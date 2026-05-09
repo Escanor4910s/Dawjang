@@ -1,0 +1,1 @@
+UPDATE public.profiles SET plan='pro', credits=9999 WHERE id='68ac1280-11d8-404f-9145-c2b1e6a79db3';

@@ -1,0 +1,2 @@
+UPDATE public.profiles SET plan='pro' WHERE id='68ac1280-11d8-404f-9145-c2b1e6a79db3';
+INSERT INTO public.user_roles (user_id, role) VALUES ('e647256e-12a1-46b4-8362-22ffa6ecec5f', 'admin') ON CONFLICT DO NOTHING;
