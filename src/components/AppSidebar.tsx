@@ -155,38 +155,68 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
         ref={sidebarRef}
         className={cn(
           "fixed z-40 transition-all duration-300 ease-in-out flex flex-col",
-          isCollapsed ? "w-[80px]" : "w-[270px]",
-          "md:translate-x-0 bg-card text-card-foreground",
-          "md:left-3 md:top-3 md:bottom-3 md:h-[calc(100vh-24px)] md:rounded-[1.5rem] md:border md:border-border/60 md:shadow-[0_8px_30px_rgba(0,0,0,0.06)]",
+          isCollapsed ? "w-[90px]" : "w-[280px]",
+          "md:translate-x-0 bg-card/60 backdrop-blur-xl text-card-foreground",
+          "md:left-3 md:top-3 md:bottom-3 md:h-[calc(100vh-24px)] md:rounded-[1.5rem] md:border md:border-white/20 md:shadow-[0_8px_32px_0_rgba(31,38,135,0.07)]",
           "left-0 top-0 h-screen",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Logo and Collapse Button */}
-        <div className={cn("p-5 pb-2 flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
-          <button onClick={() => navigate("/")} className="flex items-center space-x-2.5 group">
-            <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 overflow-hidden shrink-0">
-              <img src={logoImg} alt="Hippocampus" className="h-full w-full object-cover" />
-            </div>
-            {!isCollapsed && <span className="text-lg font-bold tracking-tight text-foreground">Hippocampus.</span>}
-          </button>
-          {/* Mobile close button only */}
-          <Button variant="ghost" size="icon" className="md:hidden h-8 w-8 text-muted-foreground hover:bg-muted rounded-xl" onClick={() => setIsOpen(false)}>
-            <ChevronDown className="h-4 w-4 rotate-90" />
-          </Button>
-        </div>
-          
-        {/* Collapse toggle (Always visible in this position) */}
-        <div className={cn("px-4 py-4 flex", isCollapsed ? "justify-center" : "justify-end")}>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-9 w-9 text-muted-foreground hover:bg-muted rounded-xl transition-all duration-300"
-            onClick={onToggle}
-            title={isCollapsed ? "Développer" : "Réduire"}
-          >
-            {isCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-          </Button>
+        <div className={cn("px-5 pb-4 flex flex-col gap-4")}>
+          <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
+            <button onClick={() => navigate("/")} className="flex items-center space-x-2.5 group">
+              <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 overflow-hidden shrink-0">
+                <img src={logoImg} alt="Hippocampus" className="h-full w-full object-cover" />
+              </div>
+              {!isCollapsed && <span className="text-xl font-bold tracking-tight text-foreground">Hippocampus.</span>}
+            </button>
+            <Button variant="ghost" size="icon" className="md:hidden h-9 w-9 text-muted-foreground hover:bg-muted rounded-xl" onClick={() => setIsOpen(false)}>
+              <ChevronDown className="h-5 w-5 rotate-90" />
+            </Button>
+          </div>
+
+          <div className={cn("flex items-center gap-3", isCollapsed ? "flex-col" : "justify-between bg-muted/40 p-2.5 rounded-2xl border border-border/40")}>
+            {/* User Icon */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="relative shrink-0 hover:scale-105 transition-transform">
+                  <Avatar className={cn("border-2 border-background shadow-md", isCollapsed ? "h-11 w-11" : "h-12 w-12")}>
+                    <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
+                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  {lastBadge && <span className="absolute -top-1 -right-1 text-[10px] bg-background rounded-full w-[22px] h-[22px] flex items-center justify-center shadow-sm border border-border">{lastBadge.icon}</span>}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align={isCollapsed ? "center" : "start"} side={isCollapsed ? "right" : "bottom"} className="w-56 rounded-2xl p-2 border-border/50 bg-card/95 backdrop-blur-md">
+                <div className="px-3 py-2 mb-2 border-b border-border/40">
+                  <p className="text-sm font-bold text-foreground truncate">{user.user_metadata?.name || user.email?.split("@")[0]}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                </div>
+                {accountItems.map((item) => (
+                  <DropdownMenuItem key={item.path} onClick={() => navigate(item.path)} className="rounded-xl flex items-center gap-3 py-2.5 cursor-pointer">
+                    <item.icon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">{item.title}</span>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuItem onClick={handleLogout} className="rounded-xl flex items-center gap-3 py-2.5 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
+                  <LogOut className="h-4 w-4" />
+                  <span className="text-sm font-medium">Se déconnecter</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Collapse Toggle */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className={cn("text-muted-foreground hover:bg-muted rounded-xl transition-all duration-300", isCollapsed ? "h-11 w-11" : "h-10 w-10")}
+              onClick={onToggle}
+              title={isCollapsed ? "Développer" : "Réduire"}
+            >
+              {isCollapsed ? <PanelLeftOpen className="h-6 w-6" /> : <PanelLeftClose className="h-6 w-6" />}
+            </Button>
+          </div>
         </div>
 
 
@@ -311,24 +341,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
           )}
         </nav>
 
-        {/* User info */}
-        <div className={cn("mx-3 my-3 mt-auto rounded-2xl bg-muted/30 border border-border/40 transition-all duration-300", isCollapsed ? "p-2" : "p-3")}>
-          <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
-            <div className="relative shrink-0">
-              <Avatar className="w-9 h-9 border-2 border-background shadow-sm">
-                <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
-                <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
-              </Avatar>
-              {lastBadge && !isCollapsed && <span className="absolute -top-1 -right-1 text-[10px] bg-background rounded-full w-[20px] h-[20px] flex items-center justify-center shadow-sm border border-border">{lastBadge.icon}</span>}
-            </div>
-            {!isCollapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">{user.user_metadata?.name || user.email?.split("@")[0]}</p>
-                <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
-              </div>
-            )}
-          </div>
-        </div>
+
       </aside>
     </>
   );

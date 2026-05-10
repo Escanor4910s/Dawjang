@@ -31,7 +31,7 @@ const Layout = ({ children }: LayoutProps) => {
   useRevisionReminder(!!user);
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="min-h-screen bg-background bg-doodle-watermark overflow-x-hidden">
       <OfflineIndicator />
       <GamificationProvider>
         <OnboardingProvider>
