@@ -170,7 +170,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
         )}
       >
         {/* Logo and Collapse Button */}
-        <div className={cn("px-5 pb-4 flex flex-col gap-4")}>
+        <div className={cn("px-5 pb-2 flex flex-col", isCollapsed ? "gap-2 pt-2" : "gap-4")}>
           <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
             <button onClick={() => navigate("/")} className="flex items-center space-x-2 group">
               <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 overflow-hidden shrink-0">
@@ -183,12 +183,12 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
             </Button>
           </div>
 
-          <div className={cn("flex items-center gap-3", isCollapsed ? "flex-col" : "justify-between bg-muted/40 p-2.5 rounded-2xl border border-border/40")}>
+          <div className={cn("flex items-center gap-2", isCollapsed ? "flex-col" : "justify-between bg-muted/40 p-2.5 rounded-2xl border border-border/40")}>
             {/* User Icon */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="relative shrink-0 hover:scale-105 transition-transform">
-                  <Avatar className={cn("border-2 border-background shadow-md", isCollapsed ? "h-11 w-11" : "h-12 w-12")}>
+                  <Avatar className={cn("border-2 border-background shadow-md", isCollapsed ? "h-10 w-10" : "h-12 w-12")}>
                     <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
                     <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
                   </Avatar>
@@ -295,7 +295,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 space-y-5 pb-4 scrollbar-none">
+        <nav className={cn("flex-1 overflow-y-auto px-3 pb-4 scrollbar-none", isCollapsed ? "space-y-1" : "space-y-5")}>
           {navSections.map((section) => (
             <div key={section.title} className="space-y-2">
               <div 
@@ -312,8 +312,8 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                 )}
               </div>
 
-              {expandedSections.includes(section.title) && (
-                <div className="space-y-1 mt-2">
+              { (isCollapsed || expandedSections.includes(section.title)) && (
+                <div className={cn("space-y-1", !isCollapsed && "mt-2")}>
                   {section.items.map((item) => {
                     const locked = item.requiredPlan && !canAccessFeature(item.requiredPlan);
                     const showBadge = item.requiredPlan && !isAdmin && !canAccessFeature(item.requiredPlan);
@@ -334,7 +334,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                         }}
                         className={cn(
                           "flex items-center w-full rounded-2xl transition-all duration-200 group relative overflow-hidden",
-                          isCollapsed ? "justify-center py-4" : "justify-between px-4 py-3",
+                          isCollapsed ? "justify-center py-2.5" : "justify-between px-4 py-3",
                           active
                             ? "bg-primary/10 text-primary"
                             : locked
@@ -375,7 +375,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
               {isAdmin && adminItems.map((item) => (
                 <button key={item.path} onClick={() => { navigate(item.path); setIsOpen(false); }}
                   className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl transition-all duration-200 group",
-                    isCollapsed ? "justify-center py-4" : "px-4 py-3 text-[15px]",
+                    isCollapsed ? "justify-center py-2.5" : "px-4 py-3 text-[15px]",
                     isActive(item.path) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
                   title={isCollapsed ? item.title : undefined}>
@@ -387,7 +387,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
               {accountItems.map((item) => (
                 <button key={item.path} onClick={() => { navigate(item.path); setIsOpen(false); }}
                   className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl transition-all duration-200 group",
-                    isCollapsed ? "justify-center py-4" : "px-4 py-3 text-[15px]",
+                    isCollapsed ? "justify-center py-2.5" : "px-4 py-3 text-[15px]",
                     isActive(item.path) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
                   title={isCollapsed ? item.title : undefined}>
@@ -397,8 +397,8 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
               ))}
 
               <button onClick={handleLogout} 
-                className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors group mt-4",
-                  isCollapsed ? "justify-center py-4" : "px-4 py-3 text-[15px]"
+                className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors group mt-2",
+                  isCollapsed ? "justify-center py-2.5" : "px-4 py-3 text-[15px]"
                 )}
                 title={isCollapsed ? "Se déconnecter" : undefined}>
                 <LogOut className="h-5 w-5 group-hover:text-destructive" />
