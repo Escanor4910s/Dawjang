@@ -163,8 +163,8 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
         className={cn(
           "fixed z-40 transition-all duration-300 ease-in-out flex flex-col",
           isCollapsed ? "w-[90px]" : "w-[280px]",
-          "md:translate-x-0 bg-card/70 backdrop-blur-2xl text-card-foreground",
-          "md:left-3 md:top-3 md:bottom-3 md:h-[calc(100vh-24px)] md:rounded-[2rem] md:border md:border-white/20 md:shadow-[0_8px_32px_0_rgba(31,38,135,0.07)]",
+          "md:translate-x-0 bg-card/80 backdrop-blur-2xl text-card-foreground",
+          "md:left-3 md:top-3 md:bottom-3 md:h-[calc(100vh-24px)] md:rounded-[2rem] md:border md:border-white/20 md:shadow-[0_12px_48px_rgba(0,0,0,0.12)]",
           "left-0 top-0 h-screen w-[280px] border-r border-border/50",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
@@ -195,51 +195,87 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                   {lastBadge && <span className="absolute -top-1 -right-1 text-[10px] bg-background rounded-full w-[22px] h-[22px] flex items-center justify-center shadow-sm border border-border">{lastBadge.icon}</span>}
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align={isCollapsed ? "center" : "start"} side={isCollapsed ? "right" : "bottom"} className="w-72 rounded-[1.5rem] p-3 border-border/50 bg-card/95 backdrop-blur-xl shadow-2xl animate-in zoom-in-95 duration-200">
-                <div className="px-4 py-3 mb-3 bg-muted/40 rounded-2xl border border-border/40">
-                  <p className="text-sm font-bold text-foreground truncate">{user.user_metadata?.name || user.email?.split("@")[0]}</p>
-                  <p className="text-[11px] text-muted-foreground truncate opacity-80">{user.email}</p>
-                </div>
-                
-                {/* Gamification Stats in Dropdown */}
-                <div className="px-1 py-1 space-y-4 mb-4">
-                  <div className="bg-primary/5 rounded-2xl p-3 border border-primary/10">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary/70">Niveau {gamData?.level || 1}</span>
-                      <span className="text-[10px] font-bold text-primary">{gamData?.xp || 0} XP</span>
+              <DropdownMenuContent align={isCollapsed ? "center" : "start"} side={isCollapsed ? "right" : "bottom"} className="w-80 rounded-[2rem] p-0 border-border/50 bg-card/95 backdrop-blur-xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
+                <div className="p-6 bg-gradient-to-br from-primary/10 via-transparent to-accent/5 border-b border-border/40">
+                  <div className="flex items-center gap-4 mb-4">
+                    <Avatar className="h-14 w-14 border-2 border-background shadow-lg">
+                      <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="text-base font-bold text-foreground truncate">{user.user_metadata?.name || user.email?.split("@")[0]}</p>
+                      <p className="text-xs text-muted-foreground truncate opacity-80">{user.email}</p>
                     </div>
-                    <div className="h-1.5 w-full bg-primary/10 rounded-full overflow-hidden">
+                  </div>
+
+                  {/* Level & XP */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-end">
+                      <span className="text-xs font-black uppercase tracking-widest text-primary">Niveau {gamData?.level || 1}</span>
+                      <span className="text-[10px] font-bold text-muted-foreground">{gamData?.xp || 0} / {((gamData?.level || 1) * 1000)} XP</span>
+                    </div>
+                    <div className="h-2 w-full bg-primary/10 rounded-full overflow-hidden border border-primary/5">
                       <div 
-                        className="h-full bg-primary transition-all duration-500" 
+                        className="h-full bg-gradient-to-r from-primary to-primary-glow transition-all duration-700 ease-out" 
                         style={{ width: `${Math.min(((gamData?.xp || 0) % 1000) / 10, 100)}%` }} 
                       />
                     </div>
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-orange-500/5 rounded-xl p-2.5 border border-orange-500/10 flex flex-col items-center">
-                      <Trophy className="h-4 w-4 text-orange-500 mb-1" />
-                      <span className="text-xs font-bold">{gamData?.currentStreak || 0} j</span>
-                      <span className="text-[9px] text-muted-foreground font-medium">Série</span>
+                </div>
+                
+                <div className="p-5 space-y-6">
+                  {/* Detailed Stats Grid */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="flex flex-col items-center p-3 rounded-2xl bg-muted/40 border border-border/30 hover:bg-muted/60 transition-colors">
+                      <Trophy className="h-5 w-5 text-orange-500 mb-1.5" />
+                      <span className="text-sm font-black">{gamData?.currentStreak || 0}</span>
+                      <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-tighter">Série</span>
                     </div>
-                    <div className="bg-blue-500/5 rounded-xl p-2.5 border border-blue-500/10 flex flex-col items-center">
-                      <Star className="h-4 w-4 text-blue-500 mb-1" />
-                      <span className="text-xs font-bold">{gamData?.earnedBadges?.length || 0}</span>
-                      <span className="text-[9px] text-muted-foreground font-medium">Badges</span>
+                    <div className="flex flex-col items-center p-3 rounded-2xl bg-muted/40 border border-border/30 hover:bg-muted/60 transition-colors">
+                      <Star className="h-5 w-5 text-blue-500 mb-1.5" />
+                      <span className="text-sm font-black">{gamData?.earnedBadges?.length || 0}</span>
+                      <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-tighter">Badges</span>
+                    </div>
+                    <div className="flex flex-col items-center p-3 rounded-2xl bg-muted/40 border border-border/30 hover:bg-muted/60 transition-colors">
+                      <Brain className="h-5 w-5 text-primary mb-1.5" />
+                      <span className="text-sm font-black">{gamData?.totalQuizzesCompleted || 0}</span>
+                      <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-tighter">QCM</span>
+                    </div>
+                  </div>
+
+                  {/* Badges Section */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3 px-1">
+                      <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Mes Badges Récents</h3>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {gamData?.earnedBadges && gamData.earnedBadges.length > 0 ? (
+                        gamData.earnedBadges.slice(-8).reverse().map((badgeId) => {
+                          const badge = BADGES[badgeId];
+                          if (!badge) return null;
+                          return (
+                            <div key={badgeId} className="group relative">
+                              <div className="h-12 w-12 rounded-xl bg-background border border-border/50 flex items-center justify-center text-xl shadow-sm hover:scale-110 hover:shadow-md transition-all cursor-help border-dashed">
+                                {badge.icon}
+                              </div>
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-foreground text-background text-[10px] rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 font-bold">
+                                {badge.name}
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="col-span-4 py-4 text-center border-2 border-dashed border-border/40 rounded-2xl">
+                          <p className="text-[10px] font-bold text-muted-foreground">Aucun badge pour le moment</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  {accountItems.map((item) => (
-                    <DropdownMenuItem key={item.path} onClick={() => navigate(item.path)} className="rounded-xl flex items-center gap-3 py-2.5 cursor-pointer hover:bg-muted/60 transition-colors">
-                      <item.icon className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">{item.title}</span>
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuItem onClick={handleLogout} className="rounded-xl flex items-center gap-3 py-3 mt-2 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10 border-t border-border/40 pt-3">
-                    <LogOut className="h-4 w-4" />
-                    <span className="text-sm font-bold">Déconnexion</span>
+                <div className="p-2 bg-muted/20 border-t border-border/40">
+                  <DropdownMenuItem onClick={() => navigate("/settings")} className="rounded-xl flex items-center justify-center gap-2 py-3 cursor-pointer hover:bg-muted/60 transition-colors">
+                    <span className="text-xs font-bold text-muted-foreground">Voir le profil complet</span>
                   </DropdownMenuItem>
                 </div>
               </DropdownMenuContent>
