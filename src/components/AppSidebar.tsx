@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { User } from "@supabase/supabase-js";
 import {
   LayoutDashboard, Plus, Brain, FileText, History, BookOpen, Sparkles, Share2, Crown, Settings, LogOut,
-  ChevronDown, ChevronRight, Menu, GraduationCap, PenTool, FileSearch, Search, Swords, Lock, PanelLeftClose, PanelLeftOpen
+  ChevronDown, ChevronRight, Menu, GraduationCap, PenTool, FileSearch, Search, Swords, Lock, PanelLeftClose, PanelLeftOpen,
+  Trophy, Star
 } from "lucide-react";
 import logoImg from "@/assets/logo-hippocampus.jpeg";
 
