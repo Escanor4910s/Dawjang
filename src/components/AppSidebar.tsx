@@ -15,6 +15,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/useUserRole";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import { GamificationWidget } from "@/components/gamification/GamificationWidget";
 import { useGamificationContext } from "@/components/gamification/GamificationProvider";
