@@ -114,7 +114,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-dashboard text-foreground bg-doodle-watermark font-sans overflow-x-hidden px-4 pt-2 pb-6 sm:px-8 sm:pt-4 sm:pb-8">
+    <div className="min-h-screen text-foreground font-sans overflow-x-hidden px-4 pt-2 pb-6 sm:px-8 sm:pt-4 sm:pb-8">
       <motion.div 
         variants={containerVariants}
         initial="hidden"
