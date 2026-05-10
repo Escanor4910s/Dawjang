@@ -96,7 +96,7 @@ const Community = () => {
   };
 
   return (
-    <div className="min-h-screen bg-dashboard bg-doodle-watermark py-8 relative overflow-hidden">
+    <div className="min-h-screen py-4 sm:py-8 relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-accent/10 rounded-full blur-[80px] pointer-events-none" />
@@ -107,7 +107,7 @@ const Community = () => {
           {/* Beautiful Hero Section */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-            className="relative overflow-hidden rounded-[2.5rem] bg-card border border-border/50 shadow-sm p-10 lg:p-14 mb-10"
+            className="relative overflow-hidden rounded-[2rem] sm:rounded-[2.5rem] bg-card border border-border/50 shadow-sm p-6 sm:p-10 lg:p-14 mb-6 sm:mb-10"
           >
             {/* Inner glow */}
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5" />
@@ -118,7 +118,7 @@ const Community = () => {
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-6">
                   <Sparkles className="w-4 h-4" /> La ruche Hippocampus
                 </div>
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif font-bold text-foreground mb-4 leading-tight">
+                <h1 className="text-3xl sm:text-5xl lg:text-6xl font-serif font-bold text-foreground mb-4 leading-tight">
                   Apprenez ensemble, <br/><span className="text-primary italic">Réussissez</span> ensemble.
                 </h1>
                 <p className="text-muted-foreground text-lg max-w-xl mx-auto md:mx-0">
@@ -163,19 +163,19 @@ const Community = () => {
           </motion.div>
 
           <Tabs defaultValue="chat" className="w-full">
-            <div className="flex justify-center mb-8">
-              <TabsList className="bg-card border border-border/50 shadow-sm p-1 rounded-2xl">
-                <TabsTrigger value="chat" className="rounded-xl px-8 py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+            <div className="flex justify-center mb-6 sm:mb-8 overflow-x-auto pb-2 scrollbar-none">
+              <TabsList className="bg-card border border-border/50 shadow-sm p-1 rounded-2xl inline-flex w-max sm:w-auto">
+                <TabsTrigger value="chat" className="rounded-xl px-4 sm:px-8 py-2.5 sm:py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all text-sm sm:text-base">
                   <MessageCircle className="h-4 w-4 mr-2" />
-                  Forum & Entraide
+                  Forum
                 </TabsTrigger>
-                <TabsTrigger value="leaderboard" className="rounded-xl px-8 py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+                <TabsTrigger value="leaderboard" className="rounded-xl px-4 sm:px-8 py-2.5 sm:py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all text-sm sm:text-base">
                   <Trophy className="h-4 w-4 mr-2" />
                   Classement
                 </TabsTrigger>
-                <TabsTrigger value="quizzes" className="rounded-xl px-8 py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+                <TabsTrigger value="quizzes" className="rounded-xl px-4 sm:px-8 py-2.5 sm:py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all text-sm sm:text-base">
                   <Star className="h-4 w-4 mr-2" />
-                  Banque de QCM
+                  QCM
                 </TabsTrigger>
               </TabsList>
             </div>

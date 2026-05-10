@@ -162,9 +162,9 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
         className={cn(
           "fixed z-40 transition-all duration-300 ease-in-out flex flex-col",
           isCollapsed ? "w-[90px]" : "w-[280px]",
-          "md:translate-x-0 bg-card/60 backdrop-blur-xl text-card-foreground",
-          "md:left-3 md:top-3 md:bottom-3 md:h-[calc(100vh-24px)] md:rounded-[1.5rem] md:border md:border-white/20 md:shadow-[0_8px_32px_0_rgba(31,38,135,0.07)]",
-          "left-0 top-0 h-screen",
+          "md:translate-x-0 bg-card/70 backdrop-blur-2xl text-card-foreground",
+          "md:left-3 md:top-3 md:bottom-3 md:h-[calc(100vh-24px)] md:rounded-[2rem] md:border md:border-white/20 md:shadow-[0_8px_32px_0_rgba(31,38,135,0.07)]",
+          "left-0 top-0 h-screen w-[280px] border-r border-border/50",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -194,21 +194,53 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                   {lastBadge && <span className="absolute -top-1 -right-1 text-[10px] bg-background rounded-full w-[22px] h-[22px] flex items-center justify-center shadow-sm border border-border">{lastBadge.icon}</span>}
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align={isCollapsed ? "center" : "start"} side={isCollapsed ? "right" : "bottom"} className="w-56 rounded-2xl p-2 border-border/50 bg-card/95 backdrop-blur-md">
-                <div className="px-3 py-2 mb-2 border-b border-border/40">
+              <DropdownMenuContent align={isCollapsed ? "center" : "start"} side={isCollapsed ? "right" : "bottom"} className="w-72 rounded-[1.5rem] p-3 border-border/50 bg-card/95 backdrop-blur-xl shadow-2xl animate-in zoom-in-95 duration-200">
+                <div className="px-4 py-3 mb-3 bg-muted/40 rounded-2xl border border-border/40">
                   <p className="text-sm font-bold text-foreground truncate">{user.user_metadata?.name || user.email?.split("@")[0]}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  <p className="text-[11px] text-muted-foreground truncate opacity-80">{user.email}</p>
                 </div>
-                {accountItems.map((item) => (
-                  <DropdownMenuItem key={item.path} onClick={() => navigate(item.path)} className="rounded-xl flex items-center gap-3 py-2.5 cursor-pointer">
-                    <item.icon className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{item.title}</span>
+                
+                {/* Gamification Stats in Dropdown */}
+                <div className="px-1 py-1 space-y-4 mb-4">
+                  <div className="bg-primary/5 rounded-2xl p-3 border border-primary/10">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary/70">Niveau {gamData?.level || 1}</span>
+                      <span className="text-[10px] font-bold text-primary">{gamData?.xp || 0} XP</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-primary/10 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-primary transition-all duration-500" 
+                        style={{ width: `${Math.min(((gamData?.xp || 0) % 1000) / 10, 100)}%` }} 
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-orange-500/5 rounded-xl p-2.5 border border-orange-500/10 flex flex-col items-center">
+                      <Trophy className="h-4 w-4 text-orange-500 mb-1" />
+                      <span className="text-xs font-bold">{gamData?.currentStreak || 0} j</span>
+                      <span className="text-[9px] text-muted-foreground font-medium">Série</span>
+                    </div>
+                    <div className="bg-blue-500/5 rounded-xl p-2.5 border border-blue-500/10 flex flex-col items-center">
+                      <Star className="h-4 w-4 text-blue-500 mb-1" />
+                      <span className="text-xs font-bold">{gamData?.earnedBadges?.length || 0}</span>
+                      <span className="text-[9px] text-muted-foreground font-medium">Badges</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  {accountItems.map((item) => (
+                    <DropdownMenuItem key={item.path} onClick={() => navigate(item.path)} className="rounded-xl flex items-center gap-3 py-2.5 cursor-pointer hover:bg-muted/60 transition-colors">
+                      <item.icon className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">{item.title}</span>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuItem onClick={handleLogout} className="rounded-xl flex items-center gap-3 py-3 mt-2 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10 border-t border-border/40 pt-3">
+                    <LogOut className="h-4 w-4" />
+                    <span className="text-sm font-bold">Déconnexion</span>
                   </DropdownMenuItem>
-                ))}
-                <DropdownMenuItem onClick={handleLogout} className="rounded-xl flex items-center gap-3 py-2.5 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
-                  <LogOut className="h-4 w-4" />
-                  <span className="text-sm font-medium">Se déconnecter</span>
-                </DropdownMenuItem>
+                </div>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -224,8 +256,6 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
             </Button>
           </div>
         </div>
-
-
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 space-y-5 pb-4 scrollbar-none">
