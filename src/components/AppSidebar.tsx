@@ -172,11 +172,11 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
         {/* Logo and Collapse Button */}
         <div className={cn("px-5 pb-4 flex flex-col gap-4")}>
           <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
-            <button onClick={() => navigate("/")} className="flex items-center space-x-2.5 group">
+            <button onClick={() => navigate("/")} className="flex items-center space-x-2 group">
               <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 overflow-hidden shrink-0">
                 <img src={logoImg} alt="Hippocampus" className="h-full w-full object-cover" />
               </div>
-              {!isCollapsed && <span className="text-xl font-bold tracking-tight text-foreground">Hippocampus</span>}
+              {!isCollapsed && <span className="text-lg font-black tracking-tight text-foreground truncate max-w-[140px]">Hippocampus</span>}
             </button>
             <Button variant="ghost" size="icon" className="md:hidden h-9 w-9 text-muted-foreground hover:bg-muted rounded-xl" onClick={() => setIsOpen(false)}>
               <ChevronDown className="h-5 w-5 rotate-90" />
@@ -302,7 +302,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                 className="px-2 flex items-center justify-between cursor-pointer group"
                 onClick={() => toggleSection(section.title)}
               >
-                <p className={cn("text-[11px] font-bold text-muted-foreground/70 uppercase tracking-[0.15em]", isCollapsed && "hidden")}>{section.title}</p>
+                <p className={cn("text-[12px] font-black text-muted-foreground/80 uppercase tracking-[0.18em]", isCollapsed && "hidden")}>{section.title}</p>
                 {!isCollapsed && (
                   expandedSections.includes(section.title) ? (
                     <ChevronDown className="h-3 w-3 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
@@ -333,19 +333,19 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                           setIsOpen(false);
                         }}
                         className={cn(
-                          "flex items-center w-full rounded-xl transition-all duration-200 group relative overflow-hidden text-sm font-medium",
-                          isCollapsed ? "justify-center py-3" : "justify-between px-3 py-2.5",
+                          "flex items-center w-full rounded-2xl transition-all duration-200 group relative overflow-hidden",
+                          isCollapsed ? "justify-center py-4" : "justify-between px-4 py-3",
                           active
-                            ? "bg-primary/10 text-primary dark:bg-primary/20"
+                            ? "bg-primary/10 text-primary"
                             : locked
                             ? "text-muted-foreground/50 hover:bg-muted/30"
                             : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                         )}
                         title={isCollapsed ? item.title : undefined}
                       >
-                        <div className="flex items-center gap-3 relative z-10">
-                          <item.icon className={cn("h-4 w-4", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground", locked && "opacity-50")} />
-                          {!isCollapsed && <span>{item.title}</span>}
+                        <div className="flex items-center gap-3.5 relative z-10">
+                          <item.icon className={cn("h-5 w-5", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground", locked && "opacity-50")} />
+                          {!isCollapsed && <span className="text-[15px] font-bold tracking-tight">{item.title}</span>}
                         </div>
                         {!isCollapsed && (
                           <div className="flex items-center gap-1.5 relative z-10">
@@ -369,49 +369,44 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
             </div>
           ))}
 
-          <div className="space-y-2">
-            {!isCollapsed && <p className="px-2 text-[11px] font-bold text-muted-foreground/70 uppercase tracking-[0.15em]">Paramètres</p>}
+          <div className="space-y-2 mt-4">
+            {!isCollapsed && <p className="px-2 text-[12px] font-black text-muted-foreground/80 uppercase tracking-[0.18em]">Paramètres</p>}
             <div className="space-y-1 mt-2">
               {isAdmin && adminItems.map((item) => (
                 <button key={item.path} onClick={() => { navigate(item.path); setIsOpen(false); }}
-                  className={cn("flex items-center gap-3 w-full font-medium rounded-xl transition-all duration-200 group",
-                    isCollapsed ? "justify-center py-3" : "px-3 py-2.5 text-sm",
-                    isActive(item.path) ? "bg-primary/10 text-primary dark:bg-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl transition-all duration-200 group",
+                    isCollapsed ? "justify-center py-4" : "px-4 py-3 text-[15px]",
+                    isActive(item.path) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
                   title={isCollapsed ? item.title : undefined}>
-                  <item.icon className={cn("h-4 w-4", isActive(item.path) ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                  <item.icon className={cn("h-5 w-5", isActive(item.path) ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
                   {!isCollapsed && <span>{item.title}</span>}
                 </button>
               ))}
               
               {accountItems.map((item) => (
                 <button key={item.path} onClick={() => { navigate(item.path); setIsOpen(false); }}
-                  className={cn("flex items-center gap-3 w-full font-medium rounded-xl transition-all duration-200 group",
-                    isCollapsed ? "justify-center py-3" : "px-3 py-2.5 text-sm",
-                    isActive(item.path) ? "bg-primary/10 text-primary dark:bg-primary/20" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl transition-all duration-200 group",
+                    isCollapsed ? "justify-center py-4" : "px-4 py-3 text-[15px]",
+                    isActive(item.path) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
                   title={isCollapsed ? item.title : undefined}>
-                  <item.icon className={cn("h-4 w-4", isActive(item.path) ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                  <item.icon className={cn("h-5 w-5", isActive(item.path) ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
                   {!isCollapsed && <span>{item.title}</span>}
                 </button>
               ))}
 
               <button onClick={handleLogout} 
-                className={cn("flex items-center gap-3 w-full font-medium rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors group mt-4",
-                  isCollapsed ? "justify-center py-3" : "px-3 py-2.5 text-sm"
+                className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors group mt-4",
+                  isCollapsed ? "justify-center py-4" : "px-4 py-3 text-[15px]"
                 )}
                 title={isCollapsed ? "Se déconnecter" : undefined}>
-                <LogOut className="h-4 w-4 group-hover:text-destructive" />
+                <LogOut className="h-5 w-5 group-hover:text-destructive" />
                 {!isCollapsed && <span>Se déconnecter</span>}
               </button>
             </div>
           </div>
           
-          {!isCollapsed && (
-            <div className="mt-6 mb-2">
-              <GamificationWidget variant="sidebar" />
-            </div>
-          )}
         </nav>
 
 
