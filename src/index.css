@@ -274,3 +274,12 @@
   opacity: 0.12;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='500' height='500' viewBox='0 0 500 500'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M45 30c0-8 6-14 14-14s14 6 14 14c4-2 9 1 9 6s-4 8-9 7c0 8-6 14-14 14s-14-6-14-14c-4 1-9-2-9-7s5-8 9-6z'/%3E%3Cpath d='M59 20v28M49 34h20'/%3E%3Cpath d='M160 25a12 12 0 0 1 6 22v5h-12v-5a12 12 0 0 1 6-22zM154 52h12M157 57h6'/%3E%3Cpath d='M160 30v4M152 34l-2-3M168 34l2-3'/%3E%3Cpath d='M270 20h-20c-3 0-5 2-5 5v25c0-3 2-5 5-5h20M270 20h20c3 0 5 2 5 5v25c0-3-2-5-5-5h-20M270 20v25'/%3E%3Cline x1='258' y1='30' x2='267' y2='30'/%3E%3Cline x1='258' y1='35' x2='265' y2='35'/%3E%3Cline x1='273' y1='30' x2='282' y2='30'/%3E%3Ccircle cx='370' cy='45' r='6'/%3E%3Cpath d='M370 39v-10c0-5-4-9-9-9M370 39v-10c0-5 4-9 9-9'/%3E%3Ccircle cx='361' cy='20' r='2'/%3E%3Ccircle cx='379' cy='20' r='2'/%3E%3Cpath d='M30 120l8 0 3-10 5 20 5-20 3 10h8'/%3E%3C/g%3E%3C/svg%3E");
 }
+
+/* Custom utilities */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

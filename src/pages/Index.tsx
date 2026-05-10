@@ -108,7 +108,7 @@ const Index = () => {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2.5 group flex-shrink-0">
             <img src="/favicon.png" alt="Hippocampus Logo" className="w-8 h-8 object-contain group-hover:scale-110 transition-transform duration-300 drop-shadow-md" />
-            <span className="font-bold text-lg tracking-tight text-white group-hover:text-primary transition-colors duration-300">Hippocampus.</span>
+            <span className="font-bold text-lg tracking-tight text-white group-hover:text-primary transition-colors duration-300">Hippocampus</span>
           </Link>
           
           {/* Center Navigation */}

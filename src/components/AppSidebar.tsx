@@ -175,7 +175,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
               <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 overflow-hidden shrink-0">
                 <img src={logoImg} alt="Hippocampus" className="h-full w-full object-cover" />
               </div>
-              {!isCollapsed && <span className="text-xl font-bold tracking-tight text-foreground">Hippocampus.</span>}
+              {!isCollapsed && <span className="text-xl font-bold tracking-tight text-foreground">Hippocampus</span>}
             </button>
             <Button variant="ghost" size="icon" className="md:hidden h-9 w-9 text-muted-foreground hover:bg-muted rounded-xl" onClick={() => setIsOpen(false)}>
               <ChevronDown className="h-5 w-5 rotate-90" />
