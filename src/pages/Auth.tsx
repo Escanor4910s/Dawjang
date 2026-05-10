@@ -56,7 +56,16 @@ const Auth = () => {
   const [showResetForm, setShowResetForm] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [tab, setTab] = useState<"login" | "signup">("login");
-  const [formData, setFormData] = useState({ email: "", password: "", confirmPassword: "", studyLevel: "" });
+  const [formData, setFormData] = useState({ 
+    email: "", 
+    password: "", 
+    confirmPassword: "", 
+    studyLevel: "",
+    firstName: "",
+    lastName: "",
+    studentNumber: "",
+    university: ""
+  });
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -104,7 +113,17 @@ const Auth = () => {
       const { error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
-        options: { emailRedirectTo: redirectUrl, data: { study_level: formData.studyLevel } },
+        options: { 
+          emailRedirectTo: redirectUrl, 
+          data: { 
+            study_level: formData.studyLevel,
+            year_of_study: formData.studyLevel,
+            first_name: formData.firstName,
+            name: formData.lastName,
+            student_number: formData.studentNumber,
+            university: formData.university
+          } 
+        },
       });
       if (error) {
         let msg = error.message;
@@ -335,6 +354,50 @@ const Auth = () => {
                             required
                           />
                         </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Prénom</Label>
+                          <Input 
+                            placeholder="Jean"
+                            className="h-14 rounded-2xl border-border bg-background focus:ring-primary transition-all" 
+                            value={formData.firstName}
+                            onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Nom</Label>
+                          <Input 
+                            placeholder="Dupont"
+                            className="h-14 rounded-2xl border-border bg-background focus:ring-primary transition-all" 
+                            value={formData.lastName}
+                            onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-foreground">Numéro d'étudiant (Optionnel)</Label>
+                        <Input 
+                          placeholder="Ex: 22104567"
+                          className="h-14 rounded-2xl border-border bg-background focus:ring-primary transition-all" 
+                          value={formData.studentNumber}
+                          onChange={(e) => setFormData({...formData, studentNumber: e.target.value})}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-foreground">Université / Faculté</Label>
+                        <Input 
+                          placeholder="Ex: Sorbonne Université"
+                          className="h-14 rounded-2xl border-border bg-background focus:ring-primary transition-all" 
+                          value={formData.university}
+                          onChange={(e) => setFormData({...formData, university: e.target.value})}
+                          required
+                        />
                       </div>
                       
                       <div className="space-y-2">

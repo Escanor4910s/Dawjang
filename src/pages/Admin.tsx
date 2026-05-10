@@ -46,7 +46,15 @@ const Admin = () => {
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
   const [editing, setEditing] = useState<UserWithStats | null>(null);
-  const [editForm, setEditForm] = useState({ first_name: "", name: "", plan: "gratuit", credits: 100, university: "" });
+  const [editForm, setEditForm] = useState({ 
+    first_name: "", 
+    name: "", 
+    plan: "gratuit", 
+    credits: 100, 
+    university: "",
+    student_number: "",
+    year_of_study: ""
+  });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -64,7 +72,7 @@ const Admin = () => {
       setLoading(true);
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, name, first_name, avatar_url, plan, university");
+        .select("id, name, first_name, avatar_url, plan, university, student_number, year_of_study");
       if (profilesError) {
         console.error("profiles error:", profilesError);
         toast.error("Erreur chargement profils: " + profilesError.message);
@@ -115,6 +123,8 @@ const Admin = () => {
       plan: u.plan || "gratuit",
       credits: 100,
       university: u.university || "",
+      student_number: u.student_number || "",
+      year_of_study: u.year_of_study || "",
     });
   };
 
@@ -128,6 +138,8 @@ const Admin = () => {
       name: editForm.name || null,
       plan: editForm.plan,
       university: editForm.university || null,
+      student_number: editForm.student_number || null,
+      year_of_study: editForm.year_of_study || null,
     }).eq("id", editing.id);
 
     if (error) {
@@ -139,6 +151,8 @@ const Admin = () => {
         p_plan: editForm.plan,
         p_credits: editForm.credits,
         p_university: editForm.university || null,
+        p_student_number: editForm.student_number || null,
+        p_year_of_study: editForm.year_of_study || null,
       });
       if (rpcError) {
         toast.error("Échec de la modification: " + rpcError.message);
@@ -299,6 +313,7 @@ const Admin = () => {
                     <TableHead className="px-6 py-4 font-semibold text-foreground">Utilisateur</TableHead>
                     <TableHead className="py-4 font-semibold text-foreground">ID Unique</TableHead>
                     <TableHead className="py-4 font-semibold text-foreground">Abonnement</TableHead>
+                    <TableHead className="py-4 font-semibold text-foreground">Études</TableHead>
                     <TableHead className="text-center py-4 font-semibold text-foreground">Activité</TableHead>
                     <TableHead className="text-right px-6 py-4 font-semibold text-foreground">Actions</TableHead>
                   </TableRow>
@@ -350,6 +365,16 @@ const Admin = () => {
                             {user.plan === "pro" && <Sparkles className="w-3 h-3 mr-1" />}
                             {user.plan || "gratuit"}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="py-4">
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className="w-fit text-[10px] py-0 border-primary/20 text-primary bg-primary/5">
+                              {user.year_of_study || "N/A"}
+                            </Badge>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              Matr: {user.student_number || "—"}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell className="py-4">
                           <div className="flex items-center justify-center gap-3 text-xs font-medium">
@@ -408,6 +433,17 @@ const Admin = () => {
             <div className="space-y-2">
               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Université / Faculté</Label>
               <Input className="h-12 rounded-xl" value={editForm.university} onChange={(e) => setEditForm(f => ({ ...f, university: e.target.value }))} placeholder="Ex: UCAD Dakar" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Niveau d'études</Label>
+                <Input className="h-12 rounded-xl" value={editForm.year_of_study} onChange={(e) => setEditForm(f => ({ ...f, year_of_study: e.target.value }))} placeholder="Ex: L1, M2..." />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">N° Étudiant</Label>
+                <Input className="h-12 rounded-xl" value={editForm.student_number} onChange={(e) => setEditForm(f => ({ ...f, student_number: e.target.value }))} />
+              </div>
             </div>
             
             <div className="grid grid-cols-2 gap-4">
