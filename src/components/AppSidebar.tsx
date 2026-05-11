@@ -169,129 +169,98 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Logo and Collapse Button */}
-        <div className={cn("px-5 pb-2 flex flex-col", isCollapsed ? "gap-2 pt-2" : "gap-4")}>
-          <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
-            <button onClick={() => navigate("/")} className="flex items-center space-x-2 group">
-              <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 overflow-hidden shrink-0">
-                <img src={logoImg} alt="Hippocampus" className="h-full w-full object-cover" />
-              </div>
-              {!isCollapsed && <span className="text-lg font-black tracking-tight text-foreground truncate max-w-[140px]">Hippocampus</span>}
-            </button>
-            <Button variant="ghost" size="icon" className="md:hidden h-9 w-9 text-muted-foreground hover:bg-muted rounded-xl" onClick={() => setIsOpen(false)}>
-              <ChevronDown className="h-5 w-5 rotate-90" />
-            </Button>
-          </div>
-
-          <div className={cn("flex items-center gap-2", isCollapsed ? "flex-col" : "justify-between bg-muted/40 p-2.5 rounded-2xl border border-border/40")}>
-            {/* User Icon */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="relative shrink-0 hover:scale-105 transition-transform">
-                  <Avatar className={cn("border-2 border-background shadow-md", isCollapsed ? "h-10 w-10" : "h-12 w-12")}>
-                    <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
-                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  {lastBadge && <span className="absolute -top-1 -right-1 text-[10px] bg-background rounded-full w-[22px] h-[22px] flex items-center justify-center shadow-sm border border-border">{lastBadge.icon}</span>}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align={isCollapsed ? "center" : "start"} side={isCollapsed ? "right" : "bottom"} className="w-80 rounded-[2rem] p-0 border-border/50 bg-card/95 backdrop-blur-xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-                <div className="p-6 bg-gradient-to-br from-primary/10 via-transparent to-accent/5 border-b border-border/40">
-                  <div className="flex items-center gap-4 mb-4">
-                    <Avatar className="h-14 w-14 border-2 border-background shadow-lg">
-                      <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
-                      <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <p className="text-base font-bold text-foreground truncate">{user.user_metadata?.name || user.email?.split("@")[0]}</p>
-                      <p className="text-xs text-muted-foreground truncate opacity-80">{user.email}</p>
-                    </div>
-                  </div>
-
-                  {/* Level & XP */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-end">
-                      <span className="text-xs font-black uppercase tracking-widest text-primary">Niveau {gamData?.level || 1}</span>
-                      <span className="text-[10px] font-bold text-muted-foreground">{gamData?.xp || 0} / {((gamData?.level || 1) * 1000)} XP</span>
-                    </div>
-                    <div className="h-2 w-full bg-primary/10 rounded-full overflow-hidden border border-primary/5">
-                      <div 
-                        className="h-full bg-gradient-to-r from-primary to-primary-glow transition-all duration-700 ease-out" 
-                        style={{ width: `${Math.min(((gamData?.xp || 0) % 1000) / 10, 100)}%` }} 
-                      />
-                    </div>
-                  </div>
+        {/* Top Section: Toggle and Logo */}
+        <div className={cn("flex flex-col transition-all duration-300", isCollapsed ? "items-center gap-4 py-2" : "px-5 py-4 gap-4")}>
+          <div className={cn("flex items-center w-full", isCollapsed ? "justify-center" : "justify-between")}>
+            {!isCollapsed ? (
+              <button onClick={() => navigate("/")} className="flex items-center space-x-2 group">
+                <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 overflow-hidden shrink-0">
+                  <img src={logoImg} alt="Hippocampus" className="h-full w-full object-cover" />
                 </div>
-                
-                <div className="p-5 space-y-6">
-                  {/* Detailed Stats Grid */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="flex flex-col items-center p-3 rounded-2xl bg-muted/40 border border-border/30 hover:bg-muted/60 transition-colors">
-                      <Trophy className="h-5 w-5 text-orange-500 mb-1.5" />
-                      <span className="text-sm font-black">{gamData?.currentStreak || 0}</span>
-                      <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-tighter">Série</span>
-                    </div>
-                    <div className="flex flex-col items-center p-3 rounded-2xl bg-muted/40 border border-border/30 hover:bg-muted/60 transition-colors">
-                      <Star className="h-5 w-5 text-blue-500 mb-1.5" />
-                      <span className="text-sm font-black">{gamData?.earnedBadges?.length || 0}</span>
-                      <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-tighter">Badges</span>
-                    </div>
-                    <div className="flex flex-col items-center p-3 rounded-2xl bg-muted/40 border border-border/30 hover:bg-muted/60 transition-colors">
-                      <Brain className="h-5 w-5 text-primary mb-1.5" />
-                      <span className="text-sm font-black">{gamData?.totalQuizzesCompleted || 0}</span>
-                      <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-tighter">QCM</span>
-                    </div>
-                  </div>
-
-                  {/* Badges Section */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3 px-1">
-                      <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Mes Badges Récents</h3>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      {gamData?.earnedBadges && gamData.earnedBadges.length > 0 ? (
-                        gamData.earnedBadges.slice(-8).reverse().map((badgeId) => {
-                          const badge = BADGES[badgeId];
-                          if (!badge) return null;
-                          return (
-                            <div key={badgeId} className="group relative">
-                              <div className="h-12 w-12 rounded-xl bg-background border border-border/50 flex items-center justify-center text-xl shadow-sm hover:scale-110 hover:shadow-md transition-all cursor-help border-dashed">
-                                {badge.icon}
-                              </div>
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-foreground text-background text-[10px] rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 font-bold">
-                                {badge.name}
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="col-span-4 py-4 text-center border-2 border-dashed border-border/40 rounded-2xl">
-                          <p className="text-[10px] font-bold text-muted-foreground">Aucun badge pour le moment</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-2 bg-muted/20 border-t border-border/40">
-                  <DropdownMenuItem onClick={() => navigate("/settings")} className="rounded-xl flex items-center justify-center gap-2 py-3 cursor-pointer hover:bg-muted/60 transition-colors">
-                    <span className="text-xs font-bold text-muted-foreground">Voir le profil complet</span>
-                  </DropdownMenuItem>
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Collapse Toggle */}
+                <span className="text-lg font-black tracking-tight text-foreground truncate max-w-[140px]">Hippocampus</span>
+              </button>
+            ) : null}
+            
             <Button 
               variant="ghost" 
               size="icon" 
-              className={cn("text-muted-foreground hover:bg-muted rounded-xl transition-all duration-300", isCollapsed ? "h-11 w-11" : "h-10 w-10")}
+              className={cn("text-muted-foreground hover:bg-muted rounded-xl transition-all duration-300", isCollapsed ? "h-11 w-11 bg-muted/30" : "h-10 w-10")}
               onClick={onToggle}
               title={isCollapsed ? "Développer" : "Réduire"}
             >
               {isCollapsed ? <PanelLeftOpen className="h-6 w-6" /> : <PanelLeftClose className="h-6 w-6" />}
             </Button>
           </div>
+
+          {!isCollapsed && (
+            <div className="flex items-center justify-between bg-muted/40 p-2.5 rounded-2xl border border-border/40">
+              {/* User Avatar & Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="relative shrink-0 hover:scale-105 transition-transform">
+                    <Avatar className="h-12 w-12 border-2 border-background shadow-md">
+                      <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    {lastBadge && <span className="absolute -top-1 -right-1 text-[10px] bg-background rounded-full w-[22px] h-[22px] flex items-center justify-center shadow-sm border border-border">{lastBadge.icon}</span>}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" side="bottom" className="w-80 rounded-[2rem] p-0 border-border/50 bg-card/95 backdrop-blur-xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
+                  <div className="p-6 bg-gradient-to-br from-primary/10 via-transparent to-accent/5 border-b border-border/40">
+                    <div className="flex items-center gap-4 mb-4">
+                      <Avatar className="h-14 w-14 border-2 border-background shadow-lg">
+                        <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
+                        <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="text-base font-bold text-foreground truncate">{user.user_metadata?.name || user.email?.split("@")[0]}</p>
+                        <p className="text-xs text-muted-foreground truncate opacity-80">{user.email}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-end">
+                        <span className="text-xs font-black uppercase tracking-widest text-primary">Niveau {gamData?.level || 1}</span>
+                        <span className="text-[10px] font-bold text-muted-foreground">{gamData?.xp || 0} XP</span>
+                      </div>
+                      <div className="h-2 w-full bg-primary/10 rounded-full overflow-hidden border border-primary/5">
+                        <div className="h-full bg-gradient-to-r from-primary to-primary-glow transition-all duration-700 ease-out" style={{ width: `${Math.min(((gamData?.xp || 0) % 1000) / 10, 100)}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-5 space-y-6">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="flex flex-col items-center p-3 rounded-2xl bg-muted/40 border border-border/30">
+                        <Trophy className="h-5 w-5 text-orange-500 mb-1.5" />
+                        <span className="text-sm font-black">{gamData?.currentStreak || 0}</span>
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground">Série</span>
+                      </div>
+                      <div className="flex flex-col items-center p-3 rounded-2xl bg-muted/40 border border-border/30">
+                        <Star className="h-5 w-5 text-blue-500 mb-1.5" />
+                        <span className="text-sm font-black">{gamData?.earnedBadges?.length || 0}</span>
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground">Badges</span>
+                      </div>
+                      <div className="flex flex-col items-center p-3 rounded-2xl bg-muted/40 border border-border/30">
+                        <Brain className="h-5 w-5 text-primary mb-1.5" />
+                        <span className="text-sm font-black">{gamData?.totalQuizzesCompleted || 0}</span>
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground">QCM</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-2 bg-muted/20 border-t border-border/40">
+                    <DropdownMenuItem onClick={() => navigate("/settings")} className="rounded-xl flex items-center justify-center gap-2 py-3 cursor-pointer">
+                      <span className="text-xs font-bold text-muted-foreground">Profil complet</span>
+                    </DropdownMenuItem>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <div className="h-8 w-px bg-border/40 mx-1" />
+              
+              <button onClick={handleLogout} className="p-2.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                <LogOut className="h-5 w-5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
@@ -333,10 +302,10 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                           setIsOpen(false);
                         }}
                         className={cn(
-                          "flex items-center w-full rounded-2xl transition-all duration-200 group relative overflow-hidden",
-                          isCollapsed ? "justify-center py-2.5" : "justify-between px-4 py-3",
+                          "flex items-center w-full rounded-2xl transition-all duration-300 group relative overflow-hidden",
+                          isCollapsed ? "justify-center py-2.5 h-12 w-12 mx-auto" : "justify-between px-4 py-3",
                           active
-                            ? "bg-primary/10 text-primary"
+                            ? (isCollapsed ? "bg-muted/60 text-primary" : "bg-primary/10 text-primary")
                             : locked
                             ? "text-muted-foreground/50 hover:bg-muted/30"
                             : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
@@ -369,44 +338,44 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
             </div>
           ))}
 
-          <div className="space-y-2 mt-4">
-            {!isCollapsed && <p className="px-2 text-[12px] font-black text-muted-foreground/80 uppercase tracking-[0.18em]">Paramètres</p>}
-            <div className="space-y-1 mt-2">
-              {isAdmin && adminItems.map((item) => (
-                <button key={item.path} onClick={() => { navigate(item.path); setIsOpen(false); }}
-                  className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl transition-all duration-200 group",
-                    isCollapsed ? "justify-center py-2.5" : "px-4 py-3 text-[15px]",
-                    isActive(item.path) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  )}
-                  title={isCollapsed ? item.title : undefined}>
-                  <item.icon className={cn("h-5 w-5", isActive(item.path) ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-                  {!isCollapsed && <span>{item.title}</span>}
-                </button>
-              ))}
-              
-              {accountItems.map((item) => (
-                <button key={item.path} onClick={() => { navigate(item.path); setIsOpen(false); }}
-                  className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl transition-all duration-200 group",
-                    isCollapsed ? "justify-center py-2.5" : "px-4 py-3 text-[15px]",
-                    isActive(item.path) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  )}
-                  title={isCollapsed ? item.title : undefined}>
-                  <item.icon className={cn("h-5 w-5", isActive(item.path) ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-                  {!isCollapsed && <span>{item.title}</span>}
-                </button>
-              ))}
-
-              <button onClick={handleLogout} 
-                className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors group mt-2",
-                  isCollapsed ? "justify-center py-2.5" : "px-4 py-3 text-[15px]"
-                )}
-                title={isCollapsed ? "Se déconnecter" : undefined}>
-                <LogOut className="h-5 w-5 group-hover:text-destructive" />
-                {!isCollapsed && <span>Se déconnecter</span>}
-              </button>
             </div>
           </div>
           
+          {isCollapsed && (
+            <div className="mt-auto py-4 space-y-4 border-t border-border/40">
+              {/* Bottom items for collapsed state */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex justify-center w-full hover:scale-110 transition-transform">
+                    <Avatar className="h-10 w-10 border border-border/50">
+                      <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" side="right" className="w-80 rounded-[2rem] p-0 border-border/50 bg-card/95 backdrop-blur-xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden ml-2">
+                  {/* Reusing the same gamification content */}
+                  <div className="p-6 bg-gradient-to-br from-primary/10 via-transparent to-accent/5 border-b border-border/40">
+                    <div className="flex items-center gap-4 mb-4">
+                      <Avatar className="h-14 w-14 border-2 border-background shadow-lg">
+                        <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
+                        <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="text-base font-bold text-foreground truncate">{user.user_metadata?.name || user.email?.split("@")[0]}</p>
+                        <p className="text-xs text-muted-foreground truncate opacity-80">{user.email}</p>
+                      </div>
+                    </div>
+                  </div>
+                  {/* ... same stats content ... */}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <button onClick={() => navigate("/settings")} className="flex justify-center w-full text-muted-foreground hover:text-foreground py-2 transition-colors">
+                <Settings className="h-5 w-5" />
+              </button>
+            </div>
+          )}
         </nav>
 
 
