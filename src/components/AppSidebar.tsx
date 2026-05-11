@@ -337,12 +337,10 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
               )}
             </div>
           ))}
+        </nav>
 
-            </div>
-          </div>
-          
-          {isCollapsed && (
-            <div className="mt-auto py-4 space-y-4 border-t border-border/40">
+        {isCollapsed && (
+          <div className="mt-auto py-4 space-y-4 border-t border-border/40">
               {/* Bottom items for collapsed state */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
