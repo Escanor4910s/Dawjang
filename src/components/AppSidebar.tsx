@@ -337,6 +337,42 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
               )}
             </div>
           ))}
+
+          {!isCollapsed && (
+            <div className="space-y-6 pt-2">
+              {isAdmin && (
+                <div className="space-y-2">
+                  <p className="px-2 text-[11px] font-black text-muted-foreground/60 uppercase tracking-[0.2em]">Administration</p>
+                  <div className="space-y-1">
+                    {adminItems.map((item) => (
+                      <button key={item.path} onClick={() => { navigate(item.path); setIsOpen(false); }}
+                        className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl transition-all duration-300 group px-4 py-3 text-[15px]",
+                          isActive(item.path) ? "bg-primary/10 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                        )}>
+                        <item.icon className={cn("h-5 w-5", isActive(item.path) ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                        <span>{item.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <p className="px-2 text-[11px] font-black text-muted-foreground/60 uppercase tracking-[0.2em]">Compte & Support</p>
+                <div className="space-y-1">
+                  {accountItems.map((item) => (
+                    <button key={item.path} onClick={() => { navigate(item.path); setIsOpen(false); }}
+                      className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl transition-all duration-300 group px-4 py-3 text-[15px]",
+                        isActive(item.path) ? "bg-primary/10 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      )}>
+                      <item.icon className={cn("h-5 w-5", isActive(item.path) ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                      <span>{item.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </nav>
 
         {isCollapsed && (
