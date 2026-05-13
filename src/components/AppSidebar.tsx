@@ -374,7 +374,6 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
               </button>
             </div>
           )}
-        </nav>
 
 
       </aside>
