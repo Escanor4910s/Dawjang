@@ -169,26 +169,90 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Top Section: Toggle and Logo */}
-        <div className={cn("flex flex-col transition-all duration-300", isCollapsed ? "items-center gap-4 py-2" : "px-5 py-4 gap-4")}>
-          <div className={cn("flex items-center w-full", isCollapsed ? "justify-center" : "justify-between")}>
-            {!isCollapsed ? (
-              <button onClick={() => navigate("/")} className="flex items-center space-x-2 group">
-                <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 overflow-hidden shrink-0">
-                  <img src={logoImg} alt="Hippocampus" className="h-full w-full object-cover" />
-                </div>
-                <span className="text-lg font-black tracking-tight text-foreground truncate max-w-[140px]">Hippocampus</span>
-              </button>
-            ) : null}
+        {/* Top Section: Logo, Avatar and Toggle */}
+        <div className={cn("flex flex-col transition-all duration-300", isCollapsed ? "items-center gap-6 py-6" : "px-5 py-4 gap-4")}>
+          <div className={cn("flex items-center w-full", isCollapsed ? "flex-col gap-5 justify-center" : "justify-between")}>
+            <button onClick={() => navigate("/")} className="flex items-center space-x-2 group">
+              <div className={cn(
+                "rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 overflow-hidden shrink-0 transition-all duration-300",
+                isCollapsed ? "h-11 w-11" : "h-10 w-10"
+              )}>
+                <img src={logoImg} alt="Hippocampus" className="h-full w-full object-cover" />
+              </div>
+              {!isCollapsed && <span className="text-lg font-black tracking-tight text-foreground truncate max-w-[140px]">Hippocampus</span>}
+            </button>
             
+            {isCollapsed && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="relative shrink-0 hover:scale-110 transition-transform">
+                    <Avatar className="h-9 w-9 border-2 border-background shadow-md">
+                      <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" side="right" className="w-80 rounded-[2rem] p-0 border-border/50 bg-card/95 backdrop-blur-xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden ml-3">
+                  <div className="p-6 bg-gradient-to-br from-primary/10 via-transparent to-accent/5 border-b border-border/40">
+                    <div className="flex items-center gap-4 mb-4">
+                      <Avatar className="h-14 w-14 border-2 border-background shadow-lg">
+                        <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
+                        <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="text-base font-bold text-foreground truncate">{user.user_metadata?.name || user.email?.split("@")[0]}</p>
+                        <p className="text-xs text-muted-foreground truncate opacity-80">{user.email}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-end">
+                        <span className="text-xs font-black uppercase tracking-widest text-primary">Niveau {gamData?.level || 1}</span>
+                        <span className="text-[10px] font-bold text-muted-foreground">{gamData?.xp || 0} XP</span>
+                      </div>
+                      <div className="h-2 w-full bg-primary/10 rounded-full overflow-hidden border border-primary/5">
+                        <div className="h-full bg-gradient-to-r from-primary to-primary-glow transition-all duration-700 ease-out" style={{ width: `${Math.min(((gamData?.xp || 0) % 1000) / 10, 100)}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="flex flex-col items-center p-3 rounded-2xl bg-muted/40 border border-border/30">
+                        <Trophy className="h-5 w-5 text-orange-500 mb-1.5" />
+                        <span className="text-sm font-black">{gamData?.currentStreak || 0}</span>
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground">Série</span>
+                      </div>
+                      <div className="flex flex-col items-center p-3 rounded-2xl bg-muted/40 border border-border/30">
+                        <Star className="h-5 w-5 text-blue-500 mb-1.5" />
+                        <span className="text-sm font-black">{gamData?.earnedBadges?.length || 0}</span>
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground">Badges</span>
+                      </div>
+                      <div className="flex flex-col items-center p-3 rounded-2xl bg-muted/40 border border-border/30">
+                        <Brain className="h-5 w-5 text-primary mb-1.5" />
+                        <span className="text-sm font-black">{gamData?.totalQuizzesCompleted || 0}</span>
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground">QCM</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-2 bg-muted/20 border-t border-border/40">
+                    <DropdownMenuItem onClick={() => navigate("/settings")} className="rounded-xl flex items-center justify-center gap-2 py-3 cursor-pointer">
+                      <span className="text-xs font-bold text-muted-foreground">Profil complet</span>
+                    </DropdownMenuItem>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
             <Button 
               variant="ghost" 
               size="icon" 
-              className={cn("text-muted-foreground hover:bg-muted rounded-xl transition-all duration-300", isCollapsed ? "h-11 w-11 bg-muted/30" : "h-10 w-10")}
+              className={cn(
+                "text-muted-foreground hover:bg-muted rounded-xl transition-all duration-300", 
+                isCollapsed ? "h-9 w-9" : "h-10 w-10"
+              )}
               onClick={onToggle}
               title={isCollapsed ? "Développer" : "Réduire"}
             >
-              {isCollapsed ? <PanelLeftOpen className="h-6 w-6" /> : <PanelLeftClose className="h-6 w-6" />}
+              {isCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-6 w-6" />}
             </Button>
           </div>
 
@@ -303,15 +367,17 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                         }}
                         className={cn(
                           "flex items-center w-full rounded-2xl transition-all duration-300 group relative overflow-hidden",
-                          isCollapsed ? "justify-center py-2 h-9 w-9 mx-auto" : "justify-between px-4 py-3",
+                          isCollapsed ? "justify-center h-11 w-11 mx-auto" : "justify-between px-4 py-3",
                           active
                             ? (isCollapsed ? "bg-muted/60 text-primary" : "bg-primary/10 text-primary")
                             : locked
                             ? "text-muted-foreground/50 hover:bg-muted/30"
                             : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                         )}
-                        title={isCollapsed ? item.title : undefined}
                       >
+                        {isCollapsed && active && (
+                          <div className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-primary rounded-r-full" />
+                        )}
                         <div className="flex items-center gap-3.5 relative z-10">
                           <item.icon className={cn("h-5 w-5", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground", locked && "opacity-50")} />
                           {!isCollapsed && <span className="text-[15px] font-bold tracking-tight">{item.title}</span>}
@@ -376,37 +442,12 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
         </nav>
 
         {isCollapsed && (
-          <div className="mt-auto py-4 space-y-4 border-t border-border/40">
-              {/* Bottom items for collapsed state */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex justify-center w-full hover:scale-110 transition-transform">
-                    <Avatar className="h-10 w-10 border border-border/50">
-                      <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
-                      <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="center" side="right" className="w-80 rounded-[2rem] p-0 border-border/50 bg-card/95 backdrop-blur-xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden ml-2">
-                  {/* Reusing the same gamification content */}
-                  <div className="p-6 bg-gradient-to-br from-primary/10 via-transparent to-accent/5 border-b border-border/40">
-                    <div className="flex items-center gap-4 mb-4">
-                      <Avatar className="h-14 w-14 border-2 border-background shadow-lg">
-                        <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
-                        <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="text-base font-bold text-foreground truncate">{user.user_metadata?.name || user.email?.split("@")[0]}</p>
-                        <p className="text-xs text-muted-foreground truncate opacity-80">{user.email}</p>
-                      </div>
-                    </div>
-                  </div>
-                  {/* ... same stats content ... */}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <button onClick={() => navigate("/settings")} className="flex justify-center w-full text-muted-foreground hover:text-foreground py-2 transition-colors">
+          <div className="mt-auto py-6 space-y-4 border-t border-border/40">
+              <button onClick={() => navigate("/settings")} className="flex justify-center w-full text-muted-foreground hover:text-foreground py-2 transition-transform hover:scale-110">
                 <Settings className="h-5 w-5" />
+              </button>
+              <button onClick={handleLogout} className="flex justify-center w-full text-muted-foreground hover:text-destructive py-2 transition-transform hover:scale-110">
+                <LogOut className="h-5 w-5" />
               </button>
             </div>
           )}
