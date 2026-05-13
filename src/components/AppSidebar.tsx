@@ -162,7 +162,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
         ref={sidebarRef}
         className={cn(
           "fixed z-40 transition-all duration-300 ease-in-out flex flex-col",
-          isCollapsed ? "w-[90px]" : "w-[280px]",
+          isCollapsed ? "w-[68px]" : "w-[280px]",
           "md:translate-x-0 bg-card/80 backdrop-blur-2xl text-card-foreground",
           "md:left-3 md:top-3 md:bottom-3 md:h-[calc(100vh-24px)] md:rounded-[2rem] md:border md:border-white/20 md:shadow-[0_12px_48px_rgba(0,0,0,0.12)]",
           "left-0 top-0 h-screen w-[280px] border-r border-border/50",
@@ -303,7 +303,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                         }}
                         className={cn(
                           "flex items-center w-full rounded-2xl transition-all duration-300 group relative overflow-hidden",
-                          isCollapsed ? "justify-center py-2.5 h-12 w-12 mx-auto" : "justify-between px-4 py-3",
+                          isCollapsed ? "justify-center py-2.5 h-11 w-11 mx-auto" : "justify-between px-4 py-3",
                           active
                             ? (isCollapsed ? "bg-muted/60 text-primary" : "bg-primary/10 text-primary")
                             : locked

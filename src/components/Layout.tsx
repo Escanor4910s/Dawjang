@@ -44,7 +44,7 @@ const Layout = ({ children }: LayoutProps) => {
           )}
           <main className={cn(
             "transition-all duration-300 min-w-0",
-            showSidebar ? (isSidebarCollapsed ? "md:ml-[100px]" : "md:ml-[282px]") : "min-w-0"
+            showSidebar ? (isSidebarCollapsed ? "md:ml-[80px]" : "md:ml-[282px]") : "min-w-0"
           )}>
             {children}
           </main>
