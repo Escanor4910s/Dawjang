@@ -328,7 +328,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
         </div>
 
         {/* Navigation */}
-        <nav className={cn("flex-1 overflow-y-auto px-3 pb-4 scrollbar-none", isCollapsed ? "space-y-1" : "space-y-5")}>
+        <nav className={cn("flex-1 overflow-y-auto pb-4 scrollbar-none transition-all duration-300", isCollapsed ? "px-0 space-y-2" : "px-3 space-y-5")}>
           {navSections.map((section) => (
             <div key={section.title} className="space-y-2">
               <div 
@@ -366,17 +366,17 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                           setIsOpen(false);
                         }}
                         className={cn(
-                          "flex items-center w-full rounded-2xl transition-all duration-300 group relative overflow-hidden",
-                          isCollapsed ? "justify-center h-11 w-11 mx-auto" : "justify-between px-4 py-3",
+                          "flex items-center w-full transition-all duration-300 group relative overflow-hidden",
+                          isCollapsed ? "justify-center h-12" : "justify-between px-4 py-3 rounded-2xl",
                           active
-                            ? (isCollapsed ? "bg-muted/60 text-primary" : "bg-primary/10 text-primary")
+                            ? (isCollapsed ? "text-primary bg-primary/5" : "bg-primary/10 text-primary shadow-sm")
                             : locked
-                            ? "text-muted-foreground/50 hover:bg-muted/30"
+                            ? "text-muted-foreground/50"
                             : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                         )}
                       >
                         {isCollapsed && active && (
-                          <div className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-primary rounded-r-full" />
+                          <div className="absolute left-0 top-2 bottom-2 w-1 bg-primary rounded-r-full shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
                         )}
                         <div className="flex items-center gap-3.5 relative z-10">
                           <item.icon className={cn("h-5 w-5", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground", locked && "opacity-50")} />
