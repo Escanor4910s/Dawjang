@@ -31,6 +31,8 @@ interface Plan {
   color: string;
 }
 
+import { PRICING_TIERS } from "@/config/pricing";
+
 const Subscription = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -42,7 +44,6 @@ const Subscription = () => {
   useEffect(() => {
     const fetchUserPlan = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      
       if (!user) {
         navigate("/auth");
         return;
@@ -57,94 +58,46 @@ const Subscription = () => {
       if (profile?.plan) {
         setCurrentPlan(profile.plan);
       }
-      
       setLoading(false);
     };
+
+    // Handle return from PayTech
+    const queryParams = new URLSearchParams(window.location.search);
+    const status = queryParams.get("status");
+    if (status === "success") {
+      toast({
+        title: "Paiement réussi ! 🎉",
+        description: "Votre abonnement a été mis à jour. Bienvenue parmi nos membres Premium !",
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (status === "cancel") {
+      toast({
+        variant: "destructive",
+        title: "Paiement annulé",
+        description: "L'opération a été annulée. Vous pouvez réessayer quand vous le souhaitez.",
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
     
     fetchUserPlan();
-  }, [navigate]);
+  }, [navigate, toast]);
 
-  const plans: Plan[] = [
-    {
-      id: "freemium",
-      name: "Freemium",
-      description: "Découvrez QuizMed gratuitement",
-      monthlyPrice: 0,
-      yearlyPrice: 0,
-      icon: <Sparkles className="h-6 w-6" />,
-      buttonText: "Plan actuel",
-      buttonVariant: "outline",
-      color: "gray",
-      features: [
-        { text: "5 QCM par jour", included: true },
-        { text: "QCM Classiques uniquement", included: true },
-        { text: "Niveau Facile uniquement", included: true },
-        { text: "Résumés courts", included: true },
-        { text: "10 Flashcards max", included: true },
-        { text: "1 cours par jour", included: true },
-        { text: "Communauté publique", included: true },
-        { text: "Téléchargement PDF", included: false },
-        { text: "Agent MOR", included: false },
-        { text: "Mode examen", included: false },
-        { text: "QCM Groupage & Cas Cliniques", included: false },
-      ]
-    },
-    {
-      id: "premium",
-      name: "Premium",
-      description: "Pour les étudiants sérieux",
-      monthlyPrice: 2500,
-      yearlyPrice: 22500,
-      icon: <Zap className="h-6 w-6" />,
-      popular: true,
-      buttonText: "Passer à Premium",
-      buttonVariant: "default",
-      gradient: "from-amber-500 to-orange-600",
-      color: "amber",
-      features: [
-        { text: "QCM illimités", included: true, highlight: true },
-        { text: "Tous types de QCM (Classique, Vrai/Faux)", included: true, highlight: true },
-        { text: "Niveaux Facile & Intermédiaire", included: true },
-        { text: "Résumés complets + structurés", included: true, highlight: true },
-        { text: "Téléchargement PDF (résumés + QCM)", included: true, highlight: true },
-        { text: "Flashcards illimitées", included: true },
-        { text: "Upload illimité de cours", included: true },
-        { text: "Historique complet", included: true },
-        { text: "Agent MOR (assistant IA)", included: true, highlight: true },
-        { text: "Corrections détaillées IA", included: true },
-        { text: "QCM Groupage & Cas Cliniques", included: false },
-        { text: "Niveau Difficile", included: false },
-      ]
-    },
-    {
-      id: "pro",
-      name: "Pro",
-      description: "Maîtrise totale pour réussir",
-      monthlyPrice: 5000,
-      yearlyPrice: 45000,
-      icon: <Crown className="h-6 w-6" />,
-      buttonText: "Passer à Pro",
-      buttonVariant: "secondary",
-      gradient: "from-violet-500 to-purple-600",
-      color: "violet",
-      features: [
-        { text: "Tout Premium inclus", included: true, highlight: true },
-        { text: "QCM Groupage médical", included: true, highlight: true },
-        { text: "QCM Cas Cliniques", included: true, highlight: true },
-        { text: "Niveau Difficile (raisonnement clinique)", included: true, highlight: true },
-        { text: "Agent MOR prioritaire", included: true, highlight: true },
-        { text: "Mode examen chronométré", included: true },
-        { text: "Fusion multi-cours", included: true },
-        { text: "Export PDF avancé stylé", included: true },
-        { text: "IA prioritaire (réponses rapides)", included: true },
-        { text: "Statistiques avancées", included: true },
-        { text: "Support prioritaire", included: true },
-        { text: "Accès anticipé nouvelles fonctionnalités", included: true },
-      ]
-    }
-  ];
+  const plans: Plan[] = PRICING_TIERS.map(tier => ({
+    id: tier.id,
+    name: tier.name,
+    description: tier.description,
+    monthlyPrice: tier.monthlyPrice,
+    yearlyPrice: tier.yearlyPrice,
+    icon: tier.id === "freemium" ? <Sparkles className="h-6 w-6" /> : tier.id === "premium" ? <Zap className="h-6 w-6" /> : <Crown className="h-6 w-6" />,
+    buttonText: tier.id === "freemium" ? "Plan actuel" : `Passer à ${tier.name}`,
+    buttonVariant: tier.id === "freemium" ? "outline" : tier.id === "premium" ? "default" : "secondary",
+    popular: tier.highlight,
+    gradient: tier.id === "premium" ? "from-amber-500 to-orange-600" : tier.id === "pro" ? "from-violet-500 to-purple-600" : undefined,
+    color: tier.id === "premium" ? "amber" : tier.id === "pro" ? "violet" : "gray",
+    features: tier.features.map(f => ({ text: f, included: true })) // Simplification for now, we could expand features in pricing.ts if needed
+  }));
 
-  const handleSelectPlan = (planId: string) => {
+  const handleSelectPlan = async (planId: string) => {
     if (planId === "freemium") {
       toast({
         title: "Plan Freemium",
@@ -152,11 +105,43 @@ const Subscription = () => {
       });
       return;
     }
-    
-    toast({
-      title: "Bientôt disponible",
-      description: `Le plan ${planId} sera disponible prochainement. Nous vous notifierons !`
-    });
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate("/auth");
+        return;
+      }
+
+      toast({
+        title: "Initialisation du paiement",
+        description: "Veuillez patienter pendant que nous vous redirigeons vers PayTech..."
+      });
+
+      const { data, error } = await supabase.functions.invoke("create-paytech-payment", {
+        body: {
+          planId,
+          isYearly,
+          successUrl: `${window.location.origin}/subscription?status=success`,
+          cancelUrl: `${window.location.origin}/subscription?status=cancel`
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.redirect_url) {
+        window.location.href = data.redirect_url;
+      } else {
+        throw new Error("URL de redirection manquante");
+      }
+    } catch (error: any) {
+      console.error("Payment error:", error);
+      toast({
+        variant: "destructive",
+        title: "Erreur lors de l'initialisation",
+        description: error.message || "Une erreur est survenue lors de la connexion à PayTech."
+      });
+    }
   };
 
   if (loading) {

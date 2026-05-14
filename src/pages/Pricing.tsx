@@ -8,56 +8,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const tiers = [
-  {
-    name: "Découverte",
-    price: "0",
-    icon: Sparkles,
-    tagline: "L'essentiel pour tester l'IA",
-    features: [
-      "5 QCM générés par jour",
-      "1 résumé structuré par jour",
-      "Statistiques de base",
-      "Accès à la communauté (lecture)",
-    ],
-    cta: "Créer un compte gratuit",
-    highlight: false,
-    color: "bg-black/5"
-  },
-  {
-    name: "Premium",
-    price: "2 500",
-    icon: Zap,
-    tagline: "Idéal pour valider ses années",
-    features: [
-      "QCM générés en illimité",
-      "Résumés et fiches illimités",
-      "Génération automatique de Flashcards",
-      "Mode Examen chronométré",
-      "Mode Duel multijoueur",
-      "Assistant MOR (Tuteur IA)",
-    ],
-    cta: "Passer Premium",
-    highlight: true,
-    color: "bg-primary text-white shadow-[0_0_40px_rgba(30,200,120,0.3)]"
-  },
-  {
-    name: "Excellence",
-    price: "5 000",
-    icon: Crown,
-    tagline: "Pour préparer les ECNi / Concours",
-    features: [
-      "Toutes les fonctionnalités Premium",
-      "Priorité absolue sur l'Agent MOR",
-      "Analyse prédictive de réussite",
-      "Génération de cas cliniques complexes",
-      "Support prioritaire 7j/7",
-    ],
-    cta: "Passer Excellence",
-    highlight: false,
-    color: "bg-[#111] text-white"
-  },
-];
+import { PRICING_TIERS } from "@/config/pricing";
+
+const tiers = PRICING_TIERS.map(tier => ({
+  ...tier,
+  price: tier.monthlyPrice.toLocaleString('fr-FR'),
+  icon: tier.id === "freemium" ? Sparkles : tier.id === "premium" ? Zap : Crown,
+  tagline: tier.description,
+  color: tier.id === "premium" 
+    ? "bg-primary text-white shadow-[0_0_40px_rgba(30,200,120,0.3)]" 
+    : tier.id === "pro" 
+      ? "bg-[#111] text-white" 
+      : "bg-black/5"
+}));
 
 const featureComparison = [
   {
