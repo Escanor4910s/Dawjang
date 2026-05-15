@@ -178,11 +178,43 @@ const QuizLibrary = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background py-8">
-        <div className="container mx-auto px-4">
-          <div className="animate-pulse space-y-4">
-            <div className="h-32 bg-muted rounded-lg"></div>
-            <div className="h-64 bg-muted rounded-lg"></div>
+      <div className="min-h-screen text-foreground font-sans px-4 pt-2 pb-6 sm:px-8 sm:pt-4 sm:pb-8 relative">
+        <div className="max-w-[1400px] mx-auto relative z-10">
+          <div className="w-full">
+            {/* Skeleton Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+              <div className="space-y-3">
+                <div className="h-10 w-48 bg-muted rounded-xl animate-pulse"></div>
+                <div className="h-4 w-32 bg-muted/60 rounded-md animate-pulse"></div>
+              </div>
+              <div className="flex gap-3 mt-4 sm:mt-0">
+                <div className="h-12 w-32 bg-muted rounded-full animate-pulse"></div>
+                <div className="h-12 w-32 bg-muted rounded-full animate-pulse"></div>
+              </div>
+            </div>
+            {/* Skeleton Cards */}
+            <div className="grid gap-6 grid-cols-1 xl:grid-cols-2">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-card/40 border border-border shadow-sm rounded-[2rem] p-6 animate-pulse">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="h-6 w-2/3 bg-muted rounded-md"></div>
+                    <div className="h-8 w-8 bg-muted rounded-md"></div>
+                  </div>
+                  <div className="flex gap-2 mb-6">
+                    <div className="h-5 w-24 bg-muted rounded-md"></div>
+                    <div className="h-5 w-16 bg-muted rounded-md"></div>
+                  </div>
+                  <div className="h-16 w-full bg-muted/50 rounded-lg mb-6"></div>
+                  <div className="flex justify-between items-center">
+                    <div className="h-6 w-20 bg-muted rounded-md"></div>
+                    <div className="flex gap-2">
+                      <div className="h-10 w-24 bg-muted rounded-full"></div>
+                      <div className="h-10 w-32 bg-muted rounded-full"></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

@@ -13,6 +13,8 @@ import { UserPreferencesProvider } from "./hooks/useUserPreferences";
 import { PlanGuard } from "./components/PlanGuard";
 import { registerSW } from 'virtual:pwa-register';
 import { toast } from "sonner";
+import { AnimatePresence, motion } from "framer-motion";
+import { useLocation } from "react-router-dom";
 import "./lib/i18n";
 
 // Register PWA with notification

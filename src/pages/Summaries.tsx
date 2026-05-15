@@ -45,7 +45,39 @@ const Summaries = () => {
   const handleRefresh = async () => { setRefreshing(true); await fetchSummaries(); toast.success("Actualisé !"); };
 
   if (loading) {
-    return (<div className="container mx-auto p-6"><div className="animate-pulse space-y-4"><div className="h-32 bg-muted rounded-lg"></div><div className="h-64 bg-muted rounded-lg"></div></div></div>);
+    return (
+      <div className="min-h-screen text-foreground font-sans px-4 pt-2 pb-6 sm:px-8 sm:pt-4 sm:pb-8 relative">
+        <div className="max-w-[1400px] mx-auto space-y-4 sm:space-y-6 relative z-10">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+            <div className="space-y-3">
+              <div className="h-10 w-48 bg-muted rounded-xl animate-pulse"></div>
+              <div className="h-4 w-32 bg-muted/60 rounded-md animate-pulse"></div>
+            </div>
+            <div className="flex gap-3 mt-4 sm:mt-0">
+              <div className="h-12 w-40 bg-muted rounded-full animate-pulse"></div>
+              <div className="h-12 w-12 bg-muted rounded-full animate-pulse"></div>
+            </div>
+          </div>
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="bg-card/40 border border-border shadow-sm rounded-[2rem] p-6 animate-pulse">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="h-10 w-10 bg-muted rounded-xl"></div>
+                  <div className="h-6 w-20 bg-muted rounded-full"></div>
+                </div>
+                <div className="h-6 w-3/4 bg-muted rounded-md mb-2"></div>
+                <div className="h-4 w-1/3 bg-muted/60 rounded-md mb-6"></div>
+                <div className="h-12 w-full bg-muted/50 rounded-lg mb-6"></div>
+                <div className="flex gap-3">
+                  <div className="h-10 w-10 bg-muted rounded-xl"></div>
+                  <div className="h-10 w-full bg-muted rounded-xl"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -4,7 +4,7 @@ import { User } from "@supabase/supabase-js";
 import {
   LayoutDashboard, Plus, Brain, FileText, History, BookOpen, Sparkles, Share2, Crown, Settings, LogOut,
   ChevronDown, ChevronRight, Menu, GraduationCap, PenTool, FileSearch, Search, Swords, Lock, PanelLeftClose, PanelLeftOpen,
-  Trophy, Star
+  Trophy, Star, Calendar
 } from "lucide-react";
 import logoImg from "@/assets/logo-hippocampus.jpeg";
 
@@ -163,10 +163,10 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
         ref={sidebarRef}
         className={cn(
           "fixed z-40 transition-all duration-300 ease-in-out flex flex-col",
-          isCollapsed ? "w-[56px]" : "w-[280px]",
-          "md:translate-x-0 bg-card/80 backdrop-blur-2xl text-card-foreground",
+          isCollapsed ? "w-[80px]" : "w-[280px]",
+          "bg-card text-card-foreground md:bg-card/80 md:backdrop-blur-2xl",
           "md:left-3 md:top-3 md:bottom-3 md:h-[calc(100vh-24px)] md:rounded-[2rem] md:border md:border-white/20 md:shadow-[0_12px_48px_rgba(0,0,0,0.12)]",
-          "left-0 top-0 h-screen w-[280px] border-r border-border/50",
+          "left-0 top-0 h-screen w-[280px] md:w-auto border-r border-border/50",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -187,7 +187,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="relative shrink-0 hover:scale-110 transition-transform">
-                    <Avatar className="h-9 w-9 border-2 border-background shadow-md">
+                    <Avatar className="h-11 w-11 border-2 border-background shadow-md">
                       <AvatarImage src={avatarUrl || user.user_metadata?.avatar_url} />
                       <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
                     </Avatar>
