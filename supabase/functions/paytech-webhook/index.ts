@@ -4,37 +4,74 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const PAYTECH_API_KEY = Deno.env.get("PAYTECH_API_KEY");
 const PAYTECH_API_SECRET = Deno.env.get("PAYTECH_API_SECRET");
 
-// Simple SHA256 helper for verification
-async function sha256(message: string) {
+// Compute expected hashes once at startup
+let expectedKeyHash: string | null = null;
+let expectedSecretHash: string | null = null;
+
+async function sha256(message: string): Promise<string> {
   const msgUint8 = new TextEncoder().encode(message);
   const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+async function getExpectedHashes() {
+  if (!expectedKeyHash) {
+    expectedKeyHash = await sha256(PAYTECH_API_KEY ?? "");
+    expectedSecretHash = await sha256(PAYTECH_API_SECRET ?? "");
+  }
+  return { expectedKeyHash, expectedSecretHash };
+}
+
+const VALID_PLAN_IDS = ["premium", "pro"];
+
 serve(async (req) => {
   try {
-    // PayTech IPN sends data as application/x-www-form-urlencoded
-    const formData = await req.formData();
-    const payload: any = {};
-    formData.forEach((value, key) => { payload[key] = value; });
+    // ── 1. Parse payload (PayTech IPN can send JSON or form data) ──
+    let payload: Record<string, string> = {};
 
-    console.log("Received PayTech IPN:", payload);
+    const contentType = req.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      payload = await req.json();
+    } else {
+      const formData = await req.formData();
+      formData.forEach((value, key) => {
+        payload[key] = String(value);
+      });
+    }
 
-    // Verify authenticity
-    const expectedKeyHash = await sha256(PAYTECH_API_KEY ?? "");
-    const expectedSecretHash = await sha256(PAYTECH_API_SECRET ?? "");
+    // ── 2. Verify IPN authenticity ────────────────────────────
+    const hashes = await getExpectedHashes();
 
-    if (payload.api_key_sha256 !== expectedKeyHash || payload.api_secret_sha256 !== expectedSecretHash) {
-      console.error("Invalid PayTech IPN signature");
+    if (
+      !payload.api_key_sha256 ||
+      !payload.api_secret_sha256 ||
+      payload.api_key_sha256 !== hashes.expectedKeyHash ||
+      payload.api_secret_sha256 !== hashes.expectedSecretHash
+    ) {
+      console.error("IPN signature mismatch — rejecting request");
       return new Response("Unauthorized", { status: 401 });
     }
 
+    // ── 3. Handle sale_complete event ─────────────────────────
     if (payload.type_event === "sale_complete") {
-      const customField = JSON.parse(payload.custom_field);
+      let customField: { userId?: string; planId?: string };
+      try {
+        customField = JSON.parse(payload.custom_field ?? "{}");
+      } catch {
+        console.error("Failed to parse custom_field:", payload.custom_field);
+        return new Response("Bad custom_field", { status: 400 });
+      }
+
       const { userId, planId } = customField;
 
-      // Update user plan in database
+      // Validate extracted data
+      if (!userId || !planId || !VALID_PLAN_IDS.includes(planId)) {
+        console.error("Invalid custom_field data:", customField);
+        return new Response("Invalid custom_field values", { status: 400 });
+      }
+
+      // Use service role key (admin) to update user plan
       const supabaseAdmin = createClient(
         Deno.env.get("SUPABASE_URL") ?? "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -42,24 +79,24 @@ serve(async (req) => {
 
       const { error } = await supabaseAdmin
         .from("profiles")
-        .update({ 
+        .update({
           plan: planId,
-          // Optional: add subscription dates here if needed
+          plan_updated_at: new Date().toISOString(),
         })
         .eq("id", userId);
 
       if (error) {
-        console.error("Error updating user plan:", error);
-        return new Response("Error updating database", { status: 500 });
+        console.error(`DB error upgrading user ${userId}:`, error);
+        return new Response("Database update failed", { status: 500 });
       }
 
-      console.log(`Successfully upgraded user ${userId} to ${planId}`);
+      console.log(`✅ User ${userId} upgraded to ${planId}`);
     }
 
     return new Response("OK", { status: 200 });
-
-  } catch (error: any) {
-    console.error("IPN Processing Error:", error);
-    return new Response(error.message, { status: 400 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("IPN processing error:", message);
+    return new Response(message, { status: 400 });
   }
 });

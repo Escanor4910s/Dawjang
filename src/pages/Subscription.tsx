@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Sparkles, Zap, Crown, ArrowRight, Brain, FileText, Download, Infinity, Target, BookOpen, Shield } from "lucide-react";
+import { Check, Sparkles, Zap, Crown, ArrowRight, Brain, FileText, BookOpen, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/useUserRole";
+
+import { PRICING_TIERS } from "@/config/pricing";
 
 interface PlanFeature {
   text: string;
@@ -30,8 +32,6 @@ interface Plan {
   gradient?: string;
   color: string;
 }
-
-import { PRICING_TIERS } from "@/config/pricing";
 
 const Subscription = () => {
   const navigate = useNavigate();
