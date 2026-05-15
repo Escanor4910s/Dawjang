@@ -41,6 +41,7 @@ const navSections: NavSection[] = [
     items: [
       { title: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
       { title: "Révision", icon: Brain, path: "/review" },
+      { title: "Planificateur", icon: Calendar, path: "/review-planner", requiredPlan: "premium" },
       { title: "Flashcards", icon: BookOpen, path: "/flashcards", requiredPlan: "premium" },
       { title: "Mes QCM", icon: FileText, path: "/quiz-library" },
       { title: "Mes Résumés", icon: FileSearch, path: "/summaries" },

@@ -52,6 +52,7 @@ const Refund = lazy(() => import("./pages/Refund"));
 const Diagnostics = lazy(() => import("./pages/Diagnostics"));
 const MyPlan = lazy(() => import("./pages/MyPlan"));
 const QuizInfini = lazy(() => import("./pages/QuizInfini"));
+const ReviewPlanner = lazy(() => import("./pages/ReviewPlanner"));
 
 const PageLoader = () => (
   <div className="min-h-screen bg-background flex items-center justify-center">
@@ -100,6 +101,7 @@ const App = () => (
                       <Route path="/my-plan" element={<MyPlan />} />
                       <Route path="/admin" element={<Admin />} />
                       <Route path="/diagnostics" element={<Diagnostics />} />
+                      <Route path="/review-planner" element={<PlanGuard requiredPlan="premium" featureName="Planificateur de révisions"><ReviewPlanner /></PlanGuard>} />
                       <Route path="/duel" element={<PlanGuard requiredPlan="premium" featureName="Mode Duel"><DuelPage /></PlanGuard>} />
                       <Route path="/duel/:duelId" element={<PlanGuard requiredPlan="premium" featureName="Mode Duel"><DuelGame /></PlanGuard>} />
                       <Route path="*" element={<NotFound />} />

@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useFileReader } from "@/hooks/useFileReader";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
+import { useAdaptiveDifficulty } from "@/hooks/useAdaptiveDifficulty";
 
 interface ExistingCourse { id: string; title: string; content: string; file_name: string | null; created_at: string; }
 
@@ -33,6 +34,7 @@ const AddCourse = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { readFile, isReading } = useFileReader();
+  const adaptiveState = useAdaptiveDifficulty();
 
   useEffect(() => {
     const checkUser = async () => {
@@ -262,7 +264,14 @@ const AddCourse = () => {
 
               {/* Difficulty */}
               <div className="space-y-3">
-                <Label className="text-base font-semibold">Niveau de difficulté</Label>
+                <div className="flex items-center gap-3">
+                  <Label className="text-base font-semibold">Niveau de difficulté</Label>
+                  {adaptiveState.globalDifficulty && !adaptiveState.loading && adaptiveState.topicPerformances.length > 0 && (
+                    <Badge variant="outline" className="text-xs border-primary/50 text-primary cursor-pointer" onClick={() => setDifficultyLevel(adaptiveState.globalDifficulty)}>
+                      <Zap className="h-3 w-3 mr-1" />IA recommande : {adaptiveState.globalDifficulty}
+                    </Badge>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {[
                     { val: "facile", icon: GraduationCap, color: "success", label: "Niveau 1 - Facile", desc: "Questions directes basées sur le cours." },
