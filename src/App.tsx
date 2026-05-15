@@ -64,6 +64,48 @@ const PageLoader = () => (
 
 const queryClient = new QueryClient();
 
+const AnimatedRoutes = () => {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        transition={{ duration: 0.2 }}
+        className="h-full"
+      >
+        <Routes location={location} key={location.pathname}>
+          <Route path="/" element={<Index />} />
+          <Route path="/add-course" element={<AddCourse />} />
+          <Route path="/quiz-library" element={<QuizLibrary />} />
+          <Route path="/community" element={<Community />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/review" element={<Review />} />
+          <Route path="/flashcards" element={<PlanGuard requiredPlan="premium" featureName="Flashcards"><Flashcards /></PlanGuard>} />
+          <Route path="/statistics" element={<Statistics />} />
+          <Route path="/quiz/:courseId" element={<Quiz />} />
+          <Route path="/quiz-infini/:courseId" element={<QuizInfini />} />
+          <Route path="/exam/:courseId" element={<PlanGuard requiredPlan="premium" featureName="Mode Examen"><ExamMode /></PlanGuard>} />
+          <Route path="/generate-summary" element={<PlanGuard requiredPlan="premium" featureName="Génération de résumés"><GenerateSummary /></PlanGuard>} />
+          <Route path="/summaries" element={<Summaries />} />
+          <Route path="/summary/:id" element={<SummaryView />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/subscription" element={<Subscription />} />
+          <Route path="/my-plan" element={<MyPlan />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/diagnostics" element={<Diagnostics />} />
+          <Route path="/review-planner" element={<PlanGuard requiredPlan="premium" featureName="Planificateur de révisions"><ReviewPlanner /></PlanGuard>} />
+          <Route path="/duel" element={<PlanGuard requiredPlan="premium" featureName="Mode Duel"><DuelPage /></PlanGuard>} />
+          <Route path="/duel/:duelId" element={<PlanGuard requiredPlan="premium" featureName="Mode Duel"><DuelGame /></PlanGuard>} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="light" storageKey="quizmed-ui-theme">
@@ -83,31 +125,7 @@ const App = () => (
                 <Route path="/refund" element={<Refund />} />
                 <Route path="/*" element={
                   <Layout>
-                    <Routes>
-                      <Route path="/" element={<Index />} />
-                      <Route path="/add-course" element={<AddCourse />} />
-                      <Route path="/quiz-library" element={<QuizLibrary />} />
-                      <Route path="/community" element={<Community />} />
-                      <Route path="/dashboard" element={<Dashboard />} />
-                      <Route path="/review" element={<Review />} />
-                      <Route path="/flashcards" element={<PlanGuard requiredPlan="premium" featureName="Flashcards"><Flashcards /></PlanGuard>} />
-                      <Route path="/statistics" element={<Statistics />} />
-                      <Route path="/quiz/:courseId" element={<Quiz />} />
-                      <Route path="/quiz-infini/:courseId" element={<QuizInfini />} />
-                      <Route path="/exam/:courseId" element={<PlanGuard requiredPlan="premium" featureName="Mode Examen"><ExamMode /></PlanGuard>} />
-                      <Route path="/generate-summary" element={<PlanGuard requiredPlan="premium" featureName="Génération de résumés"><GenerateSummary /></PlanGuard>} />
-                      <Route path="/summaries" element={<Summaries />} />
-                      <Route path="/summary/:id" element={<SummaryView />} />
-                      <Route path="/settings" element={<Settings />} />
-                      <Route path="/subscription" element={<Subscription />} />
-                      <Route path="/my-plan" element={<MyPlan />} />
-                      <Route path="/admin" element={<Admin />} />
-                      <Route path="/diagnostics" element={<Diagnostics />} />
-                      <Route path="/review-planner" element={<PlanGuard requiredPlan="premium" featureName="Planificateur de révisions"><ReviewPlanner /></PlanGuard>} />
-                      <Route path="/duel" element={<PlanGuard requiredPlan="premium" featureName="Mode Duel"><DuelPage /></PlanGuard>} />
-                      <Route path="/duel/:duelId" element={<PlanGuard requiredPlan="premium" featureName="Mode Duel"><DuelGame /></PlanGuard>} />
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
+                    <AnimatedRoutes />
                   </Layout>
                 } />
               </Routes>

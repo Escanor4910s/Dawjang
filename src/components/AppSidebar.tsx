@@ -26,6 +26,7 @@ import { PremiumBadge } from "@/components/PremiumBadge";
 import { GamificationWidget } from "@/components/gamification/GamificationWidget";
 import { useGamificationContext } from "@/components/gamification/GamificationProvider";
 import { BADGES } from "@/hooks/useGamification";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface AppSidebarProps { 
   user: User | null; 
@@ -77,6 +78,8 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
   const [reviewCount, setReviewCount] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+  const effectivelyCollapsed = isCollapsed && !isMobile;
 
   const { data: gamData } = useGamificationContext();
 
@@ -163,27 +166,27 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
         ref={sidebarRef}
         className={cn(
           "fixed z-40 transition-all duration-300 ease-in-out flex flex-col",
-          isCollapsed ? "w-[80px]" : "w-[280px]",
+          effectivelyCollapsed ? "w-[80px]" : "w-[280px]",
           "bg-card text-card-foreground md:bg-card/80 md:backdrop-blur-2xl",
           "md:left-3 md:top-3 md:bottom-3 md:h-[calc(100vh-24px)] md:rounded-[2rem] md:border md:border-white/20 md:shadow-[0_12px_48px_rgba(0,0,0,0.12)]",
           "left-0 top-0 h-screen w-[280px] md:w-auto border-r border-border/50",
-          isOpen ? "translate-x-0" : "-translate-x-full"
+          !isOpen ? "-translate-x-full md:translate-x-0" : "translate-x-0"
         )}
       >
         {/* Top Section: Logo, Avatar and Toggle */}
-        <div className={cn("flex flex-col transition-all duration-300", isCollapsed ? "items-center gap-6 py-6" : "px-5 py-4 gap-4")}>
-          <div className={cn("flex items-center w-full", isCollapsed ? "flex-col gap-5 justify-center" : "justify-between")}>
+        <div className={cn("flex flex-col transition-all duration-300", effectivelyCollapsed ? "items-center gap-6 py-6" : "px-5 py-4 gap-4")}>
+          <div className={cn("flex items-center w-full", effectivelyCollapsed ? "flex-col gap-5 justify-center" : "justify-between")}>
             <button onClick={() => navigate("/")} className="flex items-center space-x-2 group">
               <div className={cn(
                 "rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 overflow-hidden shrink-0 transition-all duration-300",
-                isCollapsed ? "h-11 w-11" : "h-10 w-10"
+                effectivelyCollapsed ? "h-11 w-11" : "h-10 w-10"
               )}>
                 <img src={logoImg} alt="Hippocampus" className="h-full w-full object-cover" />
               </div>
-              {!isCollapsed && <span className="text-lg font-black tracking-tight text-foreground truncate max-w-[140px]">Hippocampus</span>}
+              {!effectivelyCollapsed && <span className="text-lg font-black tracking-tight text-foreground truncate max-w-[140px]">Hippocampus</span>}
             </button>
             
-            {isCollapsed && (
+            {effectivelyCollapsed && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="relative shrink-0 hover:scale-110 transition-transform">
@@ -248,16 +251,16 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
               size="icon" 
               className={cn(
                 "text-muted-foreground hover:bg-muted rounded-xl transition-all duration-300", 
-                isCollapsed ? "h-9 w-9" : "h-10 w-10"
+                effectivelyCollapsed ? "h-9 w-9" : "h-10 w-10"
               )}
               onClick={onToggle}
-              title={isCollapsed ? "Développer" : "Réduire"}
+              title={effectivelyCollapsed ? "Développer" : "Réduire"}
             >
-              {isCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-6 w-6" />}
+              {effectivelyCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-6 w-6" />}
             </Button>
           </div>
 
-          {!isCollapsed && (
+          {!effectivelyCollapsed && (
             <div className="flex items-center justify-between bg-muted/40 p-2.5 rounded-2xl border border-border/40">
               {/* User Avatar & Dropdown */}
               <DropdownMenu>
@@ -329,15 +332,15 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
         </div>
 
         {/* Navigation */}
-        <nav className={cn("flex-1 overflow-y-auto pb-4 scrollbar-none transition-all duration-300", isCollapsed ? "px-0 space-y-2" : "px-3 space-y-5")}>
+        <nav className={cn("flex-1 overflow-y-auto pb-4 scrollbar-none transition-all duration-300", effectivelyCollapsed ? "px-0 space-y-2" : "px-3 space-y-5")}>
           {navSections.map((section) => (
             <div key={section.title} className="space-y-2">
               <div 
                 className="px-2 flex items-center justify-between cursor-pointer group"
                 onClick={() => toggleSection(section.title)}
               >
-                <p className={cn("text-[12px] font-black text-muted-foreground/80 uppercase tracking-[0.18em]", isCollapsed && "hidden")}>{section.title}</p>
-                {!isCollapsed && (
+                <p className={cn("text-[12px] font-black text-muted-foreground/80 uppercase tracking-[0.18em]", effectivelyCollapsed && "hidden")}>{section.title}</p>
+                {!effectivelyCollapsed && (
                   expandedSections.includes(section.title) ? (
                     <ChevronDown className="h-3 w-3 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
                   ) : (
@@ -346,8 +349,8 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                 )}
               </div>
 
-              { (isCollapsed || expandedSections.includes(section.title)) && (
-                <div className={cn("space-y-1", !isCollapsed && "mt-2")}>
+              { (effectivelyCollapsed || expandedSections.includes(section.title)) && (
+                <div className={cn("space-y-1", !effectivelyCollapsed && "mt-2")}>
                   {section.items.map((item) => {
                     const locked = item.requiredPlan && !canAccessFeature(item.requiredPlan);
                     const showBadge = item.requiredPlan && !isAdmin && !canAccessFeature(item.requiredPlan);
@@ -368,22 +371,22 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                         }}
                         className={cn(
                           "flex items-center w-full transition-all duration-300 group relative overflow-hidden",
-                          isCollapsed ? "justify-center h-12" : "justify-between px-4 py-3 rounded-2xl",
+                          effectivelyCollapsed ? "justify-center h-12" : "justify-between px-4 py-3 rounded-2xl",
                           active
-                            ? (isCollapsed ? "text-primary bg-primary/5" : "bg-primary/10 text-primary shadow-sm")
+                            ? (effectivelyCollapsed ? "text-primary bg-primary/5" : "bg-primary/10 text-primary shadow-sm")
                             : locked
                             ? "text-muted-foreground/50"
                             : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                         )}
                       >
-                        {isCollapsed && active && (
+                        {effectivelyCollapsed && active && (
                           <div className="absolute left-0 top-2 bottom-2 w-1 bg-primary rounded-r-full shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
                         )}
                         <div className="flex items-center gap-3.5 relative z-10">
                           <item.icon className={cn("h-5 w-5", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground", locked && "opacity-50")} />
-                          {!isCollapsed && <span className="text-[15px] font-bold tracking-tight">{item.title}</span>}
+                          {!effectivelyCollapsed && <span className="text-[15px] font-bold tracking-tight">{item.title}</span>}
                         </div>
-                        {!isCollapsed && (
+                        {!effectivelyCollapsed && (
                           <div className="flex items-center gap-1.5 relative z-10">
                             {item.path === "/review" && reviewCount > 0 && (
                               <Badge variant="destructive" className="bg-destructive/10 text-destructive border-0 hover:bg-destructive/20 text-[10px] px-1.5 py-0 h-5 min-w-[20px] flex items-center justify-center font-bold">
@@ -394,7 +397,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                             {showBadge && <PremiumBadge type={item.requiredPlan!} size="sm" />}
                           </div>
                         )}
-                        {isCollapsed && item.path === "/review" && reviewCount > 0 && (
+                        {effectivelyCollapsed && item.path === "/review" && reviewCount > 0 && (
                           <div className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full shadow-sm" />
                         )}
                       </button>
@@ -405,7 +408,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
             </div>
           ))}
 
-          {!isCollapsed && (
+          {!effectivelyCollapsed && (
             <div className="space-y-6 pt-2">
               {isAdmin && (
                 <div className="space-y-2">
@@ -442,7 +445,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
           )}
         </nav>
 
-        {isCollapsed && (
+        {effectivelyCollapsed && (
           <div className="mt-auto py-6 space-y-4 border-t border-border/40">
               <button onClick={() => navigate("/settings")} className="flex justify-center w-full text-muted-foreground hover:text-foreground py-2 transition-transform hover:scale-110">
                 <Settings className="h-5 w-5" />

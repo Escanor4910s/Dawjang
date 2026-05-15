@@ -29,7 +29,7 @@ export const PRICING_TIERS: PricingTier[] = [
     id: "premium",
     name: "Premium",
     monthlyPrice: 2500,
-    yearlyPrice: 22500, // 2500 * 12 * 0.75 (25% discount)
+    yearlyPrice: 24000, // 2500 * 12 * 0.80 (20% discount)
     description: "Idéal pour valider ses années",
     features: [
       "QCM générés en illimité",
@@ -45,8 +45,8 @@ export const PRICING_TIERS: PricingTier[] = [
   {
     id: "pro", // Excellence in some parts of the UI
     name: "Excellence",
-    monthlyPrice: 5000,
-    yearlyPrice: 45000, // 5000 * 12 * 0.75 (25% discount)
+    monthlyPrice: 4000,
+    yearlyPrice: 38400, // 4000 * 12 * 0.80 (20% discount)
     description: "Pour préparer les ECNi / Concours",
     features: [
       "Toutes les fonctionnalités Premium",

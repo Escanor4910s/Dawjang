@@ -273,10 +273,23 @@ const Pricing = () => {
         <div className="grid md:grid-cols-3 gap-6 mb-32">
           {tiers.map((tier, index) => {
             const Icon = tier.icon;
-            const price = annual && tier.price !== "0" 
-              ? (parseInt(tier.price.replace(" ", "")) * 0.8).toLocaleString('fr-FR')
-              : tier.price;
-              
+            
+            // Calculate the display price from raw numbers, NOT parsed strings
+            const rawMonthlyPrice = tier.id === "freemium" ? 0 : (tier as any).monthlyPrice || (tier.id === "premium" ? 2600 : 4000);
+            const rawYearlyPrice = tier.id === "freemium" ? 0 : (tier as any).yearlyPrice || (tier.id === "premium" ? 26000 : 40000);
+            
+            // In annual view, display the yearly total or equivalent monthly?
+            // "Tarif mensuel c'est 2600. En annuel, adapt the calculation"
+            // Usually, if you switch to annual, you display the total annual cost or the discounted monthly cost.
+            // But the user said "mettez les chiffres réels". I'll show the total yearly cost if annual is selected.
+            // Oh wait! The text below says "FCFA / mois" AND "Facturé annuellement".
+            // So if annual is true, maybe they want to show the discounted MONTHLY price, e.g., 26000 / 12 = 2166?
+            // "et que tu mettes les chiffres réels". Let's show the full annual price if annual is true, and change the text to "FCFA / an".
+            // OR if they want monthly equivalent: `Math.round(rawYearlyPrice / 12)`.
+            // Let's just use `rawYearlyPrice` if annual, `rawMonthlyPrice` if not.
+            const displayPriceNum = annual && tier.id !== "freemium" ? rawYearlyPrice : rawMonthlyPrice;
+            const price = displayPriceNum.toLocaleString('fr-FR');
+            
             return (
               <FadeIn key={tier.name} delay={index * 0.1} className={`rounded-[2rem] p-8 border border-black/5 relative flex flex-col transition-transform hover:-translate-y-2 ${tier.color}`}>
                 {tier.highlight && (
@@ -295,8 +308,10 @@ const Pricing = () => {
 
                 <div className="mb-8">
                   <span className="text-5xl font-black">{price}</span>
-                  <span className={`text-sm font-medium ${tier.highlight || tier.name === "Excellence" ? 'text-white/70' : 'text-black/60'}`}> FCFA / mois</span>
-                  {annual && tier.price !== "0" && <p className={`text-xs mt-2 ${tier.highlight ? 'text-white/90 font-medium' : 'text-primary font-medium'}`}>Facturé annuellement</p>}
+                  <span className={`text-sm font-medium ${tier.highlight || tier.name === "Excellence" ? 'text-white/70' : 'text-black/60'}`}>
+                    {annual && tier.id !== "freemium" ? " FCFA / an" : " FCFA / mois"}
+                  </span>
+                  {annual && tier.id !== "freemium" && <p className={`text-xs mt-2 ${tier.highlight ? 'text-white/90 font-medium' : 'text-primary font-medium'}`}>-20% inclus !</p>}
                 </div>
 
                 <ul className="space-y-4 mb-10 flex-1">
