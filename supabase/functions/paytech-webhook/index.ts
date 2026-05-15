@@ -55,7 +55,7 @@ serve(async (req) => {
 
     // ── 3. Handle sale_complete event ─────────────────────────
     if (payload.type_event === "sale_complete") {
-      let customField: { userId?: string; planId?: string };
+      let customField: { userId?: string; planId?: string; isYearly?: boolean };
       try {
         customField = JSON.parse(payload.custom_field ?? "{}");
       } catch {
@@ -63,7 +63,7 @@ serve(async (req) => {
         return new Response("Bad custom_field", { status: 400 });
       }
 
-      const { userId, planId } = customField;
+      const { userId, planId, isYearly } = customField;
 
       // Validate extracted data
       if (!userId || !planId || !VALID_PLAN_IDS.includes(planId)) {
@@ -77,11 +77,31 @@ serve(async (req) => {
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
       );
 
+      const now = new Date();
+      const expiresAt = new Date(now);
+      expiresAt.setDate(expiresAt.getDate() + (isYearly ? 365 : 30));
+
+      // Record payment in history table
+      await supabaseAdmin.from("payments").insert({
+        user_id: userId,
+        plan_id: planId,
+        amount: parseInt(payload.item_price || "0", 10),
+        currency: payload.currency || "XOF",
+        billing_cycle: isYearly ? "yearly" : "monthly",
+        status: "completed",
+        paytech_ref: payload.ref_command || null,
+        paytech_token: payload.token || null,
+        payment_method: payload.payment_method || null,
+        completed_at: now.toISOString(),
+      });
+
+      // Update user profile with plan + expiration
       const { error } = await supabaseAdmin
         .from("profiles")
         .update({
           plan: planId,
-          plan_updated_at: new Date().toISOString(),
+          plan_updated_at: now.toISOString(),
+          plan_expires_at: expiresAt.toISOString(),
         })
         .eq("id", userId);
 
@@ -90,7 +110,7 @@ serve(async (req) => {
         return new Response("Database update failed", { status: 500 });
       }
 
-      console.log(`✅ User ${userId} upgraded to ${planId}`);
+      console.log(`✅ User ${userId} upgraded to ${planId} (expires ${expiresAt.toISOString()})`);
     }
 
     return new Response("OK", { status: 200 });
