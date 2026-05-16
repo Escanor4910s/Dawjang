@@ -146,56 +146,109 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background grid lg:grid-cols-[1fr_1.2fr] overflow-hidden selection:bg-primary/30">
-      
+    <div className="min-h-screen bg-background grid lg:grid-cols-[1.1fr_1fr] overflow-hidden selection:bg-primary/30">
       {/* ─── LEFT PANE (Visuals) ────────────────────────────────────────────── */}
-      <div className="hidden lg:flex flex-col justify-between p-12 bg-[#0B0F19] relative overflow-hidden">
+      <div className="hidden lg:flex flex-col p-12 lg:p-20 bg-[#0B0F19] relative overflow-hidden">
         {/* Animated Background Gradients */}
         <div className="absolute inset-0 pointer-events-none">
           <motion.div 
             animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute -top-1/4 -right-1/4 w-[800px] h-[800px] bg-primary/20 rounded-full blur-[120px]"
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-[-10%] right-[-10%] w-[600px] h-[600px] bg-primary/30 rounded-full blur-[120px]"
           />
           <motion.div 
-            animate={{ scale: [1, 1.5, 1], opacity: [0.2, 0.4, 0.2] }}
-            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-            className="absolute bottom-0 -left-1/4 w-[600px] h-[600px] bg-violet-600/20 rounded-full blur-[100px]"
+            animate={{ scale: [1, 1.4, 1], opacity: [0.2, 0.4, 0.2] }}
+            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+            className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-600/30 rounded-full blur-[120px]"
           />
         </div>
 
         {/* Logo */}
-        <div className="relative z-10">
-          <Link to="/" className="inline-block hover:scale-105 transition-transform duration-300">
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-primary to-accent p-2.5 rounded-2xl shadow-lg shadow-primary/20">
-                <Brain className="w-8 h-8 text-white" />
-              </div>
-              <span className="text-3xl font-serif font-bold text-white tracking-tight">Hippocampus.</span>
-            </div>
+        <div className="relative z-10 mb-16">
+          <Link to="/" className="inline-block">
+            <HippocampusLogo size="xl" variant="white" />
           </Link>
         </div>
 
         {/* Main Value Prop */}
-        <div className="relative z-10 max-w-lg mt-12 mb-auto">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
-            <h1 className="text-5xl font-serif text-white leading-[1.15] mb-6">
-              Votre réussite médicale commence <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-glow to-violet-400">ici.</span>
+        <div className="relative z-10 flex-grow flex flex-col justify-center">
+          <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }} className="mb-12">
+            <h1 className="text-5xl lg:text-6xl font-serif text-white leading-[1.1] mb-6">
+              Mémorisez plus vite,<br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-glow to-violet-400">réussissez mieux.</span>
             </h1>
-            <p className="text-lg text-white/70 font-light leading-relaxed mb-12">
-              Rejoignez des milliers d'étudiants en médecine qui ont optimisé leurs révisions grâce à notre intelligence artificielle.
+            <p className="text-xl text-white/70 font-light leading-relaxed max-w-md">
+              La plateforme d'apprentissage intelligente conçue spécifiquement pour les étudiants en médecine.
             </p>
           </motion.div>
 
-          <div className="space-y-2">
-            <FeatureItem icon={Brain} title="Agent MOR Intelligent" desc="Un tuteur personnel disponible 24/7 pour répondre à toutes vos questions médicales." delay={0.2} />
-            <FeatureItem icon={FileText} title="QCMs & Cas Cliniques" desc="Génération illimitée d'exercices basés sur les annales et recommandations officielles." delay={0.4} />
-            <FeatureItem icon={Sparkles} title="Révisions Optimisées" desc="Algorithme de répétition espacée (SM-2) pour une mémorisation à long terme." delay={0.6} />
+          {/* Floating Animated Cards Container */}
+          <div className="relative h-[300px] w-full max-w-lg mt-8 perspective-1000">
+            {/* Center glowing orb */}
+            <motion.div 
+              animate={{ opacity: [0.5, 0.8, 0.5], scale: [0.9, 1.1, 0.9] }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-gradient-to-tr from-primary to-accent rounded-full opacity-40 blur-3xl"
+            />
+
+            {/* Card 1 */}
+            <motion.div
+              initial={{ opacity: 0, x: -50, y: 50 }}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.8, type: "spring" }}
+              animate={{ y: [0, -15, 0] }}
+              transition={{ y: { duration: 6, repeat: Infinity, ease: "easeInOut", delay: 0 } }}
+              className="absolute top-0 left-0 bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-2xl shadow-2xl flex items-center gap-4 w-64 transform -rotate-6 hover:rotate-0 hover:scale-105 hover:bg-white/15 transition-all cursor-default z-20"
+            >
+              <div className="bg-primary/20 p-3 rounded-xl ring-1 ring-white/20">
+                <Brain className="w-6 h-6 text-primary-glow" />
+              </div>
+              <div>
+                <h4 className="text-white font-bold text-sm">Agent MOR</h4>
+                <p className="text-white/60 text-xs mt-1">Tuteur IA disponible 24/7</p>
+              </div>
+            </motion.div>
+
+            {/* Card 2 */}
+            <motion.div
+              initial={{ opacity: 0, x: 50, y: 50 }}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              transition={{ delay: 0.6, duration: 0.8, type: "spring" }}
+              animate={{ y: [0, 15, 0] }}
+              transition={{ y: { duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 } }}
+              className="absolute top-16 right-0 bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-2xl shadow-2xl flex items-center gap-4 w-64 transform rotate-6 hover:rotate-0 hover:scale-105 hover:bg-white/15 transition-all cursor-default z-10"
+            >
+              <div className="bg-violet-500/20 p-3 rounded-xl ring-1 ring-white/20">
+                <FileText className="w-6 h-6 text-violet-300" />
+              </div>
+              <div>
+                <h4 className="text-white font-bold text-sm">QCMs Infinis</h4>
+                <p className="text-white/60 text-xs mt-1">Générés sur-mesure</p>
+              </div>
+            </motion.div>
+
+            {/* Card 3 */}
+            <motion.div
+              initial={{ opacity: 0, y: 80 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8, duration: 0.8, type: "spring" }}
+              animate={{ y: [0, -10, 0] }}
+              transition={{ y: { duration: 7, repeat: Infinity, ease: "easeInOut", delay: 2 } }}
+              className="absolute bottom-4 left-16 bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-2xl shadow-2xl flex items-center gap-4 w-64 transform hover:scale-105 hover:bg-white/15 transition-all cursor-default z-30"
+            >
+              <div className="bg-emerald-500/20 p-3 rounded-xl ring-1 ring-white/20">
+                <Sparkles className="w-6 h-6 text-emerald-300" />
+              </div>
+              <div>
+                <h4 className="text-white font-bold text-sm">Répétition Espacée</h4>
+                <p className="text-white/60 text-xs mt-1">Mémoire à long terme (SM-2)</p>
+              </div>
+            </motion.div>
           </div>
         </div>
 
         {/* Testimonial / Trust Badge */}
-        <div className="relative z-10 flex items-center gap-4 pt-12 border-t border-white/10">
+        <div className="relative z-10 flex items-center gap-4 pt-10 mt-auto">
           <div className="flex -space-x-3">
             {[1, 2, 3, 4].map(i => (
               <div key={i} className={`w-10 h-10 rounded-full border-2 border-[#0B0F19] bg-gradient-to-br ${["from-amber-400 to-orange-500", "from-blue-400 to-blue-600", "from-green-400 to-emerald-600", "from-purple-400 to-violet-600"][i-1]} flex items-center justify-center`}>
@@ -216,13 +269,8 @@ const Auth = () => {
           
           {/* Mobile Logo */}
           <div className="lg:hidden flex justify-center mb-10">
-            <Link to="/" className="inline-block">
-              <div className="flex items-center gap-3">
-                <div className="bg-gradient-to-br from-primary to-accent p-2 rounded-xl shadow-lg shadow-primary/20">
-                  <Brain className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-2xl font-serif font-bold text-foreground">Hippocampus.</span>
-              </div>
+            <Link to="/" className="inline-block hover:scale-105 transition-transform duration-300">
+              <HippocampusLogo size="xl" />
             </Link>
           </div>
 
