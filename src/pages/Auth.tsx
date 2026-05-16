@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import {
-  Mail, Lock, GraduationCap, Eye, EyeOff, KeyRound,
-  Brain, FileText, Layers, Trophy, ShieldCheck, Zap, Sparkles
+  Mail, Lock, GraduationCap, Eye, EyeOff, User, Building, Hash,
+  Brain, FileText, Sparkles, ArrowRight, CheckCircle2, Shield
 } from "lucide-react";
 import HippocampusLogo from "@/components/landing/HippocampusLogo";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,19 +34,20 @@ function scorePassword(pwd: string) {
   return s;
 }
 
-const FloatingCard = ({ icon: Icon, title, delay, x, y, rotate }: any) => (
+const FeatureItem = ({ icon: Icon, title, desc, delay }: any) => (
   <motion.div
-    initial={{ opacity: 0, y: 50 }}
-    animate={{ opacity: 1, y: 0 }}
+    initial={{ opacity: 0, x: -20 }}
+    animate={{ opacity: 1, x: 0 }}
     transition={{ delay, duration: 0.8, type: "spring" }}
-    className={`absolute ${x} ${y} bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl shadow-2xl flex items-center gap-3 w-48`}
-    style={{ rotate }}
-    whileHover={{ scale: 1.05, rotate: 0, backgroundColor: "rgba(255,255,255,0.2)" }}
+    className="flex items-start gap-4 p-4 rounded-2xl hover:bg-white/5 transition-colors cursor-default"
   >
-    <div className="bg-white/20 p-2 rounded-xl text-white">
-      <Icon className="w-5 h-5" />
+    <div className="bg-gradient-to-br from-primary/20 to-accent/20 p-3 rounded-xl ring-1 ring-white/10 shadow-inner">
+      <Icon className="w-6 h-6 text-primary-glow" />
     </div>
-    <span className="text-white font-medium text-sm">{title}</span>
+    <div>
+      <h3 className="text-white font-semibold mb-1">{title}</h3>
+      <p className="text-white/60 text-sm leading-relaxed">{desc}</p>
+    </div>
   </motion.div>
 );
 
@@ -56,16 +57,12 @@ const Auth = () => {
   const [showResetForm, setShowResetForm] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [tab, setTab] = useState<"login" | "signup">("login");
+  
   const [formData, setFormData] = useState({ 
-    email: "", 
-    password: "", 
-    confirmPassword: "", 
-    studyLevel: "",
-    firstName: "",
-    lastName: "",
-    studentNumber: "",
-    university: ""
+    email: "", password: "", confirmPassword: "", 
+    studyLevel: "", firstName: "", lastName: "", studentNumber: "", university: ""
   });
+  
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -76,204 +73,213 @@ const Auth = () => {
   }, [navigate]);
 
   const pwdScore = scorePassword(formData.password);
-  const pwdLabel = ["", "Faible", "Correct", "Bon", "Excellent"][pwdScore];
-  const pwdColor = ["bg-muted", "bg-red-500", "bg-orange-500", "bg-blue-500", "bg-green-500"][pwdScore];
+  const pwdColors = ["bg-muted", "bg-rose-500", "bg-amber-500", "bg-emerald-400", "bg-emerald-500"];
+  const pwdLabels = ["", "Très faible", "Moyen", "Bon", "Excellent"];
+
+  const handleAuthError = (error: any, isSignup: boolean) => {
+    let msg = error.message;
+    if (msg.includes("Invalid login")) msg = "Identifiants incorrects.";
+    if (msg.includes("Email not confirmed")) msg = "Veuillez confirmer votre adresse email.";
+    if (msg.includes("already registered")) msg = "Cet email est déjà utilisé.";
+    toast({ title: isSignup ? "Inscription impossible" : "Connexion impossible", description: msg, variant: "destructive" });
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: formData.email, password: formData.password });
-      if (error) {
-        let msg = error.message;
-        if (error.message.includes("Invalid login")) msg = "Email ou mot de passe incorrect.";
-        if (error.message.includes("Email not confirmed")) msg = "Email non confirmé. Vérifiez votre boîte de réception.";
-        toast({ title: "Connexion impossible", description: msg, variant: "destructive" });
-      } else {
-        toast({ title: "Bienvenue 👋", description: "Connexion réussie." });
-        navigate("/dashboard");
-      }
+      if (error) throw error;
+      toast({ title: "Bienvenue de retour 👋", description: "Connexion réussie." });
+      navigate("/dashboard");
+    } catch (err) {
+      handleAuthError(err, false);
     } finally { setIsLoading(false); }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
-      toast({ title: "Erreur", description: "Les mots de passe ne correspondent pas.", variant: "destructive" }); return;
+      return toast({ title: "Erreur", description: "Les mots de passe ne correspondent pas.", variant: "destructive" });
     }
-    if (formData.password.length < 6) {
-      toast({ title: "Erreur", description: "Mot de passe : 6 caractères minimum.", variant: "destructive" }); return;
+    if (formData.password.length < 8) {
+      return toast({ title: "Erreur", description: "Le mot de passe doit contenir au moins 8 caractères.", variant: "destructive" });
     }
-    if (!formData.studyLevel) {
-      toast({ title: "Erreur", description: "Sélectionnez votre niveau d'études.", variant: "destructive" }); return;
+    if (!formData.studyLevel || !formData.firstName || !formData.lastName || !formData.university) {
+      return toast({ title: "Erreur", description: "Veuillez remplir tous les champs obligatoires.", variant: "destructive" });
     }
+    
     setIsLoading(true);
     try {
-      const redirectUrl = `${window.location.origin}/dashboard`;
       const { error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: { 
-          emailRedirectTo: redirectUrl, 
+          emailRedirectTo: `${window.location.origin}/dashboard`,
           data: { 
-            study_level: formData.studyLevel,
-            year_of_study: formData.studyLevel,
             first_name: formData.firstName,
             name: formData.lastName,
+            study_level: formData.studyLevel,
+            year_of_study: formData.studyLevel,
             student_number: formData.studentNumber,
             university: formData.university
           } 
         },
       });
-      if (error) {
-        let msg = error.message;
-        if (error.message.includes("already registered")) msg = "Cet email est déjà utilisé. Connectez-vous.";
-        toast({ title: "Inscription impossible", description: msg, variant: "destructive" });
-      } else {
-        toast({ title: "Compte créé 🎉", description: "Vérifiez votre email pour confirmer." });
-        navigate("/dashboard");
-      }
-    } finally { setIsLoading(false); }
-  };
-
-  const handlePasswordReset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetEmail.trim()) { toast({ title: "Email requis", variant: "destructive" }); return; }
-    setIsLoading(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo: `${window.location.origin}/settings` });
       if (error) throw error;
-      toast({ title: "Email envoyé ✅", description: "Vérifiez votre boîte de réception." });
-      setShowResetForm(false);
-    } catch {
-      toast({ title: "Erreur", description: "Impossible d'envoyer l'email.", variant: "destructive" });
+      toast({ title: "Compte créé avec succès 🎉", description: "Vérifiez votre boîte mail pour confirmer votre inscription." });
+      setTab("login"); // Switch to login view
+    } catch (err) {
+      handleAuthError(err, true);
     } finally { setIsLoading(false); }
   };
 
   const handleGoogleAuth = async () => {
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/dashboard`
-        }
-      });
+      const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/dashboard` } });
       if (error) throw error;
-    } catch (error) {
+    } catch {
       toast({ title: "Erreur", description: "Impossible de se connecter avec Google.", variant: "destructive" });
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background grid lg:grid-cols-2 overflow-hidden">
-      {/* Left Pane - Dark/Primary Theme with Widgets */}
-      <div className="hidden lg:flex flex-col justify-center p-12 lg:p-24 bg-gradient-to-br from-section-dark to-section-dark/95 relative overflow-hidden">
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+    <div className="min-h-screen bg-background grid lg:grid-cols-[1fr_1.2fr] overflow-hidden selection:bg-primary/30">
+      
+      {/* ─── LEFT PANE (Visuals) ────────────────────────────────────────────── */}
+      <div className="hidden lg:flex flex-col justify-between p-12 bg-[#0B0F19] relative overflow-hidden">
+        {/* Animated Background Gradients */}
+        <div className="absolute inset-0 pointer-events-none">
           <motion.div 
-            animate={{ rotate: 360 }} transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
-            className="absolute -top-1/4 -right-1/4 w-[800px] h-[800px] bg-primary/10 rounded-full blur-[120px]"
+            animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -top-1/4 -right-1/4 w-[800px] h-[800px] bg-primary/20 rounded-full blur-[120px]"
           />
           <motion.div 
-            animate={{ rotate: -360 }} transition={{ duration: 80, repeat: Infinity, ease: "linear" }}
-            className="absolute -bottom-1/4 -left-1/4 w-[600px] h-[600px] bg-accent/10 rounded-full blur-[100px]"
+            animate={{ scale: [1, 1.5, 1], opacity: [0.2, 0.4, 0.2] }}
+            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+            className="absolute bottom-0 -left-1/4 w-[600px] h-[600px] bg-violet-600/20 rounded-full blur-[100px]"
           />
         </div>
 
-        <div className="z-10 relative h-full flex flex-col justify-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="mb-16"
-          >
-            <h2 className="text-5xl lg:text-7xl font-serif text-white leading-[1.1] mb-6">
-              Ne tape pas,<br />
-              <span className="text-primary-glow font-bold">parle simplement.</span>
-            </h2>
-            <p className="text-xl text-white/70 max-w-md font-light">
-              L'IA médicale qui comprend votre façon de travailler et révolutionne vos révisions.
+        {/* Logo */}
+        <div className="relative z-10">
+          <Link to="/" className="inline-block hover:scale-105 transition-transform duration-300">
+            <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-br from-primary to-accent p-2.5 rounded-2xl shadow-lg shadow-primary/20">
+                <Brain className="w-8 h-8 text-white" />
+              </div>
+              <span className="text-3xl font-serif font-bold text-white tracking-tight">Hippocampus.</span>
+            </div>
+          </Link>
+        </div>
+
+        {/* Main Value Prop */}
+        <div className="relative z-10 max-w-lg mt-12 mb-auto">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
+            <h1 className="text-5xl font-serif text-white leading-[1.15] mb-6">
+              Votre réussite médicale commence <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-glow to-violet-400">ici.</span>
+            </h1>
+            <p className="text-lg text-white/70 font-light leading-relaxed mb-12">
+              Rejoignez des milliers d'étudiants en médecine qui ont optimisé leurs révisions grâce à notre intelligence artificielle.
             </p>
           </motion.div>
 
-          <div className="relative h-[400px] w-full">
-            {/* Center mockup / abstract shape */}
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2, duration: 1 }}
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-gradient-to-tr from-primary to-accent rounded-full opacity-20 blur-2xl animate-pulse-glow"
-            />
-            
-            {/* Floating Widgets */}
-            <FloatingCard icon={Brain} title="QCMs Générés" delay={0.4} x="left-[5%]" y="top-[10%]" rotate="-10deg" />
-            <FloatingCard icon={Sparkles} title="Résumés IA" delay={0.6} x="right-[10%]" y="top-[20%]" rotate="15deg" />
-            <FloatingCard icon={Layers} title="Flashcards" delay={0.8} x="left-[15%]" y="bottom-[30%]" rotate="5deg" />
-            <FloatingCard icon={Trophy} title="Mode Duel" delay={1} x="right-[5%]" y="bottom-[10%]" rotate="-8deg" />
+          <div className="space-y-2">
+            <FeatureItem icon={Brain} title="Agent MOR Intelligent" desc="Un tuteur personnel disponible 24/7 pour répondre à toutes vos questions médicales." delay={0.2} />
+            <FeatureItem icon={FileText} title="QCMs & Cas Cliniques" desc="Génération illimitée d'exercices basés sur les annales et recommandations officielles." delay={0.4} />
+            <FeatureItem icon={Sparkles} title="Révisions Optimisées" desc="Algorithme de répétition espacée (SM-2) pour une mémorisation à long terme." delay={0.6} />
+          </div>
+        </div>
+
+        {/* Testimonial / Trust Badge */}
+        <div className="relative z-10 flex items-center gap-4 pt-12 border-t border-white/10">
+          <div className="flex -space-x-3">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className={`w-10 h-10 rounded-full border-2 border-[#0B0F19] bg-gradient-to-br ${["from-amber-400 to-orange-500", "from-blue-400 to-blue-600", "from-green-400 to-emerald-600", "from-purple-400 to-violet-600"][i-1]} flex items-center justify-center`}>
+                <User className="w-5 h-5 text-white/80" />
+              </div>
+            ))}
+          </div>
+          <div className="text-sm">
+            <div className="flex text-amber-400 mb-0.5">★★★★★</div>
+            <span className="text-white/60 font-medium">+5,000 étudiants nous font confiance</span>
           </div>
         </div>
       </div>
 
-      {/* Right Pane - Form */}
-      <div className="flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-card min-h-screen relative">
-        <div className="w-full max-w-md mx-auto relative z-10">
-          <AnimatePresence mode="wait">
-            {showResetForm ? (
-              <motion.div key="reset" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                <div className="mb-12 flex justify-center">
-                  <Link to="/" className="hover:scale-105 transition-transform block">
-                    <HippocampusLogo size="lg" showText={false} />
-                  </Link>
+      {/* ─── RIGHT PANE (Form) ─────────────────────────────────────────────── */}
+      <div className="flex items-center justify-center p-6 sm:p-12 bg-card relative min-h-screen overflow-y-auto">
+        <div className="w-full max-w-[440px] relative z-10 py-12">
+          
+          {/* Mobile Logo */}
+          <div className="lg:hidden flex justify-center mb-10">
+            <Link to="/" className="inline-block">
+              <div className="flex items-center gap-3">
+                <div className="bg-gradient-to-br from-primary to-accent p-2 rounded-xl shadow-lg shadow-primary/20">
+                  <Brain className="w-6 h-6 text-white" />
                 </div>
-                <h1 className="text-4xl font-serif text-foreground mb-3 text-center">Récupération</h1>
-                <p className="text-muted-foreground text-sm mb-8 text-center">Un lien magique sera envoyé à votre adresse.</p>
-                <form onSubmit={handlePasswordReset} className="space-y-6">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-foreground">Adresse email <span className="text-destructive">*</span></Label>
-                    <div className="relative group">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                      <Input type="email" placeholder="nom@exemple.com" className="pl-12 h-14 rounded-2xl border-border bg-background focus:ring-primary focus:border-primary transition-all" 
-                        value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} required />
-                    </div>
+                <span className="text-2xl font-serif font-bold text-foreground">Hippocampus.</span>
+              </div>
+            </Link>
+          </div>
+
+          <AnimatePresence mode="wait">
+            {/* RESET PASSWORD FORM */}
+            {showResetForm ? (
+              <motion.div key="reset" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6">
+                <div className="text-center mb-8">
+                  <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-primary">
+                    <Shield className="w-8 h-8" />
                   </div>
-                  <Button type="submit" className="w-full h-14 rounded-2xl bg-primary hover:bg-primary-hover text-primary-foreground font-semibold text-base shadow-lg shadow-primary/25 transition-all hover:translate-y-[-2px]" disabled={isLoading}>
-                    {isLoading ? "Envoi en cours..." : "Envoyer le lien"}
+                  <h2 className="text-3xl font-bold tracking-tight mb-2">Mot de passe oublié ?</h2>
+                  <p className="text-muted-foreground">Entrez votre email pour recevoir un lien de réinitialisation.</p>
+                </div>
+
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  setIsLoading(true);
+                  const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo: `${window.location.origin}/settings` });
+                  setIsLoading(false);
+                  if (error) toast({ title: "Erreur", description: error.message, variant: "destructive" });
+                  else { toast({ title: "Email envoyé", description: "Vérifiez votre boîte de réception." }); setShowResetForm(false); }
+                }} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-semibold">Email</Label>
+                    <Input type="email" placeholder="nom@universite.fr" className="h-12 bg-muted/50 border-transparent focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all" value={resetEmail} onChange={e => setResetEmail(e.target.value)} required />
+                  </div>
+                  <Button type="submit" className="w-full h-12 text-base font-semibold shadow-lg shadow-primary/20" disabled={isLoading}>
+                    {isLoading ? "Envoi..." : "Envoyer le lien"}
                   </Button>
-                  <div className="text-center">
-                    <button type="button" onClick={() => setShowResetForm(false)} className="text-sm text-muted-foreground hover:text-foreground font-medium transition-colors">
-                      ← Retour à la connexion
-                    </button>
-                  </div>
+                  <Button type="button" variant="ghost" onClick={() => setShowResetForm(false)} className="w-full h-12 text-muted-foreground">
+                    Retour à la connexion
+                  </Button>
                 </form>
               </motion.div>
             ) : (
-              <motion.div key="auth" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
+              
+              /* LOGIN / SIGNUP FORM */
+              <motion.div key="auth" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
                 
-                <div className="mb-10 flex flex-col items-center justify-center text-center">
-                  <Link to="/" className="mb-8 hover:scale-105 transition-transform block">
-                    <HippocampusLogo size="lg" showText={false} />
-                  </Link>
-                  
-                  <h1 className="text-2xl font-serif text-foreground mb-2">
-                    {tab === "login" ? "Nouveau ici ?" : "Déjà membre ?"}
-                  </h1>
-                  <button 
-                    onClick={() => setTab(tab === "login" ? "signup" : "login")} 
-                    className="text-primary font-bold hover:underline text-lg transition-colors"
-                  >
-                    {tab === "login" ? "Créer un compte" : "Se connecter"}
-                  </button>
+                <div className="mb-10">
+                  <h2 className="text-3xl font-bold tracking-tight mb-2 text-foreground">
+                    {tab === "login" ? "Bon retour 👋" : "Créer un compte"}
+                  </h2>
+                  <p className="text-muted-foreground flex items-center gap-2">
+                    {tab === "login" ? "Nouveau sur Hippocampus ?" : "Vous avez déjà un compte ?"}
+                    <button onClick={() => setTab(tab === "login" ? "signup" : "login")} className="text-primary font-semibold hover:underline decoration-2 underline-offset-4 transition-all">
+                      {tab === "login" ? "S'inscrire" : "Se connecter"}
+                    </button>
+                  </p>
                 </div>
 
                 <Button 
-                  onClick={handleGoogleAuth}
-                  disabled={isLoading}
-                  variant="outline" 
-                  className="w-full h-14 rounded-2xl border-border bg-background hover:bg-muted text-foreground font-medium mb-8 flex items-center justify-center gap-3 transition-all hover:shadow-md"
+                  onClick={handleGoogleAuth} disabled={isLoading} variant="outline" 
+                  className="w-full h-12 mb-6 font-semibold border-border bg-background hover:bg-muted/50 transition-all duration-300"
                 >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
@@ -282,148 +288,132 @@ const Auth = () => {
                   Continuer avec Google
                 </Button>
 
-                <div className="relative flex items-center py-2 mb-8">
+                <div className="relative flex items-center py-2 mb-6">
                   <div className="flex-grow border-t border-border"></div>
-                  <span className="flex-shrink-0 mx-4 text-muted-foreground text-xs font-medium uppercase tracking-wider">Ou via email</span>
+                  <span className="flex-shrink-0 mx-4 text-muted-foreground text-xs font-semibold uppercase tracking-wider">Ou avec votre email</span>
                   <div className="flex-grow border-t border-border"></div>
                 </div>
 
-                <form onSubmit={tab === "login" ? handleLogin : handleSignup} className="space-y-5">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-foreground">Adresse email</Label>
-                    <div className="relative group">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                      <Input 
-                        type="email" 
-                        placeholder="nom@exemple.com"
-                        className="pl-12 h-14 rounded-2xl border-border bg-background focus:ring-primary focus:border-primary transition-all" 
-                        value={formData.email}
-                        onChange={(e) => setFormData({...formData, email: e.target.value})}
-                        required
-                      />
-                    </div>
-                  </div>
+                <form onSubmit={tab === "login" ? handleLogin : handleSignup} className="space-y-4">
                   
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-sm font-medium text-foreground">Mot de passe</Label>
-                      {tab === "login" && (
-                        <button type="button" onClick={() => setShowResetForm(true)} className="text-xs text-primary hover:underline font-medium">
-                          Oublié ?
+                  {/* Email & Password (Common) */}
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-sm font-semibold">Email</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input type="email" placeholder="nom@exemple.com" className="pl-10 h-12 bg-muted/50 border-transparent focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <Label className="text-sm font-semibold">Mot de passe</Label>
+                        {tab === "login" && (
+                          <button type="button" onClick={() => setShowResetForm(true)} className="text-xs text-primary font-medium hover:underline">
+                            Oublié ?
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input type={showPassword ? "text" : "password"} placeholder="••••••••" className="pl-10 pr-10 h-12 bg-muted/50 border-transparent focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
+                      </div>
+                      
+                      {tab === "signup" && formData.password && (
+                        <div className="pt-2">
+                          <div className="flex gap-1 h-1.5 mb-1.5">
+                            {[1, 2, 3, 4].map((i) => (
+                              <div key={i} className={`flex-1 rounded-full transition-all duration-500 ${i <= pwdScore ? pwdColors[pwdScore] : "bg-border"}`} />
+                            ))}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground font-medium flex justify-between">
+                            <span>Sécurité du mot de passe</span>
+                            <span className={pwdScore >= 3 ? "text-emerald-500" : "text-amber-500"}>{pwdLabels[pwdScore]}</span>
+                          </p>
+                        </div>
                       )}
                     </div>
-                    <div className="relative group">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                      <Input 
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="pl-12 pr-12 h-14 rounded-2xl border-border bg-background focus:ring-primary focus:border-primary transition-all" 
-                        value={formData.password}
-                        onChange={(e) => setFormData({...formData, password: e.target.value})}
-                        required
-                      />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                      </button>
-                    </div>
-                    {tab === "signup" && formData.password && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-1.5 mt-3">
-                        <div className="flex gap-1 h-1.5">
-                          {[0, 1, 2, 3].map((i) => (
-                            <div key={i} className={`flex-1 rounded-full transition-colors duration-300 ${i < pwdScore ? pwdColor : "bg-muted"}`} />
-                          ))}
-                        </div>
-                        <p className="text-[11px] text-muted-foreground text-right font-medium">{pwdLabel || "—"}</p>
-                      </motion.div>
-                    )}
                   </div>
 
+                  {/* Signup Specific Fields */}
                   {tab === "signup" && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-foreground">Confirmer le mot de passe</Label>
-                        <div className="relative group">
-                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                          <Input 
-                            type="password"
-                            placeholder="••••••••"
-                            className="pl-12 h-14 rounded-2xl border-border bg-background focus:ring-primary focus:border-primary transition-all" 
-                            value={formData.confirmPassword}
-                            onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-                            required
-                          />
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-4 pt-2 border-t border-border/50 mt-6">
+                      
+                      <div className="space-y-1.5">
+                        <Label className="text-sm font-semibold">Confirmer le mot de passe</Label>
+                        <div className="relative">
+                          <CheckCircle2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input type="password" placeholder="••••••••" className="pl-10 h-12 bg-muted/50 border-transparent focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} required />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-sm font-semibold">Prénom</Label>
+                          <div className="relative">
+                            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Jean" className="pl-10 h-12 bg-muted/50 border-transparent focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} required />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-sm font-semibold">Nom</Label>
+                          <Input placeholder="Dupont" className="h-12 bg-muted/50 border-transparent focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} required />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-sm font-semibold">Université / Faculté</Label>
+                        <div className="relative">
+                          <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input placeholder="Ex: Sorbonne Université" className="pl-10 h-12 bg-muted/50 border-transparent focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20" value={formData.university} onChange={e => setFormData({...formData, university: e.target.value})} required />
                         </div>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Prénom</Label>
-                          <Input 
-                            placeholder="Jean"
-                            className="h-14 rounded-2xl border-border bg-background focus:ring-primary transition-all" 
-                            value={formData.firstName}
-                            onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Nom</Label>
-                          <Input 
-                            placeholder="Dupont"
-                            className="h-14 rounded-2xl border-border bg-background focus:ring-primary transition-all" 
-                            value={formData.lastName}
-                            onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-foreground">Numéro d'étudiant (Optionnel)</Label>
-                        <Input 
-                          placeholder="Ex: 22104567"
-                          className="h-14 rounded-2xl border-border bg-background focus:ring-primary transition-all" 
-                          value={formData.studentNumber}
-                          onChange={(e) => setFormData({...formData, studentNumber: e.target.value})}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-foreground">Université / Faculté</Label>
-                        <Input 
-                          placeholder="Ex: Sorbonne Université"
-                          className="h-14 rounded-2xl border-border bg-background focus:ring-primary transition-all" 
-                          value={formData.university}
-                          onChange={(e) => setFormData({...formData, university: e.target.value})}
-                          required
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-foreground">Niveau d'études</Label>
-                        <div className="relative group">
-                          <GraduationCap className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors z-10" />
+                        <div className="space-y-1.5">
+                          <Label className="text-sm font-semibold">Niveau d'études</Label>
                           <Select onValueChange={(v) => setFormData({ ...formData, studyLevel: v })}>
-                            <SelectTrigger className="pl-12 h-14 rounded-2xl border-border bg-background focus:ring-primary focus:border-primary transition-all">
-                              <SelectValue placeholder="Sélectionnez..." />
+                            <SelectTrigger className="h-12 bg-muted/50 border-transparent focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20">
+                              <GraduationCap className="h-4 w-4 text-muted-foreground mr-2" />
+                              <SelectValue placeholder="Niveau" />
                             </SelectTrigger>
-                            <SelectContent className="rounded-xl border-border">
-                              {studyLevels.map((l) => <SelectItem key={l.value} value={l.value} className="rounded-lg">{l.label}</SelectItem>)}
+                            <SelectContent>
+                              {studyLevels.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-sm font-semibold">N° Étudiant <span className="text-muted-foreground font-normal">(Optionnel)</span></Label>
+                          <div className="relative">
+                            <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Ex: 221045" className="pl-10 h-12 bg-muted/50 border-transparent focus:bg-background focus:border-primary focus:ring-2 focus:ring-primary/20" value={formData.studentNumber} onChange={e => setFormData({...formData, studentNumber: e.target.value})} />
+                          </div>
+                        </div>
                       </div>
+
                     </motion.div>
                   )}
 
-                  <Button type="submit" className="w-full h-14 mt-6 rounded-2xl bg-primary hover:bg-primary-hover text-primary-foreground font-semibold text-base shadow-lg shadow-primary/20 transition-all hover:translate-y-[-2px]" disabled={isLoading}>
+                  <Button type="submit" className="w-full h-12 mt-4 text-base font-bold bg-primary hover:bg-primary-hover text-primary-foreground shadow-xl shadow-primary/25 transition-all hover:-translate-y-0.5 active:translate-y-0" disabled={isLoading}>
                     {isLoading ? (
-                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     ) : (
-                      tab === "login" ? "Accéder à l'espace" : "Créer mon espace"
+                      <span className="flex items-center gap-2">
+                        {tab === "login" ? "Accéder à l'espace" : "Créer mon espace"}
+                        <ArrowRight className="w-5 h-5" />
+                      </span>
                     )}
                   </Button>
+                  
+                  {tab === "signup" && (
+                    <p className="text-center text-xs text-muted-foreground mt-4">
+                      En créant un compte, vous acceptez nos <Link to="/terms" className="underline hover:text-primary">Conditions d'utilisation</Link> et notre <Link to="/privacy" className="underline hover:text-primary">Politique de confidentialité</Link>.
+                    </p>
+                  )}
                 </form>
               </motion.div>
             )}
