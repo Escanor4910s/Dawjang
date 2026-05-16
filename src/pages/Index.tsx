@@ -275,400 +275,269 @@ const Index = () => {
         )}
       </AnimatePresence>
 
-      <main className="relative z-10 pt-32 pb-20 bg-doodle-watermark">
+      <main className="relative z-10 bg-[#FCFBF7]">
         
-        {/* HERO SECTION */}
-        <section className="px-6 flex flex-col items-center text-center max-w-5xl mx-auto relative pt-10 pb-20 rounded-[3rem]">
-          {/* Decorative floating icons */}
-          <motion.div style={{ y: yFloating1 }} className="absolute hidden md:block top-10 left-10 text-primary opacity-60">
-             <FloatingElement delay={0} yOffset={15} duration={5}>
-               <div className="p-4 bg-background rounded-2xl shadow-xl border border-border rotate-[-12deg]"><Stethoscope className="w-8 h-8" /></div>
-             </FloatingElement>
-          </motion.div>
-          <motion.div style={{ y: yFloating2 }} className="absolute hidden md:block top-32 right-10 text-[#FF8A65] opacity-60">
-             <FloatingElement delay={1} yOffset={20} duration={6}>
-               <div className="p-4 bg-background rounded-2xl shadow-xl border border-border rotate-[15deg]"><HeartPulse className="w-8 h-8" /></div>
-             </FloatingElement>
-          </motion.div>
-          
-          <FadeIn scale={0.95}>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-foreground/10 bg-background/50 backdrop-blur-md mb-8 shadow-sm">
-              <Sparkles className="w-4 h-4 text-primary-foreground" />
-              <span className="text-sm font-semibold text-foreground/80">L'IA médicale nouvelle génération</span>
+        {/* HERO SECTION - WisprFlow Style */}
+        <section className="px-6 flex flex-col items-center text-center max-w-5xl mx-auto relative pt-32 pb-32">
+          {/* WisprFlow style watermark / squiggly line */}
+          <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[120%] max-w-[1400px] h-[600px] opacity-[0.06] pointer-events-none z-0">
+            <svg viewBox="0 0 1440 600" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+              <path d="M-100 400 C 200 400, 300 100, 700 200 S 1000 500, 1500 300" stroke="#1A1C1B" strokeWidth="6" strokeDasharray="12 12" fill="none"/>
+              <path d="M-50 150 C 400 0, 500 500, 900 400 S 1200 100, 1550 200" stroke="#1A1C1B" strokeWidth="3" fill="none"/>
+            </svg>
+          </div>
+
+          <FadeIn scale={0.95} className="relative z-10">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-black/10 bg-white/50 backdrop-blur-md mb-8 shadow-sm">
+              <Sparkles className="w-4 h-4 text-[#FF8A65]" />
+              <span className="text-sm font-semibold text-[#1A1C1B]">L'IA de révision médicale par excellence</span>
             </div>
           </FadeIn>
 
-          <FadeIn delay={0.1} yOffset={40}>
-            <h1 className="text-6xl md:text-[5.5rem] lg:text-[6.5rem] font-serif font-medium tracking-tight leading-[1.02] mb-6 text-foreground">
-              L'intelligence artificielle au service de votre <span className="text-transparent bg-clip-text bg-gradient-text italic">réussite</span> médicale.
+          <FadeIn delay={0.1} yOffset={40} className="relative z-10">
+            <h1 className="text-6xl md:text-[5.5rem] lg:text-[7.5rem] font-serif font-medium tracking-tighter leading-[1.0] mb-6 text-[#1A1C1B]">
+              Ne bachotez plus,<br />
+              <span className="italic font-light text-primary">assimilez simplement.</span>
             </h1>
           </FadeIn>
           
-          <FadeIn delay={0.2}>
-            <p className="text-lg md:text-xl text-foreground/60 max-w-2xl mx-auto mb-10 font-medium">
-              Générez vos propres QCM, analysez vos cas cliniques et ancrer vos connaissances à long terme, le tout à partir de vos propres documents.
+          <FadeIn delay={0.2} className="relative z-10">
+            <p className="text-xl md:text-2xl text-[#1A1C1B]/60 max-w-2xl mx-auto mb-10 font-medium leading-relaxed">
+              La plateforme d'apprentissage qui transforme vos cours en 
+              connaissances à vie. <br className="hidden md:block" /> Conçue pour les étudiants exigeants.
             </p>
           </FadeIn>
           
-          <FadeIn delay={0.3} className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto z-10">
-            <Button asChild size="lg" className="w-full sm:w-auto rounded-full h-14 px-10 text-lg bg-primary text-primary-foreground hover:bg-foreground hover:text-background font-bold shadow-[0_10px_30px_rgba(235,223,255,0.6)] hover:shadow-[0_10px_35px_rgba(0,0,0,0.2)] transition-all duration-300 hover:scale-105 hover:-translate-y-1">
-              <Link to="/auth">Propulser mes révisions <ArrowRight className="ml-2 w-5 h-5" /></Link>
-            </Button>
+          <FadeIn delay={0.3} className="relative z-10 flex w-full max-w-md mx-auto">
+            <div className="w-full p-2 bg-white rounded-full border border-black/10 shadow-xl flex items-center justify-between pl-6 hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
+              <span className="text-[#1A1C1B]/50 font-medium">Commencer avec Hippocampus...</span>
+              <Button asChild className="rounded-full bg-[#1A1C1B] text-white hover:bg-black px-8 h-12 text-base font-bold shadow-md hover:scale-105 transition-transform">
+                <Link to="/auth">Démarrer</Link>
+              </Button>
+            </div>
           </FadeIn>
 
-          {/* Abstract Wire/Line Decoration */}
-          <motion.div style={{ y: yHeroWire }} className="absolute top-[60%] left-0 w-full h-[2px] -z-10 opacity-[0.08] pointer-events-none">
-            <svg viewBox="0 0 1000 200" className="w-full h-[300px]" preserveAspectRatio="none">
-              <path d="M0,100 C200,300 800,-100 1000,100" fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray="10,10" />
-              <path d="M0,150 C300,50 700,250 1000,150" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="5,15" />
-            </svg>
-          </motion.div>
+          {/* Hero App Mockup */}
+          <FadeIn delay={0.4} yOffset={60} className="mt-20 relative w-full max-w-4xl mx-auto z-20">
+            <div className="rounded-[2rem] p-4 bg-white border border-black/10 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.15)] relative">
+              {/* Fake UI */}
+              <div className="bg-[#FCFBF7] rounded-[1.5rem] p-12 min-h-[350px] flex items-center justify-center border border-black/5">
+                <div className="flex flex-col items-center gap-6">
+                  <div className="flex gap-3 mb-4 h-16 items-center">
+                    {[0,1,2,3,4].map((i) => (
+                      <motion.div 
+                        key={i}
+                        animate={{ height: ['20%', '100%', '20%'] }}
+                        transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.15, ease: 'easeInOut' }}
+                        className={`w-3 rounded-full ${i === 2 ? 'bg-primary' : 'bg-[#1A1C1B]'}`}
+                      />
+                    ))}
+                  </div>
+                  <h3 className="font-serif text-3xl font-bold text-[#1A1C1B]">L'Agent MOR analyse vos cours...</h3>
+                </div>
+              </div>
+            </div>
+            
+            {/* Floating Badges */}
+            <motion.div style={{ y: yFloating1 }} className="absolute -left-12 top-20 bg-white p-4 rounded-2xl shadow-xl border border-black/5 rotate-[-12deg]">
+              <div className="flex items-center gap-3">
+                <div className="bg-green-100 p-2 rounded-lg"><CheckCircle2 className="w-6 h-6 text-green-600" /></div>
+                <div><p className="font-bold text-[#1A1C1B] text-sm">Anatomie validée</p><p className="text-xs text-[#1A1C1B]/50">Score: 19/20</p></div>
+              </div>
+            </motion.div>
+            <motion.div style={{ y: yFloating2 }} className="absolute -right-8 bottom-10 bg-white p-4 rounded-2xl shadow-xl border border-black/5 rotate-[12deg]">
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-100 p-2 rounded-lg"><Zap className="w-6 h-6 text-blue-600" /></div>
+                <div><p className="font-bold text-[#1A1C1B] text-sm">Cas Clinique prêt</p><p className="text-xs text-[#1A1C1B]/50">Généré en 2s</p></div>
+              </div>
+            </motion.div>
+          </FadeIn>
         </section>
 
-        {/* DARK SECTION 1 (Black) */}
-        <section id="features" className="mt-10 bg-section-dark text-section-dark-foreground rounded-[2.5rem] md:rounded-[4rem] mx-4 md:mx-8 px-6 py-24 md:py-32 relative overflow-hidden group">
-          {/* Subtle animated background gradient */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,rgba(235,223,255,0.05),transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+        {/* DARK BLACK SECTION - Features (Wispr Style) */}
+        <section id="features" className="bg-[#151515] text-[#FCFBF7] mx-4 md:mx-8 px-6 py-32 rounded-[3rem] md:rounded-[4rem] relative overflow-hidden mt-6">
+          {/* Subtle watermark in dark section */}
+          <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGcgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIiBmaWxsPSJub25lIj48cGF0aCBkPSJNMCA0MGw0MCAtNDBNMCAwbDQwIDQwIiBvcGFjaXR5PSIwIi8+PHBhdGggZD0iTTQwIDB2NDBoLTQwdi00MHoiLz48L2c+PC9zdmc+')] [mask-image:radial-gradient(ellipse_at_center,black,transparent)]" />
           
-          <div className="max-w-5xl mx-auto relative z-10 flex flex-col md:flex-row items-center justify-between gap-16">
-            <FadeIn className="md:w-1/2">
-              <h2 className="text-4xl md:text-6xl font-serif mb-8 leading-tight">
-                Révise plus vite,<br />dans toutes<br />tes matières.
+          <div className="max-w-6xl mx-auto">
+            <FadeIn className="text-center mb-24">
+              <h2 className="text-5xl md:text-[5.5rem] font-serif mb-6 leading-tight font-medium">
+                Conçu pour votre <br /><i className="font-light text-primary-glow">façon de réviser</i>
               </h2>
-              <ul className="space-y-5 text-section-dark-foreground/70 text-lg md:text-xl font-medium">
-                <motion.li whileHover={{ x: 10 }} className="flex items-center gap-4 cursor-default">
-                  <div className="w-3 h-3 rounded-full bg-primary shadow-[0_0_10px_rgba(235,223,255,0.5)]" /> Anatomie & Physiologie
-                </motion.li>
-                <motion.li whileHover={{ x: 10 }} className="flex items-center gap-4 cursor-default">
-                  <div className="w-3 h-3 rounded-full bg-[#FFD4A3] shadow-[0_0_10px_rgba(255,212,163,0.5)]" /> Pharmacologie
-                </motion.li>
-                <motion.li whileHover={{ x: 10 }} className="flex items-center gap-4 cursor-default">
-                  <div className="w-3 h-3 rounded-full bg-[#A3FFD4] shadow-[0_0_10px_rgba(163,255,212,0.5)]" /> Cas cliniques ECNi
-                </motion.li>
-              </ul>
+              <p className="text-xl text-[#FCFBF7]/60 max-w-2xl mx-auto">
+                Des QCMs sur mesure, un algorithme de répétition espacée redoutable et un tuteur IA toujours à l'écoute.
+              </p>
             </FadeIn>
-            <FadeIn delay={0.2} scale={0.9} className="md:w-1/2 relative">
-              {/* Main Mockup visual */}
-              <motion.div 
-                whileHover={{ rotate: 0, scale: 1.05 }}
-                className="bg-[#1A1A1A] border border-white/10 rounded-3xl p-6 shadow-2xl rotate-3 transition-all duration-500 relative z-10"
-              >
-                 <div className="flex items-center gap-4 mb-6 border-b border-white/10 pb-5">
-                   <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center">
-                     <Brain className="w-6 h-6 text-primary" />
-                   </div>
-                   <div>
-                     <div className="font-bold text-lg">Génération en cours...</div>
-                     <div className="text-sm text-white/50">Cardiologie - Chapitre 4</div>
-                   </div>
+
+            <div className="grid md:grid-cols-2 gap-8">
+               <FadeIn yOffset={30} className="bg-[#1C1C1C] border border-white/5 rounded-[2.5rem] p-12 hover:bg-[#202020] transition-colors relative group overflow-hidden">
+                 <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-[80px] group-hover:bg-primary/20 transition-all" />
+                 <h3 className="text-4xl font-serif mb-4 relative z-10">Mémoire infinie</h3>
+                 <p className="text-lg text-white/60 mb-12 relative z-10">L'algorithme SM-2 vous interroge au moment exact où vous alliez oublier.</p>
+                 <div className="bg-[#151515] p-6 rounded-3xl border border-white/10 mt-auto relative z-10 shadow-2xl group-hover:-translate-y-4 transition-transform duration-500">
+                    <div className="flex flex-col gap-4">
+                      <div className="flex justify-between items-center"><span className="text-sm font-bold text-white/50">Prochaine révision</span><span className="text-primary font-bold">Dans 3 jours</span></div>
+                      <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-primary w-2/3" /></div>
+                    </div>
                  </div>
-                 <div className="space-y-4">
-                   <div className="h-5 bg-white/5 rounded-lg w-3/4 animate-pulse" />
-                   <div className="h-5 bg-white/5 rounded-lg w-1/2 animate-pulse" />
-                   <div className="h-5 bg-white/5 rounded-lg w-5/6 animate-pulse" />
+               </FadeIn>
+
+               <FadeIn yOffset={30} delay={0.2} className="bg-[#1C1C1C] border border-white/5 rounded-[2.5rem] p-12 hover:bg-[#202020] transition-colors relative group overflow-hidden">
+                 <div className="absolute top-0 right-0 w-64 h-64 bg-rose-500/10 rounded-full blur-[80px] group-hover:bg-rose-500/20 transition-all" />
+                 <h3 className="text-4xl font-serif mb-4 relative z-10">Annales générées</h3>
+                 <p className="text-lg text-white/60 mb-12 relative z-10">Des milliers de cas cliniques et de QCM générés à partir de vos supports.</p>
+                 <div className="bg-[#151515] p-6 rounded-3xl border border-white/10 mt-auto relative z-10 shadow-2xl group-hover:-translate-y-4 transition-transform duration-500">
+                    <div className="flex gap-4">
+                      <div className="w-12 h-12 bg-rose-500/20 rounded-2xl flex items-center justify-center"><BookOpen className="text-rose-400 w-6 h-6" /></div>
+                      <div>
+                        <div className="font-bold">Cas clinique Cardiologie</div>
+                        <div className="text-white/40 text-sm">Généré en 2s</div>
+                      </div>
+                    </div>
                  </div>
-              </motion.div>
-              
-              {/* Floating icons with Framer Motion */}
-              <FloatingElement delay={0} yOffset={15} duration={4} className="-top-10 -right-10 z-20">
-                <div className="w-16 h-16 bg-blue-500 rounded-3xl flex items-center justify-center shadow-2xl rotate-12 backdrop-blur-md bg-opacity-90 border border-white/20">
-                  <FileText className="text-white w-7 h-7" />
-                </div>
-              </FloatingElement>
-              
-              <FloatingElement delay={1.5} yOffset={20} duration={5} className="-bottom-8 -left-8 z-20">
-                <div className="w-16 h-16 bg-rose-500 rounded-3xl flex items-center justify-center shadow-2xl -rotate-12 backdrop-blur-md bg-opacity-90 border border-white/20">
-                  <BookOpen className="text-white w-7 h-7" />
-                </div>
-              </FloatingElement>
-              
-              <FloatingElement delay={0.8} yOffset={10} duration={3} className="bottom-20 -right-12 z-0 opacity-50">
-                <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center shadow-2xl rotate-45 backdrop-blur-md bg-opacity-90">
-                  <Activity className="text-primary-foreground w-6 h-6" />
-                </div>
-              </FloatingElement>
-            </FadeIn>
+               </FadeIn>
+            </div>
           </div>
         </section>
 
-        {/* GREEN SECTION */}
-        <section className="bg-secondary text-secondary-foreground mt-6 rounded-[2.5rem] md:rounded-[4rem] mx-4 md:mx-8 px-6 py-24 md:py-32 relative overflow-hidden group">
+        {/* GREEN SECTION - Video (Kept exactly as requested, adapted to Wispr colors) */}
+        <section className="bg-[#0D382B] text-[#FCFBF7] mx-4 md:mx-8 px-6 py-32 rounded-[3rem] md:rounded-[4rem] relative overflow-hidden mt-6">
           {/* Subtle noise/texture overlay for the green section */}
           <div className="absolute inset-0 opacity-[0.03] mix-blend-overlay bg-[url('data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjAwIDIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZmlsdGVyIGlkPSJub2lzZUZpbHRlciI+PGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9IjAuNjUiIG51bU9jdGF2ZXM9IjMiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWx0ZXI9InVybCgibm9pc2VGaWx0ZXIpIi8+PC9zdmc+')]"></div>
           
           <div className="max-w-4xl mx-auto text-center mb-16 relative z-10">
             <FadeIn>
-              <h2 className="text-5xl md:text-[5rem] font-serif mb-6 leading-tight text-white drop-shadow-md">
-                4 fois plus rapide<br />pour retenir
+              <h2 className="text-5xl md:text-[5.5rem] font-serif mb-6 leading-tight">
+                4 fois plus rapide<br /><span className="italic font-light">que la lecture</span>
               </h2>
-              <p className="text-xl md:text-2xl text-white/80 max-w-2xl mx-auto font-medium">
-                L'IA analyse tes documents et génère instantanément des questions adaptées à ton niveau.
+              <p className="text-xl md:text-2xl text-white/70 max-w-2xl mx-auto font-medium">
+                Découvrez comment l'IA change drastiquement la manière dont les étudiants assimilent leurs cours.
               </p>
-            </FadeIn>
-            <FadeIn delay={0.2} className="mt-10">
-              <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-white hover:text-black font-bold shadow-[0_10px_30px_rgba(0,0,0,0.2)] px-10 h-14 text-lg hover:scale-105 transition-all">
-                <Link to="/auth">Voir comment ça marche</Link>
-              </Button>
             </FadeIn>
           </div>
 
-          <FadeIn delay={0.3} yOffset={50} className="max-w-5xl mx-auto relative z-10 mt-20">
+          <FadeIn delay={0.3} yOffset={50} className="max-w-5xl mx-auto relative z-10 mt-16">
             <motion.div 
               whileHover={{ y: -10 }}
-              className="aspect-video bg-black/40 rounded-[2.5rem] overflow-hidden border border-white/20 backdrop-blur-md flex items-center justify-center relative shadow-[0_20px_50px_rgba(0,0,0,0.3)]"
+              className="aspect-video bg-black/60 rounded-[2.5rem] overflow-hidden border border-white/20 backdrop-blur-md flex items-center justify-center relative shadow-2xl"
             >
-              <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80')] bg-cover bg-center opacity-40 mix-blend-overlay transition-opacity duration-700 hover:opacity-60" />
-              <div className="absolute inset-0 bg-gradient-to-t from-secondary/80 to-transparent" />
+              <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80')] bg-cover bg-center opacity-30 mix-blend-overlay transition-opacity duration-700 hover:opacity-50" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0D382B] to-transparent opacity-80" />
               <motion.button 
                 whileHover={{ scale: 1.1, rotate: 90 }}
                 whileTap={{ scale: 0.9 }}
-                className="w-24 h-24 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-secondary shadow-2xl relative z-20 border border-white/50"
+                className="w-24 h-24 bg-[#FCFBF7] backdrop-blur-sm rounded-full flex items-center justify-center text-[#0D382B] shadow-[0_0_40px_rgba(255,255,255,0.2)] relative z-20"
               >
-                <PlayCircle className="w-10 h-10 ml-1" />
+                <PlayCircle className="w-12 h-12 ml-1" />
               </motion.button>
             </motion.div>
           </FadeIn>
         </section>
 
-        {/* DARK BENTO BOX SECTION */}
-        <section className="mt-6 bg-section-dark text-section-dark-foreground rounded-[2.5rem] md:rounded-[4rem] mx-4 md:mx-8 px-6 py-24 md:py-32 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGcgc3Ryb2tlPSJyZ2JhKDI1NSwgMjU1LCAyNTUsIDAuMDMpIiBzdHJva2Utd2lkdGg9IjEiIGZpbGw9Im5vbmUiPjxwaGF0aCBkPSJNMCA0MGw0MCAtNDBNMCAwbDQwIDQwIiBvcGFjaXR5PSIwIi8+PHBhdGggZD0iTTQwIDB2NDBoLTQwdi00MHoiLz48L2c+PC9zdmc+')] [mask-image:linear-gradient(to_bottom,black,transparent)]">
-          <div className="max-w-6xl mx-auto">
-            <FadeIn className="mb-20">
-              <h2 className="text-5xl md:text-[4rem] font-serif max-w-2xl leading-tight mb-6">
-                Fait pour ta façon de travailler
-              </h2>
-              <p className="text-section-dark-foreground/60 text-xl md:text-2xl font-medium max-w-xl">Adapte l'IA à tes besoins spécifiques en médecine et pharmacie.</p>
-            </FadeIn>
-
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Card 1 */}
-              <FadeIn delay={0.1} yOffset={40} className="bg-[#1A1A1A] rounded-[2.5rem] p-10 md:p-12 flex flex-col justify-between min-h-[400px] border border-white/5 relative overflow-hidden group hover:border-primary/30 transition-colors duration-500 shadow-2xl">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] group-hover:bg-primary/10 transition-colors duration-700" />
-                <div className="relative z-10">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary border border-primary/20 text-sm font-bold mb-8">
-                    <Zap className="w-4 h-4" /> Mode Examen
-                  </div>
-                  <h3 className="text-3xl font-bold mb-5">Questions précises</h3>
-                  <p className="text-section-dark-foreground/60 text-lg md:text-xl leading-relaxed">
-                    Choisis le type de questions : QCM à choix unique, multiples, QROC ou cas cliniques longs.
-                  </p>
-                </div>
-                {/* Decorative element */}
-                <div className="absolute bottom-0 right-0 p-8 translate-y-12 group-hover:translate-y-0 transition-all duration-500 opacity-50 group-hover:opacity-100">
-                  <div className="flex gap-3">
-                    <span className="px-5 py-3 bg-[#2A2A2A] rounded-2xl border border-white/10 font-bold shadow-xl">QCU</span>
-                    <span className="px-5 py-3 bg-[#2A2A2A] rounded-2xl border border-white/10 font-bold shadow-xl">QCM</span>
-                  </div>
-                </div>
-              </FadeIn>
-
-              {/* Card 2 */}
-              <FadeIn delay={0.2} yOffset={40} className="bg-[#1A1A1A] rounded-[2.5rem] p-10 md:p-12 flex flex-col justify-between min-h-[400px] border border-white/5 relative overflow-hidden group hover:border-[#FFD4A3]/30 transition-colors duration-500 shadow-2xl">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-[#FFD4A3]/5 rounded-full blur-[80px] group-hover:bg-[#FFD4A3]/10 transition-colors duration-700" />
-                <div className="relative z-10">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#FFD4A3]/10 text-[#FFD4A3] border border-[#FFD4A3]/20 text-sm font-bold mb-8">
-                    <MessageSquare className="w-4 h-4" /> Tuteur MOR
-                  </div>
-                  <h3 className="text-3xl font-bold mb-5">Explications ciblées</h3>
-                  <p className="text-section-dark-foreground/60 text-lg md:text-xl leading-relaxed">
-                    Un doute ? Notre tuteur t'explique exactement pourquoi une réponse est fausse, avec bienveillance.
-                  </p>
-                </div>
-                {/* Decorative element */}
-                <div className="absolute -bottom-4 right-10 bg-[#2A2A2A] p-5 rounded-2xl border border-white/10 shadow-2xl group-hover:-translate-y-6 transition-all duration-500 rotate-3 group-hover:rotate-0">
-                  <div className="flex gap-3 items-center">
-                    <div className="w-8 h-8 rounded-full bg-[#FFD4A3]/20 flex items-center justify-center"><Sparkles className="w-4 h-4 text-[#FFD4A3]" /></div>
-                    <p className="text-sm font-medium">"Ici, c'est l'artère radiale car..."</p>
-                  </div>
-                </div>
-              </FadeIn>
-            </div>
+        {/* WISPR LOVE LETTERS (Testimonials) */}
+        <section className="py-40 bg-[#FCFBF7] relative">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[1000px] h-full opacity-[0.05] pointer-events-none z-0">
+            <svg viewBox="0 0 1000 600" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+              <path d="M-100 300 C 300 0, 700 600, 1100 300" stroke="#1A1C1B" strokeWidth="8" strokeDasharray="15 15" fill="none"/>
+            </svg>
           </div>
-        </section>
 
-        {/* CREAM BENTO SECTION with Doodle Watermark */}
-        <section id="how" className="py-32 px-6 max-w-6xl mx-auto bg-doodle-watermark relative rounded-[4rem] mt-6 overflow-hidden">
-          {/* Animated background gradient to add some life to the cream background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent pointer-events-none" />
-          
-          <div className="grid md:grid-cols-2 gap-16 md:gap-24 items-center relative z-10">
-            <FadeIn yOffset={40} scale={0.95}>
-              <motion.div 
-                whileHover={{ scale: 1.02 }}
-                className="bg-white rounded-[2.5rem] p-10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)] border border-border relative group"
-              >
-                <motion.div 
-                  animate={{ rotate: [6, 10, 6] }}
-                  transition={{ repeat: Infinity, duration: 4 }}
-                  className="absolute -top-8 -right-8 bg-primary text-primary-foreground p-5 rounded-[1.5rem] font-serif text-3xl font-bold shadow-xl border border-primary-foreground/10"
-                >
-                  100% IA
-                </motion.div>
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center border-b border-border pb-6">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-muted rounded-xl"><Trophy className="w-6 h-6 text-foreground/70" /></div>
-                      <span className="font-semibold text-foreground/70 text-lg">Score récent</span>
-                    </div>
-                    <span className="font-black text-success text-3xl">18/20</span>
-                  </div>
-                  <div className="pt-4">
-                    <div className="w-full bg-muted rounded-full h-3 mb-4 overflow-hidden">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        whileInView={{ width: "90%" }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 1.5, delay: 0.5, ease: "easeOut" }}
-                        className="bg-primary h-full rounded-full" 
-                      />
-                    </div>
-                    <p className="text-base text-foreground/60 font-medium">Maîtrise du module de neurologie excellente.</p>
-                  </div>
-                </div>
-              </motion.div>
-            </FadeIn>
-            
-            <FadeIn delay={0.2} className="space-y-8">
-              <div className="inline-flex p-4 bg-secondary/10 rounded-2xl text-secondary shadow-sm">
-                <Target className="w-10 h-10" />
-              </div>
-              <h2 className="text-5xl font-serif leading-tight">Suivi de progression</h2>
-              <p className="text-xl text-foreground/70 leading-relaxed font-medium">
-                L'algorithme de répétition espacée repère tes points faibles et te les repropose au moment idéal pour ancrer la connaissance.
-              </p>
-              <Button asChild variant="link" className="text-primary font-bold px-0 text-xl hover:no-underline hover:text-primary-hover group">
-                <Link to="/features" className="flex items-center">
-                  Découvrir les statistiques <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-2 transition-transform" />
-                </Link>
-              </Button>
-            </FadeIn>
-          </div>
-        </section>
-
-        {/* PURPLE BANNER */}
-        <section className="px-4 md:px-8 mt-6">
-          <FadeIn className="bg-primary rounded-[3rem] md:rounded-[4rem] p-16 md:p-32 text-center relative overflow-hidden group">
-            {/* Animated circles background */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-               <motion.div 
-                 animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.2, 0.1] }}
-                 transition={{ repeat: Infinity, duration: 8 }}
-                 className="absolute -top-32 -left-32 w-96 h-96 bg-white rounded-full blur-3xl"
-               />
-               <motion.div 
-                 animate={{ scale: [1, 1.5, 1], opacity: [0.1, 0.3, 0.1] }}
-                 transition={{ repeat: Infinity, duration: 10, delay: 2 }}
-                 className="absolute -bottom-32 -right-32 w-[30rem] h-[30rem] bg-white rounded-full blur-3xl"
-               />
-            </div>
-
-            <div className="relative z-10">
-              <h2 className="text-5xl md:text-6xl lg:text-[5rem] font-serif font-medium text-primary-foreground mb-8 leading-tight">
-                Améliore ce que tu apprends
+          <div className="max-w-7xl mx-auto px-6 relative z-10">
+            <FadeIn className="text-center mb-24">
+              <h2 className="text-5xl md:text-[6rem] font-serif text-[#1A1C1B] leading-tight mb-6">
+                Love letters to <br /><span className="italic">Hippocampus</span>
               </h2>
-              <p className="text-primary-foreground/80 text-xl md:text-2xl max-w-3xl mx-auto mb-12 font-medium">
-                Hippocampus s'adapte à ton rythme pour te garantir la réussite à tes examens médicaux.
-              </p>
-              <Button asChild size="lg" className="rounded-full h-16 px-12 text-lg bg-background text-foreground hover:bg-white font-bold shadow-[0_20px_40px_rgba(0,0,0,0.1)] hover:scale-105 hover:-translate-y-1 transition-all">
-                <Link to="/auth">Créer un compte maintenant</Link>
-              </Button>
-            </div>
-          </FadeIn>
-        </section>
-
-        {/* TESTIMONIALS (Black) */}
-        <section className="mt-8 bg-section-dark text-section-dark-foreground rounded-t-[3rem] md:rounded-t-[4rem] mx-4 md:mx-8 px-6 py-32 mb-[-80px] pb-40 relative">
-          <div className="max-w-7xl mx-auto relative z-10">
-            <FadeIn>
-              <div className="flex flex-col items-center mb-20">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-white/80 text-sm font-bold mb-6">
-                  <HeartPulse className="w-4 h-4 text-rose-500" /> Ils adorent Hippocampus
-                </div>
-                <h2 className="text-5xl md:text-[4rem] font-serif text-center leading-tight">
-                  Lettres d'amour à l'IA
-                </h2>
-              </div>
             </FadeIn>
 
-            <div className="grid md:grid-cols-3 gap-8">
+            <div className="grid md:grid-cols-3 gap-6">
               {[
-                { name: "Julie M.", role: "Externat D2", text: "Je ne passe plus des heures à faire des fiches. L'IA génère les flashcards instantanément. Un gain de temps énorme." },
+                { name: "Julie M.", role: "Externat D2", text: "Je ne passe plus des heures à faire des fiches. L'IA génère les flashcards instantanément. Un gain de temps énorme pour mes gardes." },
                 { name: "Thomas L.", role: "PACES", text: "La fonction tuteur est bluffante. Quand je me trompe, l'explication est claire et me permet de comprendre mon erreur." },
-                { name: "Sarah K.", role: "Interne", text: "Idéal pour réviser rapidement entre deux gardes. Les questions sont du niveau exigé aux ECNi." }
+                { name: "Sarah K.", role: "Interne", text: "Idéal pour réviser rapidement. Les questions sont du niveau exigé aux ECNi et s'adaptent à mes lacunes." }
               ].map((t, i) => (
-                <FadeIn key={i} delay={0.1 * i} yOffset={40} className="bg-white text-black p-10 rounded-[2rem] hover:-translate-y-2 transition-transform duration-300 shadow-xl relative group">
-                  <div className="absolute top-8 right-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <MessageSquare className="w-12 h-12" />
-                  </div>
-                  <p className="text-xl font-medium mb-10 leading-relaxed relative z-10">"{t.text}"</p>
-                  <div className="flex items-center gap-4 border-t border-black/5 pt-6 relative z-10">
-                    <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center text-primary font-bold text-lg">
+                <FadeIn key={i} delay={0.1 * i} yOffset={40} className="bg-white border border-black/5 p-10 rounded-[2rem] hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 group">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 bg-[#1A1C1B] rounded-full flex items-center justify-center text-white font-serif font-bold text-lg">
                       {t.name.charAt(0)}
                     </div>
                     <div>
-                      <div className="font-bold text-lg">{t.name}</div>
-                      <div className="text-sm text-foreground/60 font-medium">{t.role}</div>
+                      <div className="font-bold text-[#1A1C1B]">{t.name}</div>
+                      <div className="text-sm text-[#1A1C1B]/50 font-medium">{t.role}</div>
                     </div>
                   </div>
+                  <p className="text-lg text-[#1A1C1B]/80 font-medium leading-relaxed">"{t.text}"</p>
                 </FadeIn>
               ))}
             </div>
           </div>
         </section>
 
-      </main>
-
-      {/* BIG FOOTER (Cream) */}
-      <footer className="bg-background pt-40 pb-12 px-6 relative z-20 rounded-t-[3rem] md:rounded-t-[4rem] shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
-        <div className="max-w-7xl mx-auto">
-          
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-32 gap-16 border-b border-border pb-20">
-            <div>
-              <h2 className="text-6xl md:text-[6rem] lg:text-[7rem] font-serif font-medium tracking-tight mb-10 leading-[0.9]">
-                Commence à <br /><span className="text-primary-foreground">réussir...</span>
+        {/* WISPR FOOTER */}
+        <footer className="bg-[#1A1C1B] text-[#FCFBF7] pt-40 pb-20 px-6 rounded-t-[4rem] md:rounded-t-[5rem] mt-[-50px] relative z-20 shadow-[0_-20px_50px_rgba(0,0,0,0.2)]">
+          <div className="max-w-7xl mx-auto">
+            
+            <FadeIn className="flex flex-col items-center text-center mb-40">
+              <h2 className="text-6xl md:text-[7rem] lg:text-[8.5rem] font-serif font-medium tracking-tighter leading-[1.0] mb-12">
+                Commencez à <br /><span className="italic font-light text-primary-glow">réussir...</span>
               </h2>
-              <Button asChild size="lg" className="rounded-full h-16 px-10 text-lg bg-primary text-primary-foreground hover:bg-primary-hover font-bold shadow-none hover:scale-105 transition-transform">
-                <Link to="/auth">Démarrer maintenant <ArrowRight className="ml-3 w-5 h-5" /></Link>
-              </Button>
+              <div className="w-full max-w-lg bg-white/10 p-3 rounded-full border border-white/20 flex items-center justify-between pl-8 backdrop-blur-md">
+                <span className="text-white/60 font-medium text-lg">Rejoindre l'aventure</span>
+                <Button asChild className="rounded-full bg-white text-[#1A1C1B] hover:bg-gray-200 px-10 h-14 text-lg font-bold shadow-xl hover:scale-105 transition-transform">
+                  <Link to="/auth">Créer un compte</Link>
+                </Button>
+              </div>
+            </FadeIn>
+            
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-16 border-b border-white/10 pb-16 mb-12">
+              {/* Massive Logo Animation (Audio wave) */}
+              <div className="flex flex-col md:flex-row md:items-end gap-6">
+                <div className="flex gap-2.5 h-20 items-end pb-2">
+                  {[...Array(5)].map((_, i) => (
+                    <motion.div 
+                      key={i} 
+                      animate={{ height: ["20%", "100%", "20%"] }}
+                      transition={{ 
+                        duration: 1.2, 
+                        repeat: Infinity, 
+                        delay: i * 0.15,
+                        ease: "easeInOut"
+                      }}
+                      className={`w-5 rounded-full ${i === 2 ? 'bg-primary' : 'bg-[#FCFBF7]'}`} 
+                    />
+                  ))}
+                </div>
+                <span className="text-5xl md:text-[7rem] font-serif font-bold tracking-tighter leading-none">
+                  Hippocampus
+                </span>
+              </div>
+              
+              <div className="flex gap-16 text-lg font-medium">
+                <div className="flex flex-col gap-4">
+                  <span className="text-white/30 text-sm font-bold uppercase tracking-widest mb-2">Produit</span>
+                  <Link to="/" className="hover:text-primary transition-colors">Accueil</Link>
+                  <Link to="/pricing" className="hover:text-primary transition-colors">Tarifs</Link>
+                </div>
+                <div className="flex flex-col gap-4">
+                  <span className="text-white/30 text-sm font-bold uppercase tracking-widest mb-2">Légal</span>
+                  <Link to="/privacy" className="hover:text-primary transition-colors">Confidentialité</Link>
+                  <Link to="/terms" className="hover:text-primary transition-colors">Conditions</Link>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row items-center justify-between text-white/30 font-medium">
+              <div>© 2026 Hippocampus Inc. Tous droits réservés.</div>
+              <div className="flex gap-6 mt-4 md:mt-0">
+                <a href="#" className="hover:text-white transition-colors">Twitter</a>
+                <a href="#" className="hover:text-white transition-colors">LinkedIn</a>
+                <a href="#" className="hover:text-white transition-colors">Instagram</a>
+              </div>
             </div>
             
-            <div className="flex gap-16 text-lg font-medium">
-              <div className="flex flex-col gap-5">
-                <span className="text-foreground/40 text-sm font-bold uppercase tracking-widest mb-2">Produit</span>
-                <Link to="/" className="hover:text-primary transition-colors">Accueil</Link>
-                <Link to="/pricing" className="hover:text-primary transition-colors">Tarifs</Link>
-                <Link to="/auth" className="hover:text-primary transition-colors">Se connecter</Link>
-              </div>
-              <div className="flex flex-col gap-5">
-                <span className="text-foreground/40 text-sm font-bold uppercase tracking-widest mb-2">Légal</span>
-                <Link to="/privacy" className="hover:text-primary transition-colors">Confidentialité</Link>
-                <Link to="/terms" className="hover:text-primary transition-colors">Conditions</Link>
-              </div>
-            </div>
           </div>
+        </footer>
 
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="flex items-center gap-6">
-               <div className="flex gap-2 group cursor-pointer">
-                 {[...Array(5)].map((_, i) => (
-                   <motion.div 
-                     key={i} 
-                     whileHover={{ y: -5 }}
-                     transition={{ duration: 0.2 }}
-                     className={`w-5 h-5 rounded-full ${i === 2 ? 'bg-primary' : 'bg-foreground'}`} 
-                   />
-                 ))}
-               </div>
-               <span className="text-4xl md:text-5xl font-bold tracking-tighter">Hippocampus</span>
-            </div>
-            <div className="mt-8 md:mt-0 flex items-center gap-2 text-foreground/40 font-medium">
-              <Shield className="w-4 h-4" /> © 2026 Hippocampus Inc.
-            </div>
-          </div>
-          
-        </div>
-      </footer>
-
+      </main>
     </div>
   );
 };
