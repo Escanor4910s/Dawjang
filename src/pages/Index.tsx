@@ -434,6 +434,58 @@ const Index = () => {
           </FadeIn>
         </section>
 
+        {/* POUR QUI SECTION (How/Who) */}
+        <section id="how" className="py-32 px-6 max-w-7xl mx-auto relative z-10">
+          <div className="grid lg:grid-cols-[1fr_1.5fr] gap-16 items-center">
+            <FadeIn>
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-black/10 bg-white/50 backdrop-blur-md mb-8 shadow-sm">
+                <Target className="w-4 h-4 text-primary" />
+                <span className="text-sm font-semibold text-[#1A1C1B]">Pour qui ?</span>
+              </div>
+              <h2 className="text-5xl md:text-6xl font-serif leading-tight mb-6 text-[#1A1C1B]">
+                Conçu pour les <br /><span className="italic text-primary">générations futures</span>
+              </h2>
+              <p className="text-xl text-[#1A1C1B]/60 font-medium max-w-md">
+                Peu importe votre année, Hippocampus s'adapte à votre programme et à vos lacunes pour vous propulser vers la réussite.
+              </p>
+            </FadeIn>
+
+            <div className="grid sm:grid-cols-2 gap-6">
+              <FadeIn delay={0.1} className="bg-white p-8 rounded-[2rem] border border-black/5 shadow-xl hover:-translate-y-2 transition-transform duration-300">
+                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6">
+                  <Activity className="w-6 h-6" />
+                </div>
+                <h3 className="text-2xl font-bold mb-3 text-[#1A1C1B]">PASS / L.A.S</h3>
+                <p className="text-[#1A1C1B]/60 font-medium">Générez des QCMs à l'infini sur des détails précis. Le par cœur n'aura jamais été aussi rapide et efficace.</p>
+              </FadeIn>
+              
+              <FadeIn delay={0.2} className="bg-white p-8 rounded-[2rem] border border-black/5 shadow-xl hover:-translate-y-2 transition-transform duration-300">
+                <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-6">
+                  <Stethoscope className="w-6 h-6" />
+                </div>
+                <h3 className="text-2xl font-bold mb-3 text-[#1A1C1B]">Externat (EDN)</h3>
+                <p className="text-[#1A1C1B]/60 font-medium">L'IA génère des cas cliniques complexes avec une correction détaillée. Révisez entre deux gardes.</p>
+              </FadeIn>
+
+              <FadeIn delay={0.3} className="bg-white p-8 rounded-[2rem] border border-black/5 shadow-xl hover:-translate-y-2 transition-transform duration-300">
+                <div className="w-12 h-12 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center mb-6">
+                  <Microscope className="w-6 h-6" />
+                </div>
+                <h3 className="text-2xl font-bold mb-3 text-[#1A1C1B]">Pharmacie</h3>
+                <p className="text-[#1A1C1B]/60 font-medium">Pharmacologie, chimie, biochimie. L'IA maîtrise toutes vos matières scientifiques complexes.</p>
+              </FadeIn>
+
+              <FadeIn delay={0.4} className="bg-white p-8 rounded-[2rem] border border-black/5 shadow-xl hover:-translate-y-2 transition-transform duration-300">
+                <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-6">
+                  <Brain className="w-6 h-6" />
+                </div>
+                <h3 className="text-2xl font-bold mb-3 text-[#1A1C1B]">Professeurs</h3>
+                <p className="text-[#1A1C1B]/60 font-medium">Transformez un PDF de cours en un test blanc complet en quelques secondes pour vos étudiants.</p>
+              </FadeIn>
+            </div>
+          </div>
+        </section>
+
         {/* WISPR LOVE LETTERS (Testimonials) */}
         <section className="py-40 bg-[#FCFBF7] relative">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[1000px] h-full opacity-[0.05] pointer-events-none z-0">
