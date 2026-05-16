@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Sparkles, Zap, Crown, ArrowRight, Brain, FileText, BookOpen, Shield } from "lucide-react";
+import { Check, Sparkles, Zap, Crown, ArrowRight, Brain, FileText, BookOpen, Shield, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -198,7 +198,7 @@ const Subscription = () => {
           >
             Annuel
             <Badge className="bg-emerald-500 text-background hover:bg-emerald-600">
-              -25%
+              -20%
             </Badge>
           </Label>
         </div>

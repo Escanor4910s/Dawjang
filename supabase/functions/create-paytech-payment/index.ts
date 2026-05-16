@@ -20,16 +20,16 @@ function getCorsHeaders(req: Request) {
 
 // Server-side pricing — single source of truth
 const PRICING: Record<string, { monthly: number; yearly: number; name: string }> = {
-  premium: { monthly: 2500, yearly: 22500, name: "Plan Premium" },
-  pro:     { monthly: 5000, yearly: 45000, name: "Plan Excellence" },
+  premium: { monthly: 2500, yearly: 24000, name: "Plan Premium" },
+  pro:     { monthly: 4000, yearly: 38400, name: "Plan Excellence" },
 };
 
 const VALID_PLAN_IDS = Object.keys(PRICING);
 
-function isValidHttpsUrl(str: string): boolean {
+function isValidUrl(str: string): boolean {
   try {
     const url = new URL(str);
-    return url.protocol === "https:";
+    return url.protocol === "https:" || url.hostname === "localhost";
   } catch {
     return false;
   }
@@ -79,7 +79,7 @@ serve(async (req) => {
       );
     }
 
-    if (!successUrl || !cancelUrl || !isValidHttpsUrl(successUrl) || !isValidHttpsUrl(cancelUrl)) {
+    if (!successUrl || !cancelUrl || !isValidUrl(successUrl) || !isValidUrl(cancelUrl)) {
       return new Response(
         JSON.stringify({ error: "successUrl and cancelUrl must be valid HTTPS URLs" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
