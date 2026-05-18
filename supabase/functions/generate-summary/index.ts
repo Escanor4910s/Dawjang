@@ -37,6 +37,7 @@ serve(async (req) => {
       content: z.string().min(50, "Contenu trop court").max(100000, "Contenu trop long (max 100k caractères)"),
       type: z.enum(["concise", "structured", "complete"]).default("concise"),
       title: z.string().max(300).optional(),
+      template: z.enum(["standard", "objectives"]).default("standard"),
     });
 
     const parseResult = SummarySchema.safeParse(await req.json());
@@ -46,7 +47,7 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    const { content, type, title } = parseResult.data;
+    const { content, type, title, template } = parseResult.data;
 
     // Check plan-based access for summary type
     const requiredPlan = SUMMARY_TYPE_ACCESS[type] || "premium";
@@ -236,6 +237,44 @@ STRUCTURE (20-30 lignes max):
       default:
         typeInstructions = "Crée un résumé structuré et clair du cours avec une structure logique.";
         lengthGuidelines = "Résumé équilibré.";
+    }
+
+    if (template === "objectives") {
+      typeInstructions = `RÉDIGE LE RÉSUMÉ EN SUIVANT FIDÈLEMENT LES OBJECTIFS PÉDAGOGIQUES DU COURS.
+
+CONSEILS D'OBJECTIFS :
+1. Recherche impérativement dans le cours s'il y a une diapositive, une section ou une partie listant clairement les "objectifs du cours", "objectifs d'apprentissage" ou "objectifs pédagogiques" fixés par l'enseignant.
+2. Si ces objectifs sont explicites, structure l'ensemble de ton résumé pour répondre de manière très complète et ordonnée à chacun de ces objectifs (ex: "-- Objectif 1: [titre de l'objectif] --").
+3. Si le cours ne présente pas d'objectifs explicitement formulés, identifie les 3 à 5 compétences cliniques ou questions d'examens cruciales que l'étudiant doit impérativement maîtriser à l'issue de cette leçon, et structure le résumé autour de ces objectifs reconstitués.
+
+${styleRules}
+
+STRUCTURE DU RÉSUMÉ :
+
+=== OBJECTIFS CLINIQUES: ${title?.toUpperCase() || "RÉSUMÉ DE COURS"} ===
+
+-- Objectif 1: [ Intitulé clair de l'objectif 1 ] --
+• Explications cliniques, physiopathologies et mécanismes associés
+• Signes sémiologiques cardinaux, examens d'imagerie/biologie de référence
+- Détails importants et conduite à tenir déduits du cours
+
+-- Objectif 2: [ Intitulé de l'objectif 2 ] --
+• Réponses structurées complètes
+• Critères diagnostiques et arsenal thérapeutique de première intention
+
+-- Objectif 3: [ Intitulé de l'objectif 3 (poursuivre pour chaque objectif) ] --
+• Explications cliniques associées
+
+[ ACQUISITION DES OBJECTIFS MÉDICAUX ]
+✓ Compétence critique 1 validée
+✓ Compétence critique 2 validée
+→ Point de vigilance capital à retenir pour l'examen`;
+
+      lengthGuidelines = type === "concise"
+        ? "Fiche d'objectifs concise : 250-500 mots. Concentre-toi sur l'essentiel absolu par objectif."
+        : type === "structured"
+        ? "Résumé d'objectifs équilibré : 800-2000 mots. Détaille chaque objectif avec rigueur."
+        : "Résumé d'objectifs complet et exhaustif : 2000-5000 mots. Analyse clinique approfondie pour chaque objectif.";
     }
 
     const systemPrompt = `Tu es un assistant médical expert spécialisé dans la création de fiches pédagogiques professionnelles pour étudiants en médecine.

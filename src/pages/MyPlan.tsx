@@ -22,6 +22,35 @@ const MyPlan = () => {
   const { plan: rolePlan, isAdmin, loading: roleLoading } = useUserRole();
   const [profile, setProfile] = useState<ProfileLite | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const handleCancelSubscription = async () => {
+    try {
+      setIsCancelling(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ plan: "gratuit" })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      toast.success("Votre abonnement a été résilié avec succès. Votre compte a été rétrogradé au plan gratuit.");
+      
+      if (profile) {
+        setProfile({ ...profile, plan: "gratuit" });
+      }
+      setIsConfirmingCancel(false);
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Erreur lors de la résiliation de l'abonnement.");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -89,6 +118,45 @@ const MyPlan = () => {
                 <Button asChild variant="outline" className="flex-1"><Link to="/pricing">Voir les tarifs</Link></Button>
                 <Button asChild variant="ghost" className="flex-1"><Link to="/refund"><ReceiptText className="h-4 w-4 mr-1" /> Remboursement</Link></Button>
               </div>
+
+              {isPremium && effectivePlan !== "admin" && (
+                <div className="pt-4 border-t border-border mt-4">
+                  {isConfirmingCancel ? (
+                    <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 space-y-3">
+                      <p className="text-xs font-semibold text-destructive-foreground text-center">
+                        ⚠️ Êtes-vous sûr de vouloir résilier votre abonnement Premium ? Vous perdrez instantanément vos avantages cliniques illimités.
+                      </p>
+                      <div className="flex gap-2 justify-center">
+                        <Button 
+                          onClick={handleCancelSubscription} 
+                          disabled={isCancelling}
+                          variant="destructive" 
+                          size="sm"
+                          className="font-bold text-xs"
+                        >
+                          {isCancelling ? "Résiliation..." : "Oui, résilier"}
+                        </Button>
+                        <Button 
+                          onClick={() => setIsConfirmingCancel(false)} 
+                          variant="outline" 
+                          size="sm"
+                          className="font-bold text-xs"
+                        >
+                          Conserver mon plan
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button 
+                      onClick={() => setIsConfirmingCancel(true)}
+                      variant="destructive" 
+                      className="w-full rounded-xl font-bold text-xs hover:bg-destructive/90 gap-1.5"
+                    >
+                      Résilier mon abonnement Premium
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

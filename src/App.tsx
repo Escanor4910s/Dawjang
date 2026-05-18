@@ -53,6 +53,7 @@ const Diagnostics = lazy(() => import("./pages/Diagnostics"));
 const MyPlan = lazy(() => import("./pages/MyPlan"));
 const QuizInfini = lazy(() => import("./pages/QuizInfini"));
 const ReviewPlanner = lazy(() => import("./pages/ReviewPlanner"));
+const Ecos = lazy(() => import("./pages/Ecos"));
 
 const PageLoader = () => (
   <div className="min-h-screen bg-background flex items-center justify-center">
@@ -106,6 +107,7 @@ const App = () => (
                 <Route path="/diagnostics" element={withLayout(<Diagnostics />)} />
                 <Route path="/review-planner" element={withLayout(<PlanGuard requiredPlan="premium" featureName="Planificateur de révisions"><ReviewPlanner /></PlanGuard>)} />
                 <Route path="/duel" element={withLayout(<PlanGuard requiredPlan="premium" featureName="Mode Duel"><DuelPage /></PlanGuard>)} />
+                <Route path="/ecos" element={withLayout(<PlanGuard requiredPlan="premium" featureName="Simulateur ECOS"><Ecos /></PlanGuard>)} />
                 <Route path="/duel/:duelId" element={withLayout(<PlanGuard requiredPlan="premium" featureName="Mode Duel"><DuelGame /></PlanGuard>)} />
 
                 {/* Fallback */}

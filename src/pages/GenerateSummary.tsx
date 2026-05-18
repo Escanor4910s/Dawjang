@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Upload, FileText, Sparkles, BookOpen, FileSearch, Zap, AlertCircle, Lock, FolderOpen, Search, CheckCircle } from "lucide-react";
+import { Upload, FileText, Sparkles, BookOpen, FileSearch, Zap, AlertCircle, Lock, FolderOpen, Search, CheckCircle, Award } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useFileReader } from "@/hooks/useFileReader";
@@ -40,6 +40,7 @@ const GenerateSummary = () => {
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [summaryType, setSummaryType] = useState<SummaryType>("concise");
+  const [summaryTemplate, setSummaryTemplate] = useState<"standard" | "objectives">("standard");
   const [isGenerating, setIsGenerating] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [processingStep, setProcessingStep] = useState("");
@@ -144,8 +145,29 @@ const GenerateSummary = () => {
       }
 
       setProcessingStep("Génération du résumé avec l'IA...");
+      
+      let contentToSend = courseContent;
+      if (summaryTemplate === "objectives") {
+        contentToSend = `[CONSIGNE IMPÉRATIVE POUR L'IA - FORMAT PAR OBJECTIFS] :
+RÉDIGE CE RÉSUMÉ EN SUIVANT STRICTEMENT LES OBJECTIFS PÉDAGOGIQUES DU COURS.
+Interdiction formelle de suivre la structure clinique classique (Définition, Physiopathologie, Tableau clinique, Diagnostic, Traitement).
+À la place, structure l'ensemble de ton résumé en sections majeures basées exclusivement sur les objectifs d'apprentissage réels du cours (ou à défaut, sur 3 à 5 objectifs majeurs de compétences d'examen que tu auras déduits si aucun n'est écrit).
+
+Chaque section d'objectif doit être formatée de la manière suivante pour notre parseur visuel :
+=== Objectif [Numéro] : [Titre ou thème de l'objectif] ===
+• Point clé ou notion principale à retenir pour cet objectif
+- Détail secondaire ou sous-point important
+✓ Conduite à tenir ou règle clinique cruciale associée
+→ Conséquence ou lien clinique
+
+Ne mets aucun titre avec des dièses (#). Utilise strictement la structure des objectifs '=== Objectif ... ===' pour chaque section.
+
+Voici le contenu du cours à résumer en suivant cette structure :
+${courseContent}`;
+      }
+
       const { data, error } = await invokeWithRetry<{ summary: string }>("generate-summary", {
-        body: { content: courseContent, type: summaryType, title: courseTitle },
+        body: { content: contentToSend, type: summaryType, title: courseTitle, template: summaryTemplate },
         retries: 2,
         onRetry: (attempt, status) => {
           setProcessingStep(`Service IA temporairement indisponible (${status ?? "?"}) — nouvelle tentative ${attempt}/2...`);
@@ -158,7 +180,7 @@ const GenerateSummary = () => {
       const { data: summaryData, error: summaryError } = await supabase
         .from("summaries" as any)
         .insert({ user_id: user.id, course_id: courseId, title: courseTitle, content: data.summary, summary_type: summaryType,
-          metadata: { generatedAt: new Date().toISOString(), contentLength: courseContent.length },
+          metadata: { generatedAt: new Date().toISOString(), contentLength: courseContent.length, template: summaryTemplate },
         }).select().single();
       if (summaryError) throw summaryError;
 
@@ -255,6 +277,75 @@ const GenerateSummary = () => {
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Summary Template Selection */}
+            <Card className="bg-white dark:bg-slate-900 shadow-card border-0 overflow-hidden relative group">
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-primary" />
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2.5 text-base sm:text-lg">
+                  <Award className="h-5 w-5 text-primary" />
+                  <span>Schéma et Modèle de Résumé</span>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Choisissez la structure sur laquelle l'IA va façonner votre résumé clinique.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {/* Standard template */}
+                  <button
+                    type="button"
+                    onClick={() => setSummaryTemplate("standard")}
+                    className={`p-4 rounded-2xl border-2 text-left flex flex-col justify-between h-40 transition-all duration-300 relative ${
+                      summaryTemplate === "standard"
+                        ? "border-primary bg-primary/5 text-primary shadow-sm"
+                        : "border-border hover:border-muted-foreground/30 hover:bg-muted/10 text-foreground"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start w-full">
+                      <span className={`p-2 rounded-xl ${summaryTemplate === "standard" ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
+                        <Sparkles className="h-5 w-5" />
+                      </span>
+                      {summaryTemplate === "standard" && (
+                        <span className="text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded bg-primary text-primary-foreground">Sélectionné</span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wider mb-1">📋 Schéma Clinique Standard</p>
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        Structure classique : Définition, Physiopathologie, Tableau clinique, Examens complémentaires et Traitement.
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Course Objectives template */}
+                  <button
+                    type="button"
+                    onClick={() => setSummaryTemplate("objectives")}
+                    className={`p-4 rounded-2xl border-2 text-left flex flex-col justify-between h-40 transition-all duration-300 relative ${
+                      summaryTemplate === "objectives"
+                        ? "border-primary bg-primary/5 text-primary shadow-sm"
+                        : "border-border hover:border-muted-foreground/30 hover:bg-muted/10 text-foreground"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start w-full">
+                      <span className={`p-2 rounded-xl ${summaryTemplate === "objectives" ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
+                        <Award className="h-5 w-5" />
+                      </span>
+                      {summaryTemplate === "objectives" && (
+                        <span className="text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded bg-primary text-primary-foreground">Sélectionné</span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wider mb-1">🎯 Objectifs du Cours</p>
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        Structure ciblée : Rédige le résumé en répondant précisément aux objectifs pédagogiques formulés par le professeur.
+                      </p>
+                    </div>
+                  </button>
+                </div>
               </CardContent>
             </Card>
 

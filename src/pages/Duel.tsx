@@ -178,21 +178,33 @@ const Duel = () => {
   };
 
   return (
-    <div className="min-h-screen bg-dashboard text-foreground bg-doodle-watermark font-sans px-4 pt-1 pb-6 sm:px-8 sm:pt-4 sm:pb-8 relative">
-      <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+    <div className="min-h-screen bg-dashboard text-foreground bg-doodle-watermark font-sans px-4 pt-1 pb-6 sm:px-8 sm:pt-4 sm:pb-8 relative overflow-hidden">
+      {/* Immersive glow background decorations */}
+      <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] pointer-events-none animate-pulse" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-500/10 rounded-full blur-[100px] pointer-events-none animate-pulse" style={{ animationDuration: '6s' }} />
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-[1400px] mx-auto space-y-6 relative z-10"
+        transition={{ type: "spring", stiffness: 100, damping: 15 }}
+        className="max-w-[1200px] mx-auto space-y-8 relative z-10 pt-6 sm:pt-10"
       >
         {/* Header */}
-        <div className="text-center space-y-2 pt-8 sm:pt-0">
-          <div className="flex items-center justify-center gap-3">
-            <Swords className="h-10 w-10 text-primary" />
-            <h1 className="text-4xl sm:text-5xl font-light tracking-tight text-foreground">Mode Duel</h1>
-          </div>
-          <p className="text-sm font-medium text-muted-foreground mt-2">
-            Défiez un ami sur des QCM en temps réel !
+        <div className="text-center space-y-3">
+          <motion.div 
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", delay: 0.1 }}
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold tracking-wider uppercase mb-2"
+          >
+            <Swords className="h-3.5 w-3.5" />
+            Arène Multijoueur
+          </motion.div>
+          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-foreground bg-gradient-to-b from-foreground to-foreground/80 bg-clip-text">
+            Mode Duel
+          </h1>
+          <p className="text-base text-muted-foreground max-w-lg mx-auto">
+            Défiez d'autres étudiants en médecine et mesurez vos connaissances cliniques en temps réel !
           </p>
         </div>
 
@@ -201,93 +213,145 @@ const Duel = () => {
           {mode === "menu" && (
             <motion.div
               key="menu"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-4"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              className="space-y-6"
             >
-              <Card className="bg-card/70 backdrop-blur-xl border border-border shadow-sm rounded-[2rem] hover:shadow-md transition-all duration-300 cursor-pointer"
-                    onClick={() => setMode("create")}>
-                <CardContent className="p-6 sm:p-8 flex items-center gap-4">
-                  <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center flex-shrink-0">
-                    <Zap className="h-6 w-6 text-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-medium text-foreground mb-1">Créer un duel</h3>
-                    <p className="text-sm text-muted-foreground truncate">Générez un code et invitez un ami</p>
-                  </div>
-                  <ArrowRight className="h-5 w-5 text-muted-foreground" />
-                </CardContent>
-              </Card>
+              {/* Bento Grid */}
+              <div className="grid sm:grid-cols-2 gap-6">
+                <Card 
+                  className="bg-card/45 backdrop-blur-2xl border border-white/5 dark:border-white/10 shadow-[0_8px_32px_0_rgba(99,102,241,0.02)] hover:shadow-[0_12px_40px_0_rgba(99,102,241,0.12)] transition-all duration-500 rounded-[2.5rem] p-4 cursor-pointer hover:-translate-y-1.5 group relative overflow-hidden"
+                  onClick={() => setMode("create")}
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:bg-amber-500/10 transition-colors duration-500 pointer-events-none" />
+                  <CardContent className="p-6 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
+                    <div className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-amber-500/10 to-orange-500/20 group-hover:from-amber-500/20 group-hover:to-orange-500/30 text-amber-500 flex items-center justify-center flex-shrink-0 transition-all duration-500 shadow-[0_0_15px_rgba(245,158,11,0.05)] group-hover:shadow-[0_0_25px_rgba(245,158,11,0.15)]">
+                      <Zap className="h-7 w-7" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl font-bold text-foreground mb-1 group-hover:text-amber-500 transition-colors duration-300">
+                        Créer un duel
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Configurez votre série de QCM, générez un code et défiez qui vous voulez.
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-full bg-muted/50 group-hover:bg-amber-500 group-hover:text-background flex items-center justify-center transition-all duration-500 flex-shrink-0">
+                      <ArrowRight className="h-5 w-5" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-              <Card className="bg-card/70 backdrop-blur-xl border border-border shadow-sm rounded-[2rem] hover:shadow-md transition-all duration-300 cursor-pointer"
-                    onClick={() => setMode("join")}>
-                <CardContent className="p-6 sm:p-8 flex items-center gap-4">
-                  <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center flex-shrink-0">
-                    <Users className="h-6 w-6 text-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-medium text-foreground mb-1">Rejoindre un duel</h3>
-                    <p className="text-sm text-muted-foreground truncate">Entrez le code d'invitation</p>
-                  </div>
-                  <ArrowRight className="h-5 w-5 text-muted-foreground" />
-                </CardContent>
-              </Card>
+                <Card 
+                  className="bg-card/45 backdrop-blur-2xl border border-white/5 dark:border-white/10 shadow-[0_8px_32px_0_rgba(99,102,241,0.02)] hover:shadow-[0_12px_40px_0_rgba(99,102,241,0.12)] transition-all duration-500 rounded-[2.5rem] p-4 cursor-pointer hover:-translate-y-1.5 group relative overflow-hidden"
+                  onClick={() => setMode("join")}
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-2xl group-hover:bg-violet-500/10 transition-colors duration-500 pointer-events-none" />
+                  <CardContent className="p-6 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
+                    <div className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-violet-500/10 to-purple-500/20 group-hover:from-violet-500/20 group-hover:to-purple-500/30 text-violet-500 flex items-center justify-center flex-shrink-0 transition-all duration-500 shadow-[0_0_15px_rgba(139,92,246,0.05)] group-hover:shadow-[0_0_25px_rgba(139,92,246,0.15)]">
+                      <Users className="h-7 w-7" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl font-bold text-foreground mb-1 group-hover:text-violet-500 transition-colors duration-300">
+                        Rejoindre un duel
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Saisissez le code fourni par votre ami pour entrer dans l'arène de combat.
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-full bg-muted/50 group-hover:bg-violet-500 group-hover:text-background flex items-center justify-center transition-all duration-500 flex-shrink-0">
+                      <ArrowRight className="h-5 w-5" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-              {/* Duel History */}
-              <Card className="bg-card/70 backdrop-blur-xl border border-border shadow-sm rounded-[2rem] overflow-hidden">
-                <CardHeader className="p-6 border-b border-border flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-base font-medium flex items-center gap-2">
-                    <History className="h-5 w-5 text-primary" /> Historique
+              {/* History */}
+              <Card className="bg-card/45 backdrop-blur-2xl border border-white/5 dark:border-white/10 shadow-lg rounded-[2.5rem] overflow-hidden">
+                <CardHeader className="p-6 border-b border-border/50 flex flex-row items-center justify-between space-y-0 bg-muted/10">
+                  <CardTitle className="text-lg font-bold flex items-center gap-2">
+                    <History className="h-5 w-5 text-primary" /> Vos Derniers Combats
                   </CardTitle>
                   {duelHistory.some((d) => d.status === "waiting" && d.creator_id === userId) && (
-                    <Button variant="ghost" size="sm" onClick={handleClearWaitingHistory} className="h-8 rounded-full text-xs text-destructive hover:bg-destructive/10">
-                      <Trash2 className="h-3 w-3 mr-1" /> Vider l'attente
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleClearWaitingHistory} 
+                      className="h-8 rounded-full text-xs font-semibold text-destructive hover:bg-destructive/10 transition-all duration-300"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Vider l'attente
                     </Button>
                   )}
                 </CardHeader>
                 <CardContent className="p-6">
                   {historyLoading ? (
                     <div className="animate-pulse space-y-3">
-                      {[1,2,3].map(i => <div key={i} className="h-14 bg-muted rounded-xl" />)}
+                      {[1, 2, 3].map(i => <div key={i} className="h-16 bg-muted/50 rounded-2xl" />)}
                     </div>
                   ) : duelHistory.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">Aucun duel joué. Lancez votre premier défi !</p>
+                    <div className="text-center py-10 space-y-3">
+                      <div className="h-12 w-12 rounded-full bg-muted mx-auto flex items-center justify-center">
+                        <Swords className="h-6 w-6 text-muted-foreground/60" />
+                      </div>
+                      <p className="text-sm font-medium text-muted-foreground">Aucun duel joué. C'est le moment de lancer votre premier défi !</p>
+                    </div>
                   ) : (
-                    <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                    <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                       {duelHistory.map((d, idx) => {
                         const result = getDuelResult(d);
                         const myScore = d.creator_id === userId ? d.creator_score : d.opponent_score;
                         const theirScore = d.creator_id === userId ? d.opponent_score : d.creator_score;
                         const canDelete = d.status === "waiting" && d.creator_id === userId;
+                        const isWin = result.label === "Victoire";
+                        const isLoss = result.label === "Défaite";
+                        
                         return (
                           <motion.div
                             key={d.id}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: idx * 0.05 }}
-                            className="flex items-center justify-between p-4 rounded-xl bg-card/50 border border-border hover:bg-background transition-colors group shadow-sm"
+                            className={`flex items-center justify-between p-4 rounded-2xl bg-card/30 border transition-all duration-300 group ${
+                              isWin 
+                                ? "border-green-500/20 hover:border-green-500/40 bg-green-500/[0.01] hover:bg-green-500/[0.03]" 
+                                : isLoss 
+                                  ? "border-red-500/20 hover:border-red-500/40 bg-red-500/[0.01] hover:bg-red-500/[0.03]" 
+                                  : "border-border hover:border-border-hover hover:bg-muted/20"
+                            }`}
                           >
                             <div
                               className="flex items-center gap-4 flex-1 cursor-pointer min-w-0"
                               onClick={() => d.status !== "waiting" && navigate(`/duel/${d.id}`)}
                             >
-                              <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                                {result.label === "Victoire" ? <Trophy className="h-5 w-5 text-success" /> :
-                                 result.label === "Défaite" ? <Swords className="h-5 w-5 text-destructive" /> :
-                                 <Clock className="h-5 w-5 text-warning" />}
+                              <div className={`h-11 w-11 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                isWin 
+                                  ? "bg-green-500/10 text-green-500" 
+                                  : isLoss 
+                                    ? "bg-red-500/10 text-red-500" 
+                                    : "bg-muted text-muted-foreground"
+                              }`}>
+                                {isWin ? <Trophy className="h-5 w-5" /> :
+                                 isLoss ? <Swords className="h-5 w-5" /> :
+                                 <Clock className="h-5 w-5" />}
                               </div>
                               <div className="min-w-0">
-                                <p className={`text-sm font-semibold truncate ${result.color}`}>{result.label}</p>
-                                <p className="text-xs font-medium text-muted-foreground/80 truncate mt-0.5">
+                                <p className={`text-sm font-bold truncate ${result.color}`}>{result.label}</p>
+                                <p className="text-xs font-semibold text-muted-foreground/80 truncate mt-0.5">
                                   {new Date(d.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-                                  {" · "}{d.question_count}Q
+                                  {" · "}{d.question_count} Questions
                                 </p>
                               </div>
                             </div>
                             <div className="flex items-center gap-3 ml-2 flex-shrink-0">
                               {d.status === "completed" && (
-                                <Badge variant="outline" className="text-xs font-bold font-mono px-2 py-1 bg-muted border-0">
+                                <Badge variant="outline" className={`text-xs font-extrabold font-mono px-3 py-1 border-0 ${
+                                  isWin 
+                                    ? "bg-green-500/10 text-green-500" 
+                                    : isLoss 
+                                      ? "bg-red-500/10 text-red-500" 
+                                      : "bg-muted text-muted-foreground"
+                                }`}>
                                   {myScore} - {theirScore}
                                 </Badge>
                               )}
@@ -295,7 +359,7 @@ const Duel = () => {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 rounded-full text-destructive hover:bg-destructive/10 opacity-60 group-hover:opacity-100"
+                                  className="h-8 w-8 rounded-full text-destructive hover:bg-destructive/10 opacity-60 group-hover:opacity-100 transition-all duration-300"
                                   onClick={(e) => { e.stopPropagation(); handleDeleteHistoryItem(d.id, d.status); }}
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -311,17 +375,17 @@ const Duel = () => {
               </Card>
 
               {/* How it works */}
-              <Card className="bg-card/40 backdrop-blur-xl border border-border shadow-sm rounded-[2rem]">
+              <Card className="bg-card/25 backdrop-blur-2xl border border-white/5 shadow-inner rounded-[2.5rem] overflow-hidden p-2">
                 <CardHeader className="p-6 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                    <Medal className="h-4 w-4" /> Comment ça marche ?
+                  <CardTitle className="text-xs font-extrabold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                    <Medal className="h-4 w-4 text-primary" /> RÈGLES DE COMBAT
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-6 text-sm font-medium text-muted-foreground space-y-3">
-                  <p className="flex gap-2"><span className="text-foreground font-bold">1.</span> Créez un duel et choisissez vos questions</p>
-                  <p className="flex gap-2"><span className="text-foreground font-bold">2.</span> Partagez le code à votre adversaire</p>
-                  <p className="flex gap-2"><span className="text-foreground font-bold">3.</span> Répondez aux mêmes questions en même temps</p>
-                  <p className="flex gap-2"><span className="text-foreground font-bold">4.</span> Le plus rapide et précis gagne ! ⚡</p>
+                <CardContent className="p-6 pt-0 text-sm font-semibold text-muted-foreground/80 space-y-3">
+                  <p className="flex items-center gap-3"><span className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-extrabold">1</span> Créez une série personnalisée en choisissant un QCM existant.</p>
+                  <p className="flex items-center gap-3"><span className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-extrabold">2</span> Copiez le code d'accès de l'arène et envoyez-le à votre ami.</p>
+                  <p className="flex items-center gap-3"><span className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-extrabold">3</span> Répondez aux mêmes questions en direct. Pas de triche possible !</p>
+                  <p className="flex items-center gap-3"><span className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-extrabold">4</span> Le score dépend de l'exactitude et de la vitesse de réponse. Que le meilleur gagne ! ⚡</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -336,42 +400,46 @@ const Duel = () => {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-4"
             >
-              <Button variant="ghost" onClick={() => setMode("menu")} className="text-sm font-medium h-12 px-6 rounded-full hover:bg-muted text-foreground">
-                ← Retour
+              <Button 
+                variant="ghost" 
+                onClick={() => setMode("menu")} 
+                className="text-sm font-bold h-11 px-5 rounded-full hover:bg-muted text-foreground transition-all duration-300"
+              >
+                ← Retour au Menu
               </Button>
 
-              <Card className="bg-card/70 backdrop-blur-xl border border-border shadow-sm rounded-[2rem] overflow-hidden">
-                <CardHeader className="p-6 border-b border-border">
-                  <CardTitle className="flex items-center gap-2 text-xl">
-                    <Zap className="h-5 w-5 text-primary" /> Configurer le duel
+              <Card className="bg-card/45 backdrop-blur-2xl border border-white/5 dark:border-white/10 shadow-lg rounded-[2.5rem] overflow-hidden">
+                <CardHeader className="p-6 border-b border-border/50 bg-muted/10">
+                  <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                    <Zap className="h-5 w-5 text-amber-500 animate-pulse" /> Configurer le duel
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 space-y-6">
                   <div className="space-y-3">
-                    <label className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Nombre de questions</label>
+                    <label className="text-xs font-extrabold uppercase tracking-widest text-muted-foreground">Nombre de questions</label>
                     <Select value={questionCount} onValueChange={setQuestionCount}>
-                      <SelectTrigger className="h-12 rounded-xl border-border bg-background"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="5">5 questions (~3 min)</SelectItem>
-                        <SelectItem value="10">10 questions (~5 min)</SelectItem>
-                        <SelectItem value="15">15 questions (~8 min)</SelectItem>
+                      <SelectTrigger className="h-12 rounded-xl border-border bg-background/50 font-semibold focus:ring-primary"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-popover border-border">
+                        <SelectItem value="5" className="font-semibold">5 questions (~3 min)</SelectItem>
+                        <SelectItem value="10" className="font-semibold">10 questions (~5 min)</SelectItem>
+                        <SelectItem value="15" className="font-semibold">15 questions (~8 min)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Source des questions</label>
+                    <label className="text-xs font-extrabold uppercase tracking-widest text-muted-foreground">Source des questions</label>
                     <Select value={selectedQcmId} onValueChange={(v) => { setSelectedQcmId(v); setSourceType("existing"); }}>
-                      <SelectTrigger className="h-12 rounded-xl border-border bg-background">
-                        <SelectValue placeholder="Choisir un QCM existant..." />
+                      <SelectTrigger className="h-12 rounded-xl border-border bg-background/50 font-semibold focus:ring-primary">
+                        <SelectValue placeholder="Sélectionnez un QCM..." />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-popover border-border max-h-56">
                         {qcmSessions.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
+                          <SelectItem key={s.id} value={s.id} className="font-semibold">
                             <div className="flex items-center gap-2">
-                              <BookOpen className="h-4 w-4 text-primary" />
-                              <span className="truncate max-w-[200px]">{s.title}</span>
-                              <Badge variant="outline" className="text-xs ml-2 bg-muted border-0 font-bold">{s.questions.length}Q</Badge>
+                              <BookOpen className="h-4 w-4 text-primary flex-shrink-0" />
+                              <span className="truncate max-w-[240px]">{s.title}</span>
+                              <Badge variant="outline" className="text-xs ml-2 bg-muted/50 border-0 font-extrabold">{s.questions.length}Q</Badge>
                             </div>
                           </SelectItem>
                         ))}
@@ -382,49 +450,92 @@ const Duel = () => {
                   <Button
                     onClick={handleCreate}
                     disabled={loading || !selectedQcmId}
-                    className="w-full h-14 rounded-full bg-foreground text-background hover:bg-foreground/90 font-medium shadow-md mt-4 text-lg"
+                    className="w-full h-14 rounded-full bg-primary text-primary-foreground hover:bg-primary/95 font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300 mt-4 text-base"
                   >
-                    {loading ? "Création..." : "Créer le duel"}
+                    {loading ? "Création en cours..." : "Générer l'arène de duel"}
                   </Button>
                 </CardContent>
               </Card>
             </motion.div>
           )}
 
-          {/* Invite Code Created */}
+          {/* Matchmaking pulse radar */}
           {mode === "create" && createdCode && (
             <motion.div
               key="waiting"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
               className="space-y-4"
             >
-              <Card className="bg-card/70 backdrop-blur-xl border border-border shadow-sm rounded-[2rem] overflow-hidden">
+              <Card className="bg-card/45 backdrop-blur-2xl border border-white/5 dark:border-white/10 shadow-xl rounded-[2.5rem] overflow-hidden">
                 <CardContent className="p-8 text-center space-y-6">
-                  <div className="h-20 w-20 mx-auto rounded-full bg-muted flex items-center justify-center border border-border">
-                    <Hash className="h-10 w-10 text-foreground" />
+                  {/* Radar holographique */}
+                  <div className="relative flex items-center justify-center h-48 my-2">
+                    {[1, 2, 3].map((ring) => (
+                      <motion.div
+                        key={ring}
+                        className="absolute border border-primary/20 rounded-full"
+                        style={{ width: 100, height: 100 }}
+                        animate={{
+                          scale: [1, 3.6],
+                          opacity: [0.7, 0],
+                        }}
+                        transition={{
+                          duration: 3,
+                          repeat: Infinity,
+                          delay: (ring - 1) * 1,
+                          ease: "easeOut",
+                        }}
+                      />
+                    ))}
+                    <motion.div
+                      className="absolute h-24 w-24 bg-primary/10 rounded-full blur-xl"
+                      animate={{ scale: [1, 1.15, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    />
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                      className="relative z-10 p-5 rounded-full bg-primary/15 border border-primary/30 text-primary shadow-lg shadow-primary/10"
+                    >
+                      <Swords className="h-10 w-10 animate-pulse" />
+                    </motion.div>
                   </div>
+
                   <div>
-                    <p className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-3">Code d'invitation</p>
+                    <p className="text-xs font-extrabold uppercase tracking-widest text-muted-foreground mb-3">Code de l'Arène</p>
                     <div className="flex items-center justify-center gap-3">
-                      <span className="text-4xl font-mono font-bold tracking-[0.3em] text-foreground">
+                      <span className="text-4xl font-mono font-black tracking-[0.25em] text-foreground bg-muted/50 pl-[0.25em] py-2.5 rounded-2xl border border-border">
                         {createdCode}
                       </span>
-                      <Button variant="ghost" size="icon" onClick={copyCode} className="h-10 w-10 rounded-full hover:bg-muted">
-                        <Copy className="h-5 w-5" />
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={copyCode} 
+                        className="h-12 w-12 rounded-full hover:bg-muted text-primary hover:text-primary transition-all duration-300"
+                      >
+                        <Copy className="h-5.5 w-5.5" />
                       </Button>
                     </div>
                   </div>
-                  <p className="text-sm font-medium text-muted-foreground max-w-[250px] mx-auto leading-relaxed">
-                    Partagez ce code à votre adversaire.<br />
-                    Le duel commencera dès qu'il rejoindra.
+
+                  <p className="text-sm font-semibold text-muted-foreground/80 max-w-[300px] mx-auto leading-relaxed">
+                    Partagez ce code avec votre confrère.<br />
+                    La session commencera instantanément dès qu'il rejoindra l'arène.
                   </p>
-                  <div className="flex items-center justify-center gap-3 py-4">
-                    <div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
-                    <span className="text-sm font-medium text-muted-foreground">En attente d'un adversaire...</span>
+
+                  <div className="flex items-center justify-center gap-3 py-2">
+                    <div className="h-2.5 w-2.5 rounded-full bg-primary animate-ping" />
+                    <span className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider">Recherche en cours...</span>
                   </div>
-                  <Button variant="outline" onClick={handleCancelWaiting} className="w-full h-12 rounded-full text-destructive border-destructive/20 hover:bg-destructive/10 font-medium">
-                    <X className="h-4 w-4 mr-2" /> Annuler le duel
+
+                  <Button 
+                    variant="outline" 
+                    onClick={handleCancelWaiting} 
+                    className="w-full h-13 rounded-full text-destructive border-destructive/20 hover:bg-destructive/10 font-bold transition-all duration-300"
+                  >
+                    <X className="h-4 w-4 mr-2" /> Annuler et fermer l'arène
                   </Button>
                 </CardContent>
               </Card>
@@ -440,33 +551,37 @@ const Duel = () => {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-4"
             >
-              <Button variant="ghost" onClick={() => setMode("menu")} className="text-sm font-medium h-12 px-6 rounded-full hover:bg-muted text-foreground">
-                ← Retour
+              <Button 
+                variant="ghost" 
+                onClick={() => setMode("menu")} 
+                className="text-sm font-bold h-11 px-5 rounded-full hover:bg-muted text-foreground transition-all duration-300"
+              >
+                ← Retour au Menu
               </Button>
 
-              <Card className="bg-card/70 backdrop-blur-xl border border-border shadow-sm rounded-[2rem] overflow-hidden">
-                <CardHeader className="p-6 border-b border-border">
-                  <CardTitle className="flex items-center gap-2 text-xl">
-                    <Users className="h-5 w-5 text-primary" /> Rejoindre un duel
+              <Card className="bg-card/45 backdrop-blur-2xl border border-white/5 dark:border-white/10 shadow-lg rounded-[2.5rem] overflow-hidden">
+                <CardHeader className="p-6 border-b border-border/50 bg-muted/10">
+                  <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                    <Users className="h-5 w-5 text-violet-500" /> Rejoindre un duel
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 space-y-6">
                   <div className="space-y-3">
-                    <label className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Code d'invitation</label>
+                    <label className="text-xs font-extrabold uppercase tracking-widest text-muted-foreground">Code de l'Arène</label>
                     <Input
                       placeholder="Ex: ABC123"
                       value={inviteCode}
                       onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                      className="text-center text-2xl h-16 font-mono tracking-[0.3em] uppercase rounded-xl border-border bg-background shadow-inner"
+                      className="text-center text-3xl h-16 font-mono font-black tracking-[0.25em] uppercase rounded-2xl border-border bg-background shadow-inner focus-visible:ring-violet-500"
                       maxLength={6}
                     />
                   </div>
                   <Button
                     onClick={handleJoin}
                     disabled={loading || inviteCode.length < 4}
-                    className="w-full h-14 rounded-full bg-foreground text-background hover:bg-foreground/90 font-medium shadow-md text-lg"
+                    className="w-full h-14 rounded-full bg-violet-600 text-white hover:bg-violet-500 font-bold shadow-lg shadow-violet-500/20 hover:shadow-violet-500/30 transition-all duration-300 text-base"
                   >
-                    {loading ? "Recherche..." : "Rejoindre"}
+                    {loading ? "Recherche de la session..." : "Rejoindre le combat"}
                   </Button>
                 </CardContent>
               </Card>

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/useUserRole";
+import { PremiumCheckoutDrawer } from "@/components/checkout/PremiumCheckoutDrawer";
 
 import { PRICING_TIERS } from "@/config/pricing";
 
@@ -40,6 +41,9 @@ const Subscription = () => {
   const [isYearly, setIsYearly] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<string>("gratuit");
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [selectedPlanDetails, setSelectedPlanDetails] = useState<{ id: string; name: string; price: number } | null>(null);
 
   useEffect(() => {
     const fetchUserPlan = async () => {
@@ -48,6 +52,7 @@ const Subscription = () => {
         navigate("/auth");
         return;
       }
+      setUser(user);
       
       const { data: profile } = await supabase
         .from("profiles")
@@ -106,42 +111,17 @@ const Subscription = () => {
       return;
     }
 
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/auth");
-        return;
-      }
+    const targetPlan = plans.find(p => p.id === planId);
+    if (!targetPlan) return;
 
-      toast({
-        title: "Initialisation du paiement",
-        description: "Veuillez patienter pendant que nous vous redirigeons vers PayTech..."
-      });
+    const price = isYearly ? targetPlan.yearlyPrice : targetPlan.monthlyPrice;
 
-      const { data, error } = await supabase.functions.invoke("create-paytech-payment", {
-        body: {
-          planId,
-          isYearly,
-          successUrl: `${window.location.origin}/subscription?status=success`,
-          cancelUrl: `${window.location.origin}/subscription?status=cancel`
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.redirect_url) {
-        window.location.href = data.redirect_url;
-      } else {
-        throw new Error("URL de redirection manquante");
-      }
-    } catch (error: any) {
-      console.error("Payment error:", error);
-      toast({
-        variant: "destructive",
-        title: "Erreur lors de l'initialisation",
-        description: error.message || "Une erreur est survenue lors de la connexion à PayTech."
-      });
-    }
+    setSelectedPlanDetails({
+      id: planId,
+      name: targetPlan.name,
+      price: price
+    });
+    setIsCheckoutOpen(true);
   };
 
   if (loading) {
@@ -388,6 +368,21 @@ const Subscription = () => {
             Support réactif
           </div>
         </div>
+
+        {selectedPlanDetails && (
+          <PremiumCheckoutDrawer
+            isOpen={isCheckoutOpen}
+            onClose={() => setIsCheckoutOpen(false)}
+            planId={selectedPlanDetails.id}
+            planName={selectedPlanDetails.name}
+            price={selectedPlanDetails.price}
+            isYearly={isYearly}
+            user={user}
+            onSuccess={() => {
+              setCurrentPlan(selectedPlanDetails.id);
+            }}
+          />
+        )}
       </div>
     </div>
   );

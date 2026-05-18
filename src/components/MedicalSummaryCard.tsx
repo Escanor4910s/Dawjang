@@ -27,7 +27,7 @@ const sectionStyles: Record<string, {
     icon: BookOpen, 
     headerBg: "bg-blue-600",
     headerText: "text-white",
-    contentBg: "bg-blue-50 dark:bg-blue-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-blue-700 dark:text-blue-300",
     borderColor: "border-blue-200 dark:border-blue-800"
   },
@@ -35,7 +35,7 @@ const sectionStyles: Record<string, {
     icon: FileText, 
     headerBg: "bg-slate-600",
     headerText: "text-white",
-    contentBg: "bg-slate-50 dark:bg-slate-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-slate-700 dark:text-slate-300",
     borderColor: "border-slate-200 dark:border-slate-800"
   },
@@ -43,7 +43,7 @@ const sectionStyles: Record<string, {
     icon: Brain, 
     headerBg: "bg-purple-600",
     headerText: "text-white",
-    contentBg: "bg-purple-50 dark:bg-purple-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-purple-700 dark:text-purple-300",
     borderColor: "border-purple-200 dark:border-purple-800"
   },
@@ -51,7 +51,7 @@ const sectionStyles: Record<string, {
     icon: Microscope, 
     headerBg: "bg-indigo-600",
     headerText: "text-white",
-    contentBg: "bg-indigo-50 dark:bg-indigo-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-indigo-700 dark:text-indigo-300",
     borderColor: "border-indigo-200 dark:border-indigo-800"
   },
@@ -59,7 +59,7 @@ const sectionStyles: Record<string, {
     icon: Stethoscope, 
     headerBg: "bg-teal-600",
     headerText: "text-white",
-    contentBg: "bg-teal-50 dark:bg-teal-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-teal-700 dark:text-teal-300",
     borderColor: "border-teal-200 dark:border-teal-800"
   },
@@ -67,7 +67,7 @@ const sectionStyles: Record<string, {
     icon: Stethoscope, 
     headerBg: "bg-teal-600",
     headerText: "text-white",
-    contentBg: "bg-teal-50 dark:bg-teal-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-teal-700 dark:text-teal-300",
     borderColor: "border-teal-200 dark:border-teal-800"
   },
@@ -75,7 +75,7 @@ const sectionStyles: Record<string, {
     icon: Activity, 
     headerBg: "bg-cyan-600",
     headerText: "text-white",
-    contentBg: "bg-cyan-50 dark:bg-cyan-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-cyan-700 dark:text-cyan-300",
     borderColor: "border-cyan-200 dark:border-cyan-800"
   },
@@ -83,7 +83,7 @@ const sectionStyles: Record<string, {
     icon: ClipboardList, 
     headerBg: "bg-sky-600",
     headerText: "text-white",
-    contentBg: "bg-sky-50 dark:bg-sky-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-sky-700 dark:text-sky-300",
     borderColor: "border-sky-200 dark:border-sky-800"
   },
@@ -91,7 +91,7 @@ const sectionStyles: Record<string, {
     icon: TestTube, 
     headerBg: "bg-sky-600",
     headerText: "text-white",
-    contentBg: "bg-sky-50 dark:bg-sky-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-sky-700 dark:text-sky-300",
     borderColor: "border-sky-200 dark:border-sky-800"
   },
@@ -99,7 +99,7 @@ const sectionStyles: Record<string, {
     icon: Target, 
     headerBg: "bg-emerald-600",
     headerText: "text-white",
-    contentBg: "bg-emerald-50 dark:bg-emerald-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-emerald-700 dark:text-emerald-300",
     borderColor: "border-emerald-200 dark:border-emerald-800"
   },
@@ -107,7 +107,7 @@ const sectionStyles: Record<string, {
     icon: Target, 
     headerBg: "bg-emerald-600",
     headerText: "text-white",
-    contentBg: "bg-emerald-50 dark:bg-emerald-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-emerald-700 dark:text-emerald-300",
     borderColor: "border-emerald-200 dark:border-emerald-800"
   },
@@ -115,7 +115,7 @@ const sectionStyles: Record<string, {
     icon: Pill, 
     headerBg: "bg-green-600",
     headerText: "text-white",
-    contentBg: "bg-green-50 dark:bg-green-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-green-700 dark:text-green-300",
     borderColor: "border-green-200 dark:border-green-800"
   },
@@ -123,7 +123,7 @@ const sectionStyles: Record<string, {
     icon: Pill, 
     headerBg: "bg-green-600",
     headerText: "text-white",
-    contentBg: "bg-green-50 dark:bg-green-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-green-700 dark:text-green-300",
     borderColor: "border-green-200 dark:border-green-800"
   },
@@ -131,7 +131,7 @@ const sectionStyles: Record<string, {
     icon: AlertTriangle, 
     headerBg: "bg-amber-600",
     headerText: "text-white",
-    contentBg: "bg-amber-50 dark:bg-amber-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-amber-700 dark:text-amber-300",
     borderColor: "border-amber-200 dark:border-amber-800"
   },
@@ -139,7 +139,7 @@ const sectionStyles: Record<string, {
     icon: Activity, 
     headerBg: "bg-orange-600",
     headerText: "text-white",
-    contentBg: "bg-orange-50 dark:bg-orange-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-orange-700 dark:text-orange-300",
     borderColor: "border-orange-200 dark:border-orange-800"
   },
@@ -147,7 +147,7 @@ const sectionStyles: Record<string, {
     icon: ShieldCheck, 
     headerBg: "bg-lime-600",
     headerText: "text-white",
-    contentBg: "bg-lime-50 dark:bg-lime-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-lime-700 dark:text-lime-300",
     borderColor: "border-lime-200 dark:border-lime-800"
   },
@@ -155,7 +155,7 @@ const sectionStyles: Record<string, {
     icon: CheckCircle, 
     headerBg: "bg-rose-600",
     headerText: "text-white",
-    contentBg: "bg-rose-50 dark:bg-rose-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-rose-700 dark:text-rose-300",
     borderColor: "border-rose-200 dark:border-rose-800"
   },
@@ -163,7 +163,7 @@ const sectionStyles: Record<string, {
     icon: AlertTriangle, 
     headerBg: "bg-red-600",
     headerText: "text-white",
-    contentBg: "bg-red-50 dark:bg-red-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-red-700 dark:text-red-300",
     borderColor: "border-red-200 dark:border-red-800"
   },
@@ -171,7 +171,7 @@ const sectionStyles: Record<string, {
     icon: Lightbulb, 
     headerBg: "bg-yellow-600",
     headerText: "text-white",
-    contentBg: "bg-yellow-50 dark:bg-yellow-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-yellow-700 dark:text-yellow-300",
     borderColor: "border-yellow-200 dark:border-yellow-800"
   },
@@ -179,15 +179,23 @@ const sectionStyles: Record<string, {
     icon: Lightbulb, 
     headerBg: "bg-yellow-600",
     headerText: "text-white",
-    contentBg: "bg-yellow-50 dark:bg-yellow-950/30",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-yellow-700 dark:text-yellow-300",
     borderColor: "border-yellow-200 dark:border-yellow-800"
+  },
+  "objectif": { 
+    icon: Target, 
+    headerBg: "bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-violet-500 dark:to-indigo-500",
+    headerText: "text-white",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
+    accentColor: "text-violet-700 dark:text-violet-300",
+    borderColor: "border-indigo-200 dark:border-indigo-800"
   },
   "default": { 
     icon: Heart, 
     headerBg: "bg-primary",
     headerText: "text-primary-foreground",
-    contentBg: "bg-muted/50",
+    contentBg: "bg-white dark:bg-slate-900/98 backdrop-blur-md",
     accentColor: "text-primary",
     borderColor: "border-border"
   }

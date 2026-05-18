@@ -4,7 +4,7 @@ import { User } from "@supabase/supabase-js";
 import {
   LayoutDashboard, Plus, Brain, FileText, History, BookOpen, Sparkles, Share2, Crown, Settings, LogOut,
   ChevronDown, ChevronRight, Menu, GraduationCap, PenTool, FileSearch, Search, Swords, Lock, PanelLeftClose, PanelLeftOpen,
-  Trophy, Star, Calendar
+  Trophy, Star, Calendar, Activity
 } from "lucide-react";
 import logoImg from "@/assets/logo-hippocampus.jpeg";
 
@@ -48,6 +48,7 @@ const navSections: NavSection[] = [
       { title: "Mes Résumés", icon: FileSearch, path: "/summaries" },
       { title: "Statistiques", icon: History, path: "/statistics" },
       { title: "Mode Duel", icon: Swords, path: "/duel", requiredPlan: "premium" },
+      { title: "Simulateur ECOS", icon: Activity, path: "/ecos", requiredPlan: "premium" },
     ],
   },
   {

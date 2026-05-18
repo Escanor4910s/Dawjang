@@ -153,19 +153,26 @@ const DuelGame = () => {
 
   if (!duel) {
     return (
-      <div className="min-h-screen p-4 bg-doodle-watermark">
-        <div className="max-w-lg mx-auto space-y-4 pt-10">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Swords className="h-5 w-5 animate-pulse" />
-            <span className="text-sm">Chargement du duel...</span>
+      <div className="min-h-screen flex items-center justify-center p-4 bg-dashboard bg-doodle-watermark relative overflow-hidden">
+        <div className="absolute top-[-10%] right-[-10%] w-[350px] h-[350px] bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
+        <Card className="max-w-md w-full bg-card/45 backdrop-blur-2xl border border-white/5 shadow-xl rounded-[2.5rem] p-8 text-center space-y-6 relative z-10">
+          <div className="relative flex items-center justify-center h-24 my-2">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+              className="p-4 rounded-full bg-primary/15 border border-primary/20 text-primary shadow-lg shadow-primary/5"
+            >
+              <Swords className="h-8 w-8 animate-pulse" />
+            </motion.div>
           </div>
-          <div className="h-2 bg-muted rounded animate-pulse" />
-          <div className="h-32 bg-muted rounded-2xl animate-pulse" />
           <div className="space-y-2">
-            {[0,1,2,3].map(i => <div key={i} className="h-12 bg-muted rounded-xl animate-pulse" />)}
+            <h3 className="text-lg font-bold text-foreground">Chargement de l'arène...</h3>
+            <p className="text-xs text-muted-foreground">Vérification de l'état de la session de duel</p>
           </div>
-          <p className="text-xs text-muted-foreground text-center">État: <span className="font-mono">loading</span></p>
-        </div>
+          <div className="h-1.5 w-32 bg-muted/40 rounded-full overflow-hidden mx-auto">
+            <div className="h-full bg-primary animate-[shimmer_1.5s_infinite] w-1/2 rounded-full" />
+          </div>
+        </Card>
       </div>
     );
   }
@@ -173,14 +180,48 @@ const DuelGame = () => {
   // Waiting for opponent
   if (duel.status === "waiting") {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-doodle-watermark">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-6 text-center space-y-4">
-            <Swords className="h-12 w-12 mx-auto text-muted-foreground animate-pulse" />
-            <p className="text-lg font-medium">En attente de l'adversaire...</p>
-            <p className="text-sm text-muted-foreground">Code: <span className="font-mono font-bold">{duel.invite_code}</span></p>
-            <Badge variant="outline" className="text-xs">État: waiting</Badge>
-          </CardContent>
+      <div className="min-h-screen flex items-center justify-center p-4 bg-dashboard bg-doodle-watermark relative overflow-hidden">
+        <div className="absolute top-[-10%] right-[-10%] w-[350px] h-[350px] bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
+        <Card className="max-w-md w-full bg-card/45 backdrop-blur-2xl border border-white/5 shadow-xl rounded-[2.5rem] p-8 text-center space-y-6 relative z-10">
+          <div className="relative flex items-center justify-center h-32 my-2">
+            {/* Radar concentric rings */}
+            {[1, 2].map((ring) => (
+              <motion.div
+                key={ring}
+                className="absolute border border-primary/20 rounded-full"
+                style={{ width: 80, height: 80 }}
+                animate={{
+                  scale: [1, 2.5],
+                  opacity: [0.6, 0],
+                }}
+                transition={{
+                  duration: 2.5,
+                  repeat: Infinity,
+                  delay: (ring - 1) * 1.2,
+                  ease: "easeOut",
+                }}
+              />
+            ))}
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+              className="relative z-10 p-5 rounded-full bg-primary/15 border border-primary/30 text-primary shadow-lg"
+            >
+              <Swords className="h-9 w-9 animate-pulse" />
+            </motion.div>
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold text-foreground">En attente d'un adversaire...</h3>
+            <p className="text-sm font-semibold text-muted-foreground/80">
+              Code de session : <span className="font-mono text-primary font-black tracking-widest bg-muted/60 px-3 py-1 rounded-xl border border-border ml-1">{duel.invite_code}</span>
+            </p>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 pt-2 text-xs font-extrabold uppercase tracking-widest text-muted-foreground">
+            <div className="h-2 w-2 bg-primary rounded-full animate-ping" />
+            Synchronisation de l'arène
+          </div>
         </Card>
       </div>
     );
@@ -189,18 +230,24 @@ const DuelGame = () => {
   // Error: no valid questions
   if (duel.status === "active" && (!duel.questions || duel.questions.length === 0)) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-doodle-watermark">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-6 text-center space-y-4">
-            <Swords className="h-12 w-12 mx-auto text-destructive" />
-            <p className="text-lg font-medium text-foreground">Erreur de duel</p>
-            <p className="text-sm text-muted-foreground">
-              Aucune question valide n'a été chargée pour ce duel. Cela peut arriver si le QCM source était dans un format incompatible.
+      <div className="min-h-screen flex items-center justify-center p-4 bg-dashboard bg-doodle-watermark relative overflow-hidden">
+        <div className="absolute top-[-10%] right-[-10%] w-[350px] h-[350px] bg-red-500/5 rounded-full blur-[80px] pointer-events-none" />
+        <Card className="max-w-md w-full bg-card/45 backdrop-blur-2xl border border-red-500/10 shadow-xl rounded-[2.5rem] p-8 text-center space-y-6 relative z-10">
+          <div className="h-16 w-16 mx-auto rounded-2xl bg-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive">
+            <Swords className="h-8 w-8" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold text-foreground">Erreur de Duel</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Aucune question n'a pu être chargée pour cette session. Le QCM source est peut-être vide ou incompatible.
             </p>
-            <Button onClick={() => navigate("/duel")} className="w-full bg-foreground text-background hover:bg-foreground/90">
-              Retour aux duels
-            </Button>
-          </CardContent>
+          </div>
+          <Button 
+            onClick={() => navigate("/duel")} 
+            className="w-full bg-primary text-primary-foreground hover:bg-primary/95 h-12 rounded-full font-bold shadow-lg shadow-primary/10 transition-all duration-300"
+          >
+            Retour aux duels
+          </Button>
         </Card>
       </div>
     );
@@ -209,15 +256,30 @@ const DuelGame = () => {
   // Countdown
   if (countdown !== null) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-doodle-watermark">
+      <div className="min-h-screen flex items-center justify-center bg-dashboard text-foreground bg-doodle-watermark relative overflow-hidden">
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-40 pointer-events-none" />
+        {/* Glowing blur effects */}
+        <div className="absolute top-[20%] left-[20%] w-[300px] h-[300px] bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute bottom-[20%] right-[20%] w-[300px] h-[300px] bg-violet-500/10 rounded-full blur-[80px] pointer-events-none" />
+
         <motion.div
           key={countdown}
-          initial={{ scale: 2, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.5, opacity: 0 }}
-          className="text-7xl font-black text-foreground"
+          initial={{ scale: 0.3, rotate: -25, opacity: 0 }}
+          animate={{ scale: 1, rotate: 0, opacity: 1 }}
+          exit={{ scale: 2.2, rotate: 25, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 220, damping: 14 }}
+          className="relative z-50 flex flex-col items-center justify-center gap-6"
         >
-          {countdown === 0 ? "⚔️ GO!" : countdown}
+          <motion.div 
+            animate={{ y: [0, -8, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            className="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-tr from-primary via-indigo-500 to-violet-400 select-none drop-shadow-[0_0_35px_rgba(99,102,241,0.3)] font-sans"
+          >
+            {countdown === 0 ? "⚔️ COMBAT!" : countdown}
+          </motion.div>
+          <p className="text-xs font-extrabold uppercase tracking-widest text-muted-foreground animate-pulse">
+            Préparez votre diagnostic...
+          </p>
         </motion.div>
       </div>
     );
@@ -233,36 +295,52 @@ const DuelGame = () => {
     const tied = myScore === theirScore;
 
     return (
-      <div className="min-h-screen p-4 flex items-center justify-center bg-doodle-watermark">
+      <div className="min-h-screen p-4 flex items-center justify-center bg-dashboard bg-doodle-watermark relative overflow-hidden">
+        {/* Glow backgrounds */}
+        <div className="absolute top-[-10%] right-[-10%] w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-violet-500/10 rounded-full blur-[100px] pointer-events-none" />
+
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
+          initial={{ opacity: 0, scale: 0.93 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full space-y-4"
+          transition={{ type: "spring", stiffness: 100, damping: 15 }}
+          className="max-w-[480px] w-full space-y-4 relative z-10"
         >
-          <Card className="border-2 border-foreground/20 overflow-hidden">
-            <CardContent className="p-6 text-center space-y-6 relative">
+          <Card className="bg-card/45 backdrop-blur-2xl border border-white/5 dark:border-white/10 shadow-[0_8px_32px_0_rgba(99,102,241,0.08)] rounded-[2.5rem] overflow-hidden">
+            <CardContent className="p-8 text-center space-y-6 relative">
               {/* Battle result animation */}
               <motion.div
                 initial={{ scale: 0, rotate: -180 }}
                 animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.2 }}
-                className="h-20 w-20 mx-auto rounded-full bg-foreground flex items-center justify-center"
+                transition={{ type: "spring", stiffness: 180, damping: 15, delay: 0.2 }}
+                className="h-24 w-24 mx-auto rounded-[2rem] bg-gradient-to-tr from-primary/10 to-violet-500/20 border border-primary/20 flex items-center justify-center shadow-lg shadow-primary/5 hover:scale-105 transition-transform duration-300 relative group"
               >
-                <Trophy className="h-10 w-10 text-background" />
+                <div className="absolute inset-0 bg-primary/20 rounded-[2rem] blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-300 pointer-events-none" />
+                <Trophy className="h-11 w-11 text-primary drop-shadow-[0_0_15px_rgba(99,102,241,0.5)] animate-pulse" />
               </motion.div>
 
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
+                transition={{ delay: 0.4 }}
+                className="space-y-1"
               >
-                <h2 className="text-2xl font-bold text-foreground">
+                <h2 className="text-3xl font-extrabold text-foreground tracking-tight">
                   {won ? "🎉 Victoire !" : tied ? "🤝 Égalité !" : "😤 Défaite !"}
                 </h2>
-                <p className="text-muted-foreground text-sm mt-1">
-                  {won ? `+50 XP bonus !` : tied ? "+20 XP" : "+10 XP de participation"}
+                <p className="text-muted-foreground text-sm font-semibold">
+                  Excellent combat clinique. Félicitations !
                 </p>
               </motion.div>
+
+              {/* XP Acquisition Badge */}
+              <div className="py-4 border-y border-border/50">
+                <p className="text-xs font-extrabold uppercase tracking-widest text-muted-foreground mb-1">XP ACQUISITION</p>
+                <div className="inline-flex items-center gap-1.5 bg-primary/10 border border-primary/20 text-primary font-bold px-4 py-1.5 rounded-full text-sm animate-pulse mt-1">
+                  <Flame className="h-4 w-4" />
+                  {won ? `+50 XP (Victoire)` : tied ? "+20 XP (Égalité)" : "+10 XP (Participation)"}
+                </div>
+              </div>
 
               {/* Score comparison with battle animation */}
               <div className="grid grid-cols-2 gap-4 relative">
@@ -272,46 +350,63 @@ const DuelGame = () => {
                       initial={{ scale: 0, opacity: 0 }}
                       animate={{ scale: 1.5, opacity: 1 }}
                       exit={{ scale: 0, opacity: 0 }}
-                      className="absolute inset-0 flex items-center justify-center z-10"
+                      className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none"
                     >
-                      <Swords className="h-12 w-12 text-warning" />
+                      <Swords className="h-12 w-12 text-warning animate-bounce" />
                     </motion.div>
                   )}
                 </AnimatePresence>
+
                 <motion.div
-                  initial={{ x: -50, opacity: 0 }}
+                  initial={{ x: -40, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className={`p-4 rounded-xl ${won || tied ? "bg-primary/20 ring-2 ring-primary/30" : "bg-muted"}`}
+                  transition={{ type: "spring", delay: 0.3 }}
+                  className={`p-4 rounded-2xl border transition-all duration-300 ${
+                    won || tied 
+                      ? "bg-green-500/[0.03] border-green-500/20 shadow-[0_4px_20px_rgba(34,197,94,0.05)]" 
+                      : "bg-muted/40 border-border"
+                  }`}
                 >
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <Shield className="h-4 w-4" />
-                    <span className="text-xs font-medium">Vous</span>
+                  <div className="flex items-center justify-center gap-1.5 mb-1.5">
+                    <Shield className="h-4 w-4 text-primary" />
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Vous</span>
                   </div>
-                  <p className="text-2xl font-bold text-foreground">{myScore}</p>
-                  <p className="text-xs text-muted-foreground">{myCorrect}/{duel.question_count} correct</p>
+                  <p className="text-3xl font-black text-foreground font-mono">{myScore}</p>
+                  <p className="text-xs font-semibold text-muted-foreground/80 mt-1">{myCorrect}/{duel.question_count} corrects</p>
                 </motion.div>
+
                 <motion.div
-                  initial={{ x: 50, opacity: 0 }}
+                  initial={{ x: 40, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className={`p-4 rounded-xl ${!won && !tied ? "bg-destructive/10 ring-2 ring-destructive/30" : "bg-muted"}`}
+                  transition={{ type: "spring", delay: 0.3 }}
+                  className={`p-4 rounded-2xl border transition-all duration-300 ${
+                    !won && !tied 
+                      ? "bg-red-500/[0.03] border-red-500/20 shadow-[0_4px_20px_rgba(239,68,68,0.05)]" 
+                      : "bg-muted/40 border-border"
+                  }`}
                 >
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <User className="h-4 w-4" />
-                    <span className="text-xs font-medium">Adversaire</span>
+                  <div className="flex items-center justify-center gap-1.5 mb-1.5">
+                    <User className="h-4 w-4 text-violet-500" />
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Adversaire</span>
                   </div>
-                  <p className="text-2xl font-bold text-foreground">{theirScore}</p>
-                  <p className="text-xs text-muted-foreground">{theirCorrect}/{duel.question_count} correct</p>
+                  <p className="text-3xl font-black text-foreground font-mono">{theirScore}</p>
+                  <p className="text-xs font-semibold text-muted-foreground/80 mt-1">{theirCorrect}/{duel.question_count} corrects</p>
                 </motion.div>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <Button onClick={() => navigate("/duel")} className="bg-foreground text-background hover:bg-foreground/90">
-                  Nouveau duel
+              <div className="flex flex-col gap-3 pt-2">
+                <Button 
+                  onClick={() => navigate("/duel")} 
+                  className="bg-primary text-primary-foreground hover:bg-primary/95 h-13 rounded-full font-bold shadow-lg shadow-primary/10 transition-all duration-300 text-base"
+                >
+                  Nouveau combat
                 </Button>
-                <Button variant="outline" onClick={() => navigate("/dashboard")}>
-                  Retour au Dashboard
+                <Button 
+                  variant="outline" 
+                  onClick={() => navigate("/dashboard")}
+                  className="h-13 rounded-full font-bold border-border hover:bg-muted/30 transition-all duration-300 text-base"
+                >
+                  Tableau de bord
                 </Button>
               </div>
             </CardContent>
@@ -326,7 +421,7 @@ const DuelGame = () => {
   if (!currentQuestion) {
     console.warn("[DuelGame] No question at index", duel.current_question_index, "questions:", duel.questions);
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-doodle-watermark">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-dashboard bg-doodle-watermark">
         <Card className="max-w-md w-full">
           <CardContent className="p-6 text-center space-y-4">
             <Swords className="h-12 w-12 mx-auto text-muted-foreground" />
@@ -361,76 +456,109 @@ const DuelGame = () => {
   };
 
   const progress = ((duel.current_question_index + 1) / duel.question_count) * 100;
+  
+  const myScoreVal = isCreator ? duel.creator_score : duel.opponent_score;
+  const opponentScoreVal = isCreator ? duel.opponent_score : duel.creator_score;
+  const totalScoreVal = myScoreVal + opponentScoreVal || 1;
+  const scoreRatio = (myScoreVal / totalScoreVal) * 100;
 
   return (
-    <div className="min-h-screen p-4 bg-doodle-watermark">
-      <div className="max-w-lg mx-auto space-y-4">
-        {/* Top bar */}
-        <div className="flex items-center justify-between">
-          <Badge variant="outline" className="text-xs">
-            <Swords className="h-3 w-3 mr-1" />
-            Q{duel.current_question_index + 1}/{duel.question_count}
-          </Badge>
-          
-          {comboCount >= 2 && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="flex items-center gap-1"
-            >
-              <Flame className="h-4 w-4 text-warning" />
-              <span className="text-xs font-bold text-warning">x{comboCount} combo!</span>
-            </motion.div>
-          )}
+    <div className="min-h-screen p-4 sm:p-8 bg-dashboard bg-doodle-watermark relative overflow-hidden flex flex-col justify-center">
+      {/* Background decorations */}
+      <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-500/10 rounded-full blur-[120px] pointer-events-none" />
 
-          <div className="flex items-center gap-4 text-sm">
-            <span className="font-medium text-foreground">
-              {isCreator ? duel.creator_score : duel.opponent_score}
-            </span>
-            <motion.span
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ repeat: Infinity, duration: 2 }}
-              className="text-muted-foreground font-bold"
-            >
-              ⚔️
-            </motion.span>
-            <span className="font-medium text-foreground">
-              {isCreator ? duel.opponent_score : duel.creator_score}
-            </span>
+      <div className="max-w-[760px] mx-auto w-full space-y-6 relative z-10">
+        {/* Versus Match Panel */}
+        <div className="grid grid-cols-3 items-center gap-4 p-4 rounded-3xl bg-card/45 backdrop-blur-2xl border border-white/5 dark:border-white/10 shadow-lg">
+          {/* You */}
+          <div className="flex flex-col items-center sm:flex-row gap-3 pl-2">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 text-primary">
+              <Shield className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 text-center sm:text-left">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Vous</p>
+              <p className="text-xl font-black text-foreground font-mono leading-none mt-0.5">{myScoreVal}</p>
+            </div>
+          </div>
+
+          {/* VS Center */}
+          <div className="flex flex-col items-center justify-center gap-1.5">
+            <div className="relative h-9 w-9 flex items-center justify-center rounded-full bg-gradient-to-tr from-primary to-violet-500 text-primary-foreground font-black text-xs shadow-lg shadow-primary/20 pointer-events-none select-none">
+              <div className="absolute inset-0 rounded-full bg-primary animate-ping opacity-25" />
+              VS
+            </div>
+            <Badge variant="outline" className="text-[10px] font-bold border-border/80 uppercase px-2 py-0.5 tracking-wider bg-muted/40 text-muted-foreground select-none">
+              Q{duel.current_question_index + 1}/{duel.question_count}
+            </Badge>
+          </div>
+
+          {/* Opponent */}
+          <div className="flex flex-col items-center sm:flex-row-reverse gap-3 pr-2 text-right">
+            <div className="h-10 w-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center flex-shrink-0 text-violet-500">
+              <User className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 text-center sm:text-right">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Adversaire</p>
+              <p className="text-xl font-black text-foreground font-mono leading-none mt-0.5">{opponentScoreVal}</p>
+            </div>
           </div>
         </div>
 
-        <Progress value={progress} className="h-1.5" />
+        {/* Versus Battle Jauge */}
+        <div className="h-2 w-full rounded-full bg-muted/40 overflow-hidden flex border border-white/5">
+          <motion.div 
+            className="h-full bg-gradient-to-r from-cyan-500 to-primary transition-all duration-500" 
+            style={{ width: `${scoreRatio}%` }}
+          />
+          <motion.div 
+            className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-500" 
+            style={{ width: `${100 - scoreRatio}%` }}
+          />
+        </div>
 
-        {/* Clash animation overlay */}
-        <AnimatePresence>
-          {showClash && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0 }}
-              animate={{ opacity: 1, scale: 1.5 }}
-              exit={{ opacity: 0, scale: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
-            >
-              <div className="text-6xl">⚔️</div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Question */}
+        {/* Question Panel */}
         <AnimatePresence mode="wait">
           <motion.div
             key={duel.current_question_index}
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ type: "spring", stiffness: 120, damping: 16 }}
           >
-            <Card className="border-2 border-foreground/10">
-              <CardContent className="p-5 space-y-4">
-                <p className="font-medium text-foreground leading-relaxed text-sm md:text-base">
+            <Card className="bg-card/45 backdrop-blur-2xl border border-white/5 dark:border-white/10 shadow-xl rounded-[2.5rem] overflow-hidden">
+              <div className="h-1.5 w-full bg-muted/20">
+                <motion.div 
+                  className="h-full bg-primary" 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.4 }}
+                />
+              </div>
+              <CardContent className="p-6 sm:p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-primary" /> Diagnostic Clinique
+                  </span>
+                  
+                  {comboCount >= 2 && (
+                    <motion.div
+                      initial={{ scale: 0, rotate: -20 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      className="flex items-center gap-1 bg-warning/10 text-warning px-3 py-1 rounded-full border border-warning/20 shadow-sm"
+                    >
+                      <Flame className="h-4 w-4 animate-bounce" />
+                      <span className="text-xs font-black uppercase tracking-wider">x{comboCount} Combo!</span>
+                    </motion.div>
+                  )}
+                </div>
+
+                <p className="font-bold text-foreground leading-relaxed text-base md:text-lg">
                   {currentQuestion.question}
                 </p>
 
-                <div className="space-y-2">
+                {/* Staggered Options list */}
+                <div className="grid gap-3 pt-2">
                   {currentQuestion.options.map((option, idx) => {
                     const letter = String.fromCharCode(65 + idx);
                     const isSelected = selectedAnswer === option;
@@ -440,33 +568,38 @@ const DuelGame = () => {
                     return (
                       <motion.button
                         key={idx}
-                        whileTap={{ scale: 0.98 }}
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        whileHover={{ scale: showFeedback ? 1 : 1.01 }}
+                        whileTap={{ scale: showFeedback ? 1 : 0.99 }}
+                        transition={{ delay: idx * 0.06, type: "spring", stiffness: 120 }}
+                        animate={showFeedback && isSelected && !isCorrect ? { x: [0, -8, 8, -8, 8, 0] } : { opacity: 1, y: 0 }}
                         onClick={() => handleAnswer(option)}
                         disabled={hasAnsweredCurrent}
-                        className={`w-full text-left p-3 rounded-xl border-2 transition-all text-sm ${
+                        className={`w-full text-left p-4 rounded-2xl border-2 transition-all text-sm font-semibold flex items-center justify-between ${
                           showFeedback && isCorrect
-                            ? "border-green-500 bg-green-500/10"
+                            ? "border-green-500/40 bg-green-500/10 shadow-[0_0_15px_rgba(34,197,94,0.1)] text-green-600 dark:text-green-400"
                             : showFeedback && isSelected && !isCorrect
-                            ? "border-red-500 bg-red-500/10"
+                            ? "border-red-500/40 bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.1)] text-red-600 dark:text-red-400"
                             : isSelected
-                            ? "border-foreground bg-foreground/5"
-                            : "border-foreground/10 hover:border-foreground/30"
+                            ? "border-primary bg-primary/5 text-primary"
+                            : "border-border hover:border-border-hover hover:bg-muted/30 text-foreground/90"
                         }`}
                       >
-                        <div className="flex items-start gap-3">
-                          <span className={`flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                        <div className="flex items-start gap-4 pr-2">
+                          <span className={`flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center text-xs font-extrabold ${
                             showFeedback && isCorrect
-                              ? "bg-green-500 text-background"
+                              ? "bg-green-500 text-white"
                               : showFeedback && isSelected && !isCorrect
-                              ? "bg-red-500 text-background"
+                              ? "bg-red-500 text-white"
                               : isSelected
-                              ? "bg-foreground text-background"
-                              : "bg-foreground/10 text-foreground"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground group-hover:bg-muted-hover"
                           }`}>
                             {showFeedback && isCorrect ? <CheckCircle className="h-4 w-4" /> :
                              showFeedback && isSelected && !isCorrect ? <XCircle className="h-4 w-4" /> : letter}
                           </span>
-                          <span className="text-foreground pt-0.5">{option}</span>
+                          <span className="pt-0.5 leading-relaxed">{option}</span>
                         </div>
                       </motion.button>
                     );
@@ -475,19 +608,26 @@ const DuelGame = () => {
 
                 {/* Status indicators */}
                 {hasAnsweredCurrent && !opponentAnsweredCurrent && (
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground pt-2">
-                    <Clock className="h-4 w-4 animate-pulse" />
-                    En attente de l'adversaire...
-                  </div>
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex items-center justify-center gap-2 text-sm text-muted-foreground pt-4 border-t border-border/50"
+                  >
+                    <Clock className="h-4 w-4 animate-spin" />
+                    <span className="font-semibold">Diagnostic envoyé. En attente de votre confrère...</span>
+                  </motion.div>
                 )}
 
                 {showResult && currentQuestion.explanation && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
-                    className="p-3 rounded-lg bg-muted text-sm text-muted-foreground"
+                    className="p-4 rounded-2xl bg-muted/40 border border-border/50 text-sm font-medium text-muted-foreground/90 leading-relaxed shadow-inner"
                   >
-                    💡 {currentQuestion.explanation}
+                    <div className="flex items-center gap-1.5 text-primary font-bold mb-1.5 uppercase text-xs tracking-wider">
+                      <span>💡 Explication Physiopathologique</span>
+                    </div>
+                    {currentQuestion.explanation}
                   </motion.div>
                 )}
               </CardContent>
