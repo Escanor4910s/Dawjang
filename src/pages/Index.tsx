@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Brain, Sparkles, Trophy, MessageSquare, Shield, Menu, X, ArrowRight, Zap, BookOpen, Target, Activity, Stethoscope, LayoutDashboard, LogOut, Mail, Circle, Fingerprint, Layers, Cpu } from "lucide-react";
+import { Brain, Sparkles, Trophy, MessageSquare, Shield, Menu, X, ArrowRight, Zap, BookOpen, Target, Activity, Stethoscope, LayoutDashboard, LogOut, Mail, Circle, Fingerprint, Layers, Cpu, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
