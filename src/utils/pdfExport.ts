@@ -19,7 +19,9 @@ interface QuizData {
 // Helper: safe text and cleaning
 const cleanForPDF = (text: string): string => {
   if (!text) return "";
-  return String(text)
+  let cleaned = text.replace(/\*\*/g, "").replace(/\*/g, "");
+  cleaned = cleaned.replace(/[\u00A0\u200B\u202F\uFEFF]/g, " ").replace(/[ \t]+/g, " ");
+  return cleaned
     .replace(/[\u{1F600}-\u{1F9FF}]/gu, "") // Remove emojis
     .replace(/[✓→•📌📚🔬💊🫀🧠📋📊⚖️⚠️💡🛡️🎯🩺🧬]/g, "")
     .replace(/\s+/g, " ")

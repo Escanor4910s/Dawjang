@@ -125,7 +125,8 @@ const SummaryView = () => {
         pdf.setFontSize(fontSize);
         pdf.setTextColor(...textColor);
         const effectiveW = contentW - xOffset;
-        const lines: string[] = pdf.splitTextToSize(text, effectiveW);
+        const normalizedText = text.replace(/[\u00A0\u200B\u202F\uFEFF]/g, " ").replace(/\s+/g, " ");
+        const lines: string[] = pdf.splitTextToSize(normalizedText, effectiveW);
         for (let li = 0; li < lines.length; li++) {
           ensureSpace(lineSpacing);
           if (li === 0 && bulletPrefix) {
