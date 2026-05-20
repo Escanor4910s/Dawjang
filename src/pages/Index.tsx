@@ -261,8 +261,11 @@ const Index = () => {
 
       <main className="relative z-10">
         
+        {/* HERO + FEATURES + DEMO — Unified doodle watermark area */}
+        <div className="bg-doodle-watermark">
+
         {/* HERO SECTION - Wispr Flow Inspired */}
-        <section className="relative pt-40 pb-32 px-6 overflow-hidden min-h-[90vh] flex flex-col items-center justify-center text-center bg-doodle-watermark">
+        <section className="relative pt-40 pb-32 px-6 overflow-hidden min-h-[90vh] flex flex-col items-center justify-center text-center">
           <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay pointer-events-none" />
           
           {/* Abstract Hand-drawn SVG Wires */}
@@ -442,6 +445,8 @@ const Index = () => {
             </div>
           </FadeIn>
         </section>
+
+        </div>{/* END of unified doodle watermark area */}
 
         {/* MOR AGENT SECTION - Dark, Neural, Glowing */}
         <section id="mor" className="py-32 px-6 relative overflow-hidden bg-[#1A1A1A] text-white mt-12 rounded-[3rem] md:rounded-[4rem] mx-4 md:mx-8 shadow-[0_30px_60px_rgba(0,0,0,0.5)]">
