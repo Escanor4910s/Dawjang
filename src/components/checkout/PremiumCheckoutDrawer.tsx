@@ -54,6 +54,7 @@ export const PremiumCheckoutDrawer = ({
   // Reset drawer state when it opens or closes to avoid bypass/persistency bugs
   useEffect(() => {
     if (isOpen) {
+      uiAudio.playDrawerSlide();
       setIsFinished(false);
       setIsProcessing(false);
       setProcessingStep(0);
@@ -72,6 +73,7 @@ export const PremiumCheckoutDrawer = ({
   // PayPal Sandbox states
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [paypalError, setPaypalError] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
 
   // 3D Card tilt motion values
   const x = useMotionValue(160);
@@ -198,7 +200,7 @@ export const PremiumCheckoutDrawer = ({
             setTimeout(() => {
               setIsProcessing(false);
               setIsFinished(true);
-              playTone(880, 0.25);
+              uiAudio.playSuccessChime();
               confetti({ particleCount: 200, spread: 90, colors: ["#d97706", "#c084fc", "#10b981"] });
             }, 1200);
 
@@ -341,7 +343,7 @@ export const PremiumCheckoutDrawer = ({
                 }
 
                 setProcessingStep(3); // Finalisation
-                playTone(880, 0.25);
+                uiAudio.playSuccessChime();
 
                 setTimeout(() => {
                   setIsProcessing(false);
@@ -424,7 +426,10 @@ export const PremiumCheckoutDrawer = ({
                 <div className="grid grid-cols-2 p-1 bg-muted/40 backdrop-blur-md rounded-xl border border-border/40 text-xs">
                   <button
                     type="button"
-                    onClick={() => setPaymentMethod("mobile_money")}
+                    onClick={() => {
+                      uiAudio.playSoftClick();
+                      setPaymentMethod("mobile_money");
+                    }}
                     className={`py-2 rounded-lg flex items-center justify-center gap-1.5 font-bold transition-all ${
                       paymentMethod === "mobile_money"
                         ? "bg-primary text-primary-foreground shadow-md"
@@ -435,7 +440,10 @@ export const PremiumCheckoutDrawer = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPaymentMethod("card")}
+                    onClick={() => {
+                      uiAudio.playSoftClick();
+                      setPaymentMethod("card");
+                    }}
                     className={`py-2 rounded-lg flex items-center justify-center gap-1.5 font-bold transition-all ${
                       paymentMethod === "card"
                         ? "bg-primary text-primary-foreground shadow-md"
@@ -449,40 +457,76 @@ export const PremiumCheckoutDrawer = ({
                 {/* Visualizer Frame */}
                 <div className="flex items-center justify-center py-2 min-h-[190px]">
                   {paymentMethod === "card" ? (
-                    /* Interactive 3D Card Visualizer */
-                    <motion.div
-                      style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-                      onMouseMove={handleMouseMove}
-                      onMouseLeave={handleMouseLeave}
-                      className={`w-[300px] h-[175px] rounded-3xl p-5 relative overflow-hidden shadow-2xl border cursor-pointer select-none ${
-                        planId === "premium"
-                          ? "bg-gradient-to-br from-amber-500/80 to-amber-700/80 border-amber-400/30"
-                          : "bg-gradient-to-br from-violet-600/80 to-purple-800/80 border-violet-400/30"
-                      }`}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 pointer-events-none" />
-                      <div className="flex justify-between items-start" style={{ transform: "translateZ(30px)" }}>
-                        <span className="text-sm font-black tracking-widest text-white flex items-center gap-1">
-                          🧬 Hippocampus
-                        </span>
-                        <div className="h-7 w-9 rounded-md bg-amber-200/20 border border-white/10 shadow-inner flex items-center justify-center text-[10px] font-bold text-white/55">
-                          CHIP
+                    /* Interactive 3D Card Visualizer with front/back flipping */
+                    <div className="perspective-1000 py-2">
+                      <motion.div
+                        style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
+                        animate={{ rotateY: isFlipped ? 180 : 0 }}
+                        transition={{ type: "spring", stiffness: 85, damping: 15 }}
+                        onMouseMove={handleMouseMove}
+                        onMouseLeave={handleMouseLeave}
+                        className={`w-[300px] h-[175px] rounded-3xl relative shadow-2xl border cursor-pointer select-none transition-all duration-500 ${
+                          planId === "premium"
+                            ? "bg-gradient-to-br from-amber-500 to-amber-700 border-amber-400/30 text-white"
+                            : "bg-gradient-to-br from-violet-600 to-purple-800 border-violet-400/30 text-white"
+                        }`}
+                      >
+                        {/* CARD FRONT */}
+                        <div 
+                          className="absolute inset-0 p-5 flex flex-col justify-between"
+                          style={{ backfaceVisibility: "hidden", transform: "translateZ(1px)" }}
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 pointer-events-none" />
+                          <div className="flex justify-between items-start" style={{ transform: "translateZ(30px)" }}>
+                            <span className="text-sm font-black tracking-widest text-white flex items-center gap-1">
+                              🧬 Hippocampus
+                            </span>
+                            <div className="h-6 px-2 rounded-md bg-white/15 backdrop-blur-md border border-white/10 overflow-hidden flex items-center justify-center">
+                              {cardNumber.startsWith("4") ? (
+                                <span className="text-[9px] font-black italic text-sky-400 tracking-wider">VISA</span>
+                              ) : cardNumber.startsWith("5") ? (
+                                <span className="text-[9px] font-black italic text-orange-400 tracking-wider">MC</span>
+                              ) : (
+                                <CreditCard className="h-3.5 w-3.5 text-white/80" />
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-lg font-mono font-bold tracking-widest text-white/90 mt-5 text-center" style={{ transform: "translateZ(40px)" }}>
+                            {cardNumber || "•••• •••• •••• ••••"}
+                          </div>
+                          <div className="flex justify-between items-end mt-4" style={{ transform: "translateZ(30px)" }}>
+                            <div className="space-y-0.5">
+                              <span className="text-[7px] uppercase font-bold text-white/50">Titulaire</span>
+                              <p className="text-[10px] font-black tracking-wide text-white uppercase truncate max-w-[140px]">{cardHolder}</p>
+                            </div>
+                            <div className="space-y-0.5 text-right">
+                              <span className="text-[7px] uppercase font-bold text-white/50">Expire</span>
+                              <p className="text-[10px] font-black text-white">{expiry || "MM/AA"}</p>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-lg font-mono font-bold tracking-widest text-white/90 mt-5 text-center" style={{ transform: "translateZ(40px)" }}>
-                        {cardNumber || "•••• •••• •••• ••••"}
-                      </div>
-                      <div className="flex justify-between items-end mt-4" style={{ transform: "translateZ(30px)" }}>
-                        <div className="space-y-0.5">
-                          <span className="text-[7px] uppercase font-bold text-white/50">Titulaire</span>
-                          <p className="text-[10px] font-black tracking-wide text-white uppercase truncate max-w-[140px]">{cardHolder}</p>
+
+                        {/* CARD BACK */}
+                        <div 
+                          className="absolute inset-0 flex flex-col justify-between py-5"
+                          style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg) translateZ(1px)" }}
+                        >
+                          <div className="w-full h-8 bg-zinc-950/80 mt-1" />
+                          <div className="px-5 space-y-3" style={{ transform: "translateZ(30px)" }}>
+                            <div className="flex items-center justify-end gap-3">
+                              <span className="text-[7px] uppercase font-bold text-white/50">CVV</span>
+                              <div className="w-14 h-7 bg-white rounded-md flex items-center justify-center text-xs font-mono font-bold text-slate-900 shadow-inner">
+                                {cvv || "•••"}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="px-5 flex justify-between items-center text-[7px] font-bold text-white/40 tracking-wider" style={{ transform: "translateZ(20px)" }}>
+                            <span>M-ECOS SYNCED</span>
+                            <span>🔒 SECURE CARD</span>
+                          </div>
                         </div>
-                        <div className="space-y-0.5 text-right">
-                          <span className="text-[7px] uppercase font-bold text-white/50">Expire</span>
-                          <p className="text-[10px] font-black text-white">{expiry || "MM/AA"}</p>
-                        </div>
-                      </div>
-                    </motion.div>
+                      </motion.div>
+                    </div>
                   ) : (
                     /* Simulated Mobile Money visual phone receiver */
                     <motion.div
@@ -569,7 +613,10 @@ export const PremiumCheckoutDrawer = ({
                         type="button"
                         whileHover={{ y: -4, scale: 1.02 }}
                         whileTap={{ scale: 0.97 }}
-                        onClick={() => setMobileProvider("wave")}
+                        onClick={() => {
+                          uiAudio.playSoftClick();
+                          setMobileProvider("wave");
+                        }}
                         className={`relative flex flex-col items-center justify-center p-3 h-28 rounded-2xl border text-center transition-all ${
                           mobileProvider === "wave"
                             ? "bg-cyan-500/10 border-cyan-500 shadow-[0_8px_20px_rgba(6,182,212,0.25)] text-cyan-600 dark:text-cyan-400 font-extrabold"
@@ -587,7 +634,10 @@ export const PremiumCheckoutDrawer = ({
                         type="button"
                         whileHover={{ y: -4, scale: 1.02 }}
                         whileTap={{ scale: 0.97 }}
-                        onClick={() => setMobileProvider("orange_money")}
+                        onClick={() => {
+                          uiAudio.playSoftClick();
+                          setMobileProvider("orange_money");
+                        }}
                         className={`relative flex flex-col items-center justify-center p-3 h-28 rounded-2xl border text-center transition-all ${
                           mobileProvider === "orange_money"
                             ? "bg-orange-500/10 border-orange-500 shadow-[0_8px_20px_rgba(249,115,22,0.25)] text-orange-600 dark:text-orange-400 font-extrabold"
@@ -605,7 +655,10 @@ export const PremiumCheckoutDrawer = ({
                         type="button"
                         whileHover={{ y: -4, scale: 1.02 }}
                         whileTap={{ scale: 0.97 }}
-                        onClick={() => setMobileProvider("mixx_yas")}
+                        onClick={() => {
+                          uiAudio.playSoftClick();
+                          setMobileProvider("mixx_yas");
+                        }}
                         className={`relative flex flex-col items-center justify-center p-3 h-28 rounded-2xl border text-center transition-all ${
                           mobileProvider === "mixx_yas"
                             ? "bg-yellow-500/10 border-yellow-500 shadow-[0_8px_20px_rgba(234,179,8,0.25)] text-yellow-600 dark:text-yellow-400 font-extrabold"
@@ -672,17 +725,71 @@ export const PremiumCheckoutDrawer = ({
                       </form>
                     ) : (
                       /* PayPal Sandbox Secured Card Payment buttons container */
-                      <div className="space-y-3 animate-[fadeIn_0.2s_ease]">
-                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Règlement sécurisé (PayPal Sandbox)
-                        </Label>
-                        
-                        {!paypalLoaded ? (
-                          <div className="flex flex-col items-center justify-center py-6 space-y-2 border border-dashed border-border rounded-2xl bg-muted/20">
-                            <RefreshCw className="h-6 w-6 text-primary animate-spin" />
-                            <p className="text-[10px] text-muted-foreground font-semibold">Chargement de la passerelle PayPal sécurisée...</p>
+                      <div className="space-y-4 animate-[fadeIn_0.2s_ease]">
+                        {/* Glassmorphic Credit Card Form */}
+                        <div className="p-4 rounded-2xl border border-border/40 bg-muted/20 space-y-3 shadow-inner">
+                          <div className="space-y-1">
+                            <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Numéro de Carte</Label>
+                            <Input
+                              type="text"
+                              placeholder="4000 1234 5678 9010"
+                              value={cardNumber}
+                              onChange={handleCardNumberChange}
+                              onFocus={() => setIsFlipped(false)}
+                              className="h-10 rounded-xl transition-all border-border/60 focus:border-primary/80 focus:shadow-[0_0_10px_rgba(139,92,246,0.15)] font-mono text-xs"
+                            />
                           </div>
-                        ) : (
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Expiration</Label>
+                              <Input
+                                type="text"
+                                placeholder="MM/AA"
+                                value={expiry}
+                                onChange={handleExpiryChange}
+                                onFocus={() => setIsFlipped(false)}
+                                className="h-10 rounded-xl transition-all border-border/60 focus:border-primary/80 focus:shadow-[0_0_10px_rgba(139,92,246,0.15)] font-mono text-xs"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">CVV</Label>
+                              <Input
+                                type="text"
+                                placeholder="123"
+                                value={cvv}
+                                onChange={handleCvvChange}
+                                onFocus={() => setIsFlipped(true)}
+                                onBlur={() => setIsFlipped(false)}
+                                className="h-10 rounded-xl transition-all border-border/60 focus:border-primary/80 focus:shadow-[0_0_10px_rgba(139,92,246,0.15)] font-mono text-xs"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Titulaire de la Carte</Label>
+                            <Input
+                              type="text"
+                              placeholder="NOM COMPLET"
+                              value={cardHolder}
+                              onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
+                              onFocus={() => setIsFlipped(false)}
+                              className="h-10 rounded-xl transition-all border-border/60 focus:border-primary/80 focus:shadow-[0_0_10px_rgba(139,92,246,0.15)] text-xs uppercase"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 pt-2 border-t border-border/40">
+                          <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                            🔒 Validation Rapide via PayPal / Card Gateway
+                          </Label>
+                          
+                          {!paypalLoaded ? (
+                            <div className="flex flex-col items-center justify-center py-6 space-y-2 border border-dashed border-border rounded-2xl bg-muted/20">
+                              <RefreshCw className="h-5 w-5 text-primary animate-spin" />
+                              <p className="text-[9px] text-muted-foreground font-semibold">Initialisation PayPal...</p>
+                            </div>
+                          ) : (
                           <div className="space-y-2">
                             <div id="paypal-button-container" className="w-full relative z-20 min-h-[150px]" />
                             <p className="text-[9px] text-muted-foreground/80 leading-normal text-center">
@@ -691,8 +798,9 @@ export const PremiumCheckoutDrawer = ({
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                </div>
                 )}
               </div>
             ) : (

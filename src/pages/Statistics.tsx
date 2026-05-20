@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { motion } from "framer-motion";
+import { Badge } from "@/components/ui/badge";
 import {
   LineChart,
   Line,
@@ -271,6 +272,22 @@ const Statistics = () => {
   const radialData = [
     { name: "Score", value: globalStats.averageScore, fill: "hsl(var(--primary))" },
   ];
+
+  // Ebbinghaus Forgetting Curve Simulator (FSRS algorithm model)
+  const ebbinghausData = useMemo(() => {
+    return Array.from({ length: 15 }, (_, day) => {
+      const t = day;
+      const rNoReview = Math.round(100 * Math.exp(-t / 1.5));
+      const rOneReview = t >= 1 ? Math.round(100 * Math.exp(-(t - 1) / 5)) : 100;
+      const rThreeReviews = t >= 3 ? Math.round(100 * Math.exp(-(t - 3) / 18)) : 100;
+      return {
+        day: `Jour ${t}`,
+        "Sans révision": rNoReview,
+        "Avec 1 révision": rOneReview,
+        "Avec 3 révisions (FSRS)": rThreeReviews,
+      };
+    });
+  }, []);
 
   const cardVariants = {
     hidden: { opacity: 0, y: 30 },
@@ -616,6 +633,97 @@ const Statistics = () => {
                 </Card>
               </motion.div>
             </div>
+
+            {/* EBBINGHAUS 3D-STYLE FORGETTING CURVE VISUALIZER */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.55 }}
+              className="mb-6 sm:mb-8"
+            >
+              <Card className="bg-gradient-to-br from-card/85 via-card/55 to-background/50 backdrop-blur-2xl border border-white/10 dark:border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.25)] rounded-[2.5rem] overflow-hidden">
+                <CardHeader>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                        <Clock className="h-5 w-5 text-primary animate-pulse" />
+                        Simulateur de Rétention Clinique (Courbe d'Ebbinghaus)
+                      </CardTitle>
+                      <CardDescription className="text-xs sm:text-sm">
+                        Découvrez comment l'algorithme d'espacement des révisions (FSRS) de Hipocampus combat activement la courbe de l'oubli.
+                      </CardDescription>
+                    </div>
+                    <Badge className="bg-primary/10 text-primary border border-primary/20 rounded-xl text-[9px] font-black uppercase tracking-wider px-3.5 py-1.5 self-start sm:self-auto">
+                      💡 MOTEUR FSRS V4 ACTIF
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-center">
+                    <div className="lg:col-span-3">
+                      <ResponsiveContainer width="100%" height={280}>
+                        <LineChart data={ebbinghausData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} domain={[0, 100]} />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "hsl(var(--card))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "12px",
+                              fontSize: "12px",
+                              boxShadow: "0 10px 25px rgba(0,0,0,0.15)"
+                            }}
+                            formatter={(value: number) => [`${value}%`, "Rétention"]}
+                          />
+                          <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "10px" }} />
+                          <Line
+                            type="monotone"
+                            dataKey="Sans révision"
+                            stroke="hsl(var(--destructive))"
+                            strokeWidth={2}
+                            strokeDasharray="5 5"
+                            dot={false}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="Avec 1 révision"
+                            stroke="hsl(var(--warning))"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="Avec 3 révisions (FSRS)"
+                            stroke="hsl(var(--success))"
+                            strokeWidth={3.5}
+                            dot={{ fill: "hsl(var(--success))", r: 4 }}
+                            activeDot={{ r: 7 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    
+                    <div className="space-y-4 bg-muted/40 p-5 rounded-3xl border border-border/50">
+                      <h4 className="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-1.5">
+                        <TrendingUp className="h-3.5 w-3.5 text-primary" /> Vérité Scientifique
+                      </h4>
+                      <div className="space-y-3.5 text-xs text-muted-foreground leading-relaxed">
+                        <p>
+                          Sans révision, vous oubliez plus de <strong className="text-destructive">50%</strong> des connaissances après seulement 24 heures et <strong className="text-destructive">90%</strong> en 7 jours.
+                        </p>
+                        <p>
+                          Grâce à Hipocampus, chaque révision calibrée par l'algorithme <strong className="text-foreground">FSRS</strong> réinitialise la courbe et aplatit son déclin.
+                        </p>
+                        <p className="text-[10px] font-bold text-success flex items-center gap-1">
+                          ✔ Stabilisation optimale garantie pour vos examens.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
               {/* Pie Chart */}

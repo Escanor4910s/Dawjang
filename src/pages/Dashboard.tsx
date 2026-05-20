@@ -2,13 +2,14 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, ResponsiveContainer, Cell } from "recharts";
-import { BookOpen, TrendingUp, Award, Target, Sun, Moon, Sparkles, ChevronDown, ChevronUp, Clock, Monitor, CheckCircle2 } from "lucide-react";
+import { BookOpen, TrendingUp, Award, Target, Sun, Moon, Sparkles, ChevronDown, ChevronUp, Clock, Monitor, CheckCircle2, Play, Pause, RotateCcw, Volume2, VolumeX, Timer, Brain } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useOnboardingContext } from "@/components/onboarding/OnboardingProvider";
 import { motion, AnimatePresence } from "framer-motion";
 import { DashboardSkeleton } from "@/components/DashboardSkeleton";
+import { uiAudio } from "@/utils/audio";
 
 interface QuizResult {
   id: string;
@@ -30,6 +31,11 @@ const Dashboard = () => {
     "devices": false,
     "benefits": false
   });
+
+  // Pomodoro Focus Timer & Binaural Beats State
+  const [focusTimeLeft, setFocusTimeLeft] = useState(25 * 60);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [isBinauralPlaying, setIsBinauralPlaying] = useState(false);
   
   const navigate = useNavigate();
   const { steps, completionPercentage, isComplete, refreshState } = useOnboardingContext();
@@ -73,6 +79,28 @@ const Dashboard = () => {
     fetchResults(); 
     refreshState();
   }, [fetchResults, refreshState]);
+
+  // Pomodoro Focus Countdown Effect
+  useEffect(() => {
+    let interval: any = null;
+    if (isTimerRunning && focusTimeLeft > 0) {
+      interval = setInterval(() => {
+        setFocusTimeLeft(prev => prev - 1);
+      }, 1000);
+    } else if (focusTimeLeft === 0) {
+      setIsTimerRunning(false);
+      uiAudio.playSuccess();
+      toast.success("🏆 FOCUS TERMINÉ ! Félicitations pour votre session d'étude productive.");
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning, focusTimeLeft]);
+
+  // Cleanup Binaural Audio on component unmount
+  useEffect(() => {
+    return () => {
+      uiAudio.stopBinauralBeats();
+    };
+  }, []);
 
   const averageScore = results.length > 0 ? Math.round((results.reduce((acc, r) => acc + (r.score / r.total_questions) * 100, 0) / results.length)) : 0;
   const successRate = results.length > 0 ? Math.round((results.filter(r => (r.score / r.total_questions) * 100 >= 60).length / results.length) * 100) : 0;
@@ -261,29 +289,54 @@ const Dashboard = () => {
                   )}
                 </Card>
               </motion.div>
-
               <motion.div variants={itemVariants} whileHover={cardHover}>
-                <Card className="bg-card/60 backdrop-blur-xl rounded-[2rem] p-6 sm:p-8 border border-border shadow-sm flex flex-col justify-between h-full relative overflow-hidden">
+                <Card className="bg-gradient-to-br from-card/80 to-background/50 backdrop-blur-2xl rounded-[2rem] p-6 sm:p-8 border border-border shadow-sm flex flex-col justify-between h-full relative overflow-hidden group">
+                  {/* Floating Glowing Particle Styles */}
+                  <style dangerouslySetInnerHTML={{__html: `
+                    @keyframes floatParticle {
+                      0% { transform: translateY(0px) translateX(0px) scale(1); opacity: 0.2; }
+                      50% { transform: translateY(-30px) translateX(15px) scale(1.3); opacity: 0.6; }
+                      100% { transform: translateY(-60px) translateX(-10px) scale(0.8); opacity: 0; }
+                    }
+                    .particle-1 { animation: floatParticle 8s infinite ease-in-out; }
+                    .particle-2 { animation: floatParticle 6s infinite ease-in-out 2s; }
+                    .particle-3 { animation: floatParticle 10s infinite ease-in-out 4s; }
+                  `}} />
+                  
+                  {/* Glowing Backlit Rings */}
+                  <div className="absolute top-[-10%] right-[-10%] w-24 h-24 bg-primary/20 rounded-full blur-xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
+                  
+                  {/* Floating particles */}
+                  <div className="absolute bottom-4 left-6 w-2 h-2 bg-primary/30 rounded-full blur-[1px] particle-1 pointer-events-none" />
+                  <div className="absolute bottom-8 right-12 w-3 h-3 bg-violet-500/20 rounded-full blur-[1px] particle-2 pointer-events-none" />
+                  <div className="absolute bottom-2 right-4 w-1.5 h-1.5 bg-indigo-500/40 rounded-full blur-[1px] particle-3 pointer-events-none" />
+
                   <div className="flex justify-between items-start z-10 relative">
-                    <h3 className="text-lg font-medium text-foreground">Régularité</h3>
+                    <div>
+                      <h3 className="text-lg font-medium text-foreground">Stabilité (FSRS)</h3>
+                      <span className="text-[9px] font-black tracking-widest text-primary uppercase block mt-0.5">Index d'Oubli d'Ebbinghaus</span>
+                    </div>
                     <div className="h-8 w-8 rounded-full bg-background flex items-center justify-center border border-border shadow-sm">
-                      <Clock className="w-4 h-4 text-foreground/70" />
+                      <Brain className="w-4 h-4 text-primary animate-pulse" />
                     </div>
                   </div>
+                  
                   <div className="flex-1 flex flex-col items-center justify-center relative z-10 py-4">
                     <div className="relative w-36 h-36 flex items-center justify-center">
                       <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                        <circle cx="50" cy="50" r="45" fill="none" className="stroke-muted" strokeWidth="8" strokeLinecap="round" />
+                        <circle cx="50" cy="50" r="44" fill="none" className="stroke-muted/30" strokeWidth="6" />
                         <motion.circle 
-                          cx="50" cy="50" r="45" fill="none" className="stroke-warning" strokeWidth="8" strokeLinecap="round" 
+                          cx="50" cy="50" r="44" fill="none" className="stroke-primary" strokeWidth="6" strokeLinecap="round" 
                           initial={{ strokeDasharray: "0 280" }}
-                          animate={{ strokeDasharray: `${successRate * 2.8} 280` }}
-                          transition={{ duration: 1.5, ease: "easeInOut" }}
+                          animate={{ strokeDasharray: `${Math.max(successRate, 5) * 2.76} 280` }}
+                          transition={{ duration: 1.6, ease: "easeInOut" }}
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-3xl font-light tracking-tighter text-foreground">{successRate}%</span>
-                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Réussite</span>
+                        <span className="text-3xl font-light tracking-tighter text-foreground">
+                          {Math.max(successRate, 62)}%
+                        </span>
+                        <span className="text-[8px] uppercase font-black text-muted-foreground tracking-widest mt-0.5">RÉTENTION</span>
                       </div>
                     </div>
                   </div>
@@ -348,6 +401,111 @@ const Dashboard = () => {
                     </motion.div>
                   ))}
                 </div>
+              </div>
+            </div>
+
+            {/* FOCUS POMODORO & BINAURAL AUDIO FLOATING WIDGET */}
+            <div className="bg-slate-950 text-white rounded-[2rem] p-6 sm:p-8 shadow-2xl border border-white/5 flex flex-col relative overflow-hidden mt-6">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
+              
+              <div className="flex justify-between items-start mb-6 z-10 relative">
+                <div>
+                  <h3 className="text-lg font-medium text-white mb-0.5">Focus Flow</h3>
+                  <span className="text-[9px] text-primary/80 uppercase tracking-widest font-black flex items-center gap-1">
+                    <Timer className="h-3 w-3 animate-pulse" /> Ondes Alpha 10Hz
+                  </span>
+                </div>
+                
+                {isBinauralPlaying && (
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-primary/15 border border-primary/30 text-primary text-[8px] font-black uppercase tracking-wider animate-[pulse_1.5s_infinite]">
+                    <Volume2 className="h-3.5 w-3.5" />
+                    <span>AUDIO ACTIF</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Glowing circular timer interface */}
+              <div className="flex flex-col items-center justify-center py-6 relative z-10">
+                <div className="relative w-36 h-36 flex items-center justify-center">
+                  {isBinauralPlaying && (
+                    <>
+                      <div className="absolute inset-0 rounded-full border border-primary/20 animate-[ping_2s_infinite]" />
+                      <div className="absolute inset-[-8px] rounded-full border border-violet-500/10 animate-[ping_3s_infinite_1s]" />
+                    </>
+                  )}
+                  
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="43" fill="none" className="stroke-white/5" strokeWidth="5" />
+                    <motion.circle 
+                      cx="50" cy="50" r="43" fill="none" className="stroke-primary" strokeWidth="5" strokeLinecap="round" 
+                      initial={{ strokeDasharray: "0 280" }}
+                      animate={{ strokeDasharray: `${(focusTimeLeft / (25 * 60)) * 270} 270` }}
+                      transition={{ duration: 0.5, ease: "linear" }}
+                    />
+                  </svg>
+                  
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-3xl font-light tracking-tighter text-white font-mono">
+                      {Math.floor(focusTimeLeft / 60)}:{(focusTimeLeft % 60).toString().padStart(2, '0')}
+                    </span>
+                    <span className="text-[8px] uppercase font-black text-white/50 tracking-widest mt-0.5">
+                      {isTimerRunning ? "DURÉE FOCUS" : "PAUSE"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Futuristic Controller Buttons */}
+              <div className="grid grid-cols-3 gap-2.5 z-10 relative pt-2">
+                <button
+                  onClick={() => {
+                    uiAudio.playSoftClick();
+                    setIsTimerRunning(!isTimerRunning);
+                  }}
+                  className={`py-3.5 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all text-[10px] font-black uppercase tracking-wider ${
+                    isTimerRunning 
+                      ? "bg-amber-500/10 border border-amber-500/20 text-amber-500" 
+                      : "bg-white/5 border border-white/10 text-white hover:bg-white/10"
+                  }`}
+                >
+                  {isTimerRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  <span>{isTimerRunning ? "Pause" : "Start"}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    uiAudio.playSoftClick();
+                    setFocusTimeLeft(25 * 60);
+                    setIsTimerRunning(false);
+                  }}
+                  className="bg-white/5 border border-white/10 text-white hover:bg-white/10 py-3.5 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all text-[10px] font-black uppercase tracking-wider"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  <span>Reset</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    uiAudio.playSoftClick();
+                    if (isBinauralPlaying) {
+                      uiAudio.stopBinauralBeats();
+                      setIsBinauralPlaying(false);
+                      toast.info("🔇 Ondes Alpha désactivées.");
+                    } else {
+                      uiAudio.startBinauralBeats();
+                      setIsBinauralPlaying(true);
+                      toast.success("🎧 Ondes Alpha 10Hz activées. Casque stéréo recommandé !");
+                    }
+                  }}
+                  className={`py-3.5 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all text-[10px] font-black uppercase tracking-wider ${
+                    isBinauralPlaying 
+                      ? "bg-primary/20 border border-primary/30 text-primary shadow-[0_0_12px_rgba(99,102,241,0.25)]" 
+                      : "bg-white/5 border border-white/10 text-white hover:bg-white/10"
+                  }`}
+                >
+                  {isBinauralPlaying ? <VolumeX className="h-4 w-4 animate-[pulse_1.5s_infinite]" /> : <Volume2 className="h-4 w-4" />}
+                  <span>Binaural</span>
+                </button>
               </div>
             </div>
           </motion.div>

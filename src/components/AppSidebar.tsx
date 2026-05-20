@@ -11,6 +11,7 @@ import logoImg from "@/assets/logo-hippocampus.jpeg";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
+import { uiAudio } from "@/utils/audio";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
@@ -81,6 +82,20 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const effectivelyCollapsed = isCollapsed && !isMobile;
+
+  // Magnetic Hover coordinates
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleSidebarMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (sidebarRef.current) {
+      const rect = sidebarRef.current.getBoundingClientRect();
+      setMousePos({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+    }
+  };
 
   const { data: gamData } = useGamificationContext();
 
@@ -165,15 +180,28 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
       {/* Sidebar */}
       <aside
         ref={sidebarRef}
+        onMouseMove={handleSidebarMouseMove}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "fixed z-40 transition-all duration-300 ease-in-out flex flex-col",
+          "fixed z-40 transition-all duration-300 ease-in-out flex flex-col overflow-hidden",
           effectivelyCollapsed ? "w-[80px]" : "w-[280px]",
-          "bg-card text-card-foreground md:bg-card/80 md:backdrop-blur-2xl",
+          "bg-card text-card-foreground md:bg-card/85 md:backdrop-blur-2xl",
           "md:left-3 md:top-3 md:bottom-3 md:h-[calc(100vh-24px)] md:rounded-[2rem] md:border md:border-white/20 md:shadow-[0_12px_48px_rgba(0,0,0,0.12)]",
           "left-0 top-0 h-screen w-[280px] md:w-auto border-r border-border/50",
           !isOpen ? "-translate-x-full md:translate-x-0" : "translate-x-0"
         )}
       >
+        {/* Interactive Magnetic Mouse Glow */}
+        {isHovered && !effectivelyCollapsed && (
+          <div 
+            className="absolute pointer-events-none rounded-full blur-[100px] bg-primary/10 transition-all duration-300 z-0 h-52 w-52 opacity-80"
+            style={{
+              left: mousePos.x - 104,
+              top: mousePos.y - 104,
+            }}
+          />
+        )}
         {/* Top Section: Logo, Avatar and Toggle */}
         <div className={cn("flex flex-col transition-all duration-300", effectivelyCollapsed ? "items-center gap-6 py-6" : "px-5 py-4 gap-4")}>
           <div className={cn("flex items-center w-full", effectivelyCollapsed ? "flex-col gap-5 justify-center" : "justify-between")}>
@@ -361,6 +389,7 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                       <button
                         key={item.path}
                         onClick={() => {
+                          uiAudio.playSoftClick();
                           if (locked) {
                             toast.error(`Fonctionnalité réservée aux abonnés ${item.requiredPlan === "pro" ? "Pro" : "Premium / Pro"}`);
                             navigate("/subscription");
@@ -384,7 +413,13 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                           <div className="absolute left-0 top-2 bottom-2 w-1 bg-primary rounded-r-full shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
                         )}
                         <div className="flex items-center gap-3.5 relative z-10">
-                          <item.icon className={cn("h-5 w-5", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground", locked && "opacity-50")} />
+                          <motion.div
+                            whileHover={{ scale: 1.22, rotate: [0, -10, 8, -4, 0] }}
+                            transition={{ type: "spring", stiffness: 350, damping: 11 }}
+                            className="shrink-0"
+                          >
+                            <item.icon className={cn("h-5 w-5", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground", locked && "opacity-50")} />
+                          </motion.div>
                           {!effectivelyCollapsed && <span className="text-[15px] font-bold tracking-tight">{item.title}</span>}
                         </div>
                         {!effectivelyCollapsed && (
@@ -416,11 +451,17 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                   <p className="px-2 text-[11px] font-black text-muted-foreground/60 uppercase tracking-[0.2em]">Administration</p>
                   <div className="space-y-1">
                     {adminItems.map((item) => (
-                      <button key={item.path} onClick={() => { navigate(item.path); setIsOpen(false); }}
+                      <button key={item.path} onClick={() => { uiAudio.playSoftClick(); navigate(item.path); setIsOpen(false); }}
                         className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl transition-all duration-300 group px-4 py-3 text-[15px]",
                           isActive(item.path) ? "bg-primary/10 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                         )}>
-                        <item.icon className={cn("h-5 w-5", isActive(item.path) ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                        <motion.div
+                          whileHover={{ scale: 1.22, rotate: [0, -10, 8, -4, 0] }}
+                          transition={{ type: "spring", stiffness: 350, damping: 11 }}
+                          className="shrink-0"
+                        >
+                          <item.icon className={cn("h-5 w-5", isActive(item.path) ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                        </motion.div>
                         <span>{item.title}</span>
                       </button>
                     ))}
@@ -432,11 +473,17 @@ const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) =>
                 <p className="px-2 text-[11px] font-black text-muted-foreground/60 uppercase tracking-[0.2em]">Compte & Support</p>
                 <div className="space-y-1">
                   {accountItems.map((item) => (
-                    <button key={item.path} onClick={() => { navigate(item.path); setIsOpen(false); }}
+                    <button key={item.path} onClick={() => { uiAudio.playSoftClick(); navigate(item.path); setIsOpen(false); }}
                       className={cn("flex items-center gap-3.5 w-full font-bold rounded-2xl transition-all duration-300 group px-4 py-3 text-[15px]",
                         isActive(item.path) ? "bg-primary/10 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                       )}>
-                      <item.icon className={cn("h-5 w-5", isActive(item.path) ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                      <motion.div
+                        whileHover={{ scale: 1.22, rotate: [0, -10, 8, -4, 0] }}
+                        transition={{ type: "spring", stiffness: 350, damping: 11 }}
+                        className="shrink-0"
+                      >
+                        <item.icon className={cn("h-5 w-5", isActive(item.path) ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                      </motion.div>
                       <span>{item.title}</span>
                     </button>
                   ))}

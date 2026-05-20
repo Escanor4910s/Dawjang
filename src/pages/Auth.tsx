@@ -194,10 +194,12 @@ const Auth = () => {
             {/* Card 1 */}
             <motion.div
               initial={{ opacity: 0, x: -50, y: 50 }}
-              animate={{ opacity: 1, x: 0, y: 0 }}
-              transition={{ delay: 0.4, duration: 0.8, type: "spring" }}
-              animate={{ y: [0, -15, 0] }}
-              transition={{ y: { duration: 6, repeat: Infinity, ease: "easeInOut", delay: 0 } }}
+              animate={{ opacity: 1, x: 0, y: [0, -15, 0] }}
+              transition={{
+                x: { delay: 0.4, duration: 0.8, type: "spring" },
+                opacity: { delay: 0.4, duration: 0.8 },
+                y: { duration: 6, repeat: Infinity, ease: "easeInOut", delay: 0.4 }
+              }}
               className="absolute top-0 left-0 bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-2xl shadow-2xl flex items-center gap-4 w-64 transform -rotate-6 hover:rotate-0 hover:scale-105 hover:bg-white/15 transition-all cursor-default z-20"
             >
               <div className="bg-primary/20 p-3 rounded-xl ring-1 ring-white/20">
@@ -212,10 +214,12 @@ const Auth = () => {
             {/* Card 2 */}
             <motion.div
               initial={{ opacity: 0, x: 50, y: 50 }}
-              animate={{ opacity: 1, x: 0, y: 0 }}
-              transition={{ delay: 0.6, duration: 0.8, type: "spring" }}
-              animate={{ y: [0, 15, 0] }}
-              transition={{ y: { duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 } }}
+              animate={{ opacity: 1, x: 0, y: [0, 15, 0] }}
+              transition={{
+                x: { delay: 0.6, duration: 0.8, type: "spring" },
+                opacity: { delay: 0.6, duration: 0.8 },
+                y: { duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.6 }
+              }}
               className="absolute top-16 right-0 bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-2xl shadow-2xl flex items-center gap-4 w-64 transform rotate-6 hover:rotate-0 hover:scale-105 hover:bg-white/15 transition-all cursor-default z-10"
             >
               <div className="bg-violet-500/20 p-3 rounded-xl ring-1 ring-white/20">
@@ -230,10 +234,11 @@ const Auth = () => {
             {/* Card 3 */}
             <motion.div
               initial={{ opacity: 0, y: 80 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.8, duration: 0.8, type: "spring" }}
-              animate={{ y: [0, -10, 0] }}
-              transition={{ y: { duration: 7, repeat: Infinity, ease: "easeInOut", delay: 2 } }}
+              animate={{ opacity: 1, y: [0, -10, 0] }}
+              transition={{
+                opacity: { delay: 0.8, duration: 0.8 },
+                y: { duration: 7, repeat: Infinity, ease: "easeInOut", delay: 0.8 }
+              }}
               className="absolute bottom-4 left-16 bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-2xl shadow-2xl flex items-center gap-4 w-64 transform hover:scale-105 hover:bg-white/15 transition-all cursor-default z-30"
             >
               <div className="bg-emerald-500/20 p-3 rounded-xl ring-1 ring-white/20">

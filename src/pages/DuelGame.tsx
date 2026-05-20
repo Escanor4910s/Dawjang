@@ -569,7 +569,6 @@ const DuelGame = () => {
                       <motion.button
                         key={idx}
                         initial={{ opacity: 0, y: 15 }}
-                        animate={{ opacity: 1, y: 0 }}
                         whileHover={{ scale: showFeedback ? 1 : 1.01 }}
                         whileTap={{ scale: showFeedback ? 1 : 0.99 }}
                         transition={{ delay: idx * 0.06, type: "spring", stiffness: 120 }}

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ShieldAlert, Activity, FileText, CheckCircle, XCircle, ArrowRight, RotateCcw, 
-  UserCheck, Award, AlertCircle, Heart, Zap, Sparkles, Search, Dices, BookOpen, Loader2
+  UserCheck, Award, AlertCircle, Heart, Zap, Sparkles, Search, Dices, BookOpen, Loader2, Timer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,8 @@ import { EcgMonitor } from "@/components/ecos/EcgMonitor";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { uiAudio } from "@/utils/audio";
+import { cn } from "@/lib/utils";
 
 interface Question {
   id: number;
@@ -254,6 +256,11 @@ const EcosPage = () => {
   const [isFinished, setIsFinished] = useState(false);
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
 
+  // Immersive Urgency Mode 60s
+  const [isUrgencyMode, setIsUrgencyMode] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [isShaking, setIsShaking] = useState(false);
+
   // Dynamic ECOS simulation builder parameters
   const [uploadedCourses, setUploadedCourses] = useState<{ id: string; title: string; content: string }[]>([]);
   const [difficulty, setDifficulty] = useState<"facile" | "moyen" | "difficile">("moyen");
@@ -453,6 +460,45 @@ const EcosPage = () => {
     } catch {}
   };
 
+  // Manage heartbeat audio loops and timer countdown
+  useEffect(() => {
+    if (selectedCase && !isFinished && isUrgencyMode) {
+      const bpm = patientState?.bpm || 80;
+      uiAudio.startHeartbeatLoop(bpm);
+      
+      const timer = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            const currentQuestion = selectedCase.questions[currentStep];
+            handleAnswerSubmit(currentQuestion.dangerous);
+            setIsShaking(true);
+            setTimeout(() => setIsShaking(false), 800);
+            toast.error("⌛ TEMPS ÉCOULÉ ! Une erreur critique de retard de soin a été enregistrée.");
+            return 60;
+          }
+          if (prev <= 16) {
+            setIsShaking(true);
+            setTimeout(() => setIsShaking(false), 200);
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => {
+        clearInterval(timer);
+        uiAudio.stopHeartbeatLoop();
+      };
+    } else {
+      uiAudio.stopHeartbeatLoop();
+    }
+  }, [selectedCase, isFinished, isUrgencyMode, currentStep, patientState?.bpm]);
+
+  useEffect(() => {
+    if (!selectedCase || isFinished) {
+      uiAudio.stopHeartbeatLoop();
+    }
+  }, [selectedCase, isFinished]);
+
   const startCase = (c: Case) => {
     setSelectedCase(c);
     setPatientState({ ...c.initialState });
@@ -464,6 +510,7 @@ const EcosPage = () => {
     setMorStatus("normal");
     setMorComment(`Bonjour confrère. Je suis l'Agent MOR, chef de clinique de garde. Nous accueillons ce patient présentant un tableau clinique délicat de ${c.title}. Installez le patient et examinez les constantes.`);
     triggerTone(523.25, 0.25, "sine", 0.08); // Sweet C note
+    setTimeLeft(60); // Reset countdown
   };
 
   const handleAnswerSubmit = (optionIndex: number) => {
@@ -522,6 +569,7 @@ const EcosPage = () => {
       setMorStatus("normal");
       setMorComment("Le patient évolue. Analysons la situation clinique suivante pour orienter la suite de la prise en charge.");
       triggerTone(587.33, 0.15, "sine", 0.06); // Sweet D note
+      setTimeLeft(60); // Reset countdown
     } else {
       // Completed!
       setIsFinished(true);
@@ -607,7 +655,7 @@ const EcosPage = () => {
               
               <div className="space-y-8 relative z-10">
                 {/* Header Section */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/10">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-white/10">
                   <div className="flex items-center gap-3.5">
                     <div className="p-3 rounded-2xl bg-gradient-to-tr from-primary/20 to-violet-500/20 border border-primary/30 text-primary shadow-inner">
                       <Sparkles className="h-6 w-6 animate-pulse" />
@@ -622,9 +670,36 @@ const EcosPage = () => {
                     </div>
                   </div>
                   
-                  <Badge className="bg-primary/15 text-primary border border-primary/30 rounded-xl font-bold uppercase tracking-widest text-[9px] px-3.5 py-1.5 self-start sm:self-auto animate-[pulse_3s_infinite]">
-                    🔥 MOTEUR V2 ACTIF
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Mode Urgence 60s Toggle */}
+                    <div className="flex items-center gap-3.5 bg-background/50 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 shadow-inner">
+                      <div className="flex items-center gap-2">
+                        <Timer className={`h-4 w-4 ${isUrgencyMode ? "text-rose-500 animate-pulse" : "text-muted-foreground"}`} />
+                        <div className="text-left">
+                          <p className="text-[9px] font-black uppercase tracking-wider text-foreground">MODE URGENCE 60s</p>
+                          <p className="text-[7px] font-extrabold text-muted-foreground uppercase tracking-widest leading-none">Pulsation Cardiaque 3D</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          uiAudio.playSoftClick();
+                          setIsUrgencyMode(!isUrgencyMode);
+                        }}
+                        className={`w-10 h-5.5 rounded-full transition-all duration-300 relative focus:outline-none ${
+                          isUrgencyMode ? "bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]" : "bg-muted"
+                        }`}
+                      >
+                        <div className={`absolute top-0.5 left-0.5 bg-white h-4.5 w-4.5 rounded-full transition-all duration-300 shadow-sm ${
+                          isUrgencyMode ? "translate-x-4.5" : "translate-x-0"
+                        }`} />
+                      </button>
+                    </div>
+
+                    <Badge className="bg-primary/15 text-primary border border-primary/30 rounded-xl font-bold uppercase tracking-widest text-[9px] px-3.5 py-1.5 animate-[pulse_3s_infinite]">
+                      🔥 MOTEUR V2 ACTIF
+                    </Badge>
+                  </div>
                 </div>
 
                 {isGenerating ? (
@@ -1012,9 +1087,17 @@ const EcosPage = () => {
           <motion.div
             key="simulation-room"
             initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
+            animate={isShaking ? {
+              x: [-6, 6, -6, 6, -3, 3, 0],
+              y: [-3, 3, -3, 3, -1, 1, 0],
+              boxShadow: "0 0 45px rgba(239, 68, 68, 0.25)"
+            } : { opacity: 1, y: 0 }}
+            transition={isShaking ? { duration: 0.22, repeat: 1 } : { duration: 0.3 }}
             exit={{ opacity: 0, y: -15 }}
-            className="grid lg:grid-cols-12 gap-6 pt-2"
+            className={cn(
+              "grid lg:grid-cols-12 gap-6 pt-2 transition-all duration-300",
+              isUrgencyMode && timeLeft <= 15 && !hasAnswered && "border-2 border-rose-500/40 rounded-[3rem] p-3 bg-rose-950/10 shadow-[0_0_55px_rgba(239,68,68,0.25)] animate-pulse"
+            )}
           >
             {/* LEFT COLUMN: ECG and patient constants (4 cols) */}
             <div className="lg:col-span-4 space-y-6">
@@ -1056,9 +1139,22 @@ const EcosPage = () => {
 
                 <CardContent className="p-6 md:p-8 space-y-6 flex-grow flex flex-col justify-between">
                   <div className="space-y-4">
-                    <span className="text-[10px] font-black text-muted-foreground/75 uppercase tracking-widest flex items-center gap-1.5">
-                      <AlertCircle className="h-3.5 w-3.5 text-primary" /> Décision Thérapeutique
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-muted-foreground/75 uppercase tracking-widest flex items-center gap-1.5">
+                        <AlertCircle className="h-3.5 w-3.5 text-primary" /> Décision Thérapeutique
+                      </span>
+                      {isUrgencyMode && !hasAnswered && (
+                        <div className={cn(
+                          "flex items-center gap-1.5 px-3 py-1 rounded-xl border text-[10px] font-black transition-all duration-300",
+                          timeLeft <= 15
+                            ? "bg-rose-500/10 border-rose-500/30 text-rose-500 animate-pulse"
+                            : "bg-primary/5 border-primary/20 text-primary"
+                        )}>
+                          <Timer className="h-3.5 w-3.5 animate-[spin_4s_linear_infinite]" />
+                          <span>CHRONO : {timeLeft}s</span>
+                        </div>
+                      )}
+                    </div>
 
                     <h3 className="font-bold text-foreground leading-relaxed text-base md:text-lg">
                       {selectedCase.questions[currentStep].text}
