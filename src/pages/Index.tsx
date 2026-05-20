@@ -140,7 +140,6 @@ const Index = () => {
             <a href="#features" className="px-4 py-2 rounded-full text-white/65 hover:text-white hover:bg-white/[0.08] transition-all duration-300">Produit</a>
             <a href="#mor" className="px-4 py-2 rounded-full text-white/65 hover:text-white hover:bg-white/[0.08] transition-all duration-300">Agent MOR</a>
             <Link to="/pricing" className="px-4 py-2 rounded-full text-white/65 hover:text-white hover:bg-white/[0.08] transition-all duration-300">Tarifs</Link>
-            <Link to="/community" className="px-4 py-2 rounded-full text-white/65 hover:text-white hover:bg-white/[0.08] transition-all duration-300">Communauté</Link>
           </div>
           
           <div className="hidden md:flex items-center gap-3 flex-shrink-0">
@@ -176,12 +175,6 @@ const Index = () => {
                         <Circle className="w-2 h-2 fill-green-500 text-green-500" />
                         <span className="text-xs font-medium">Statut: Connecté</span>
                       </div>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild className="focus:bg-white/10 focus:text-white rounded-xl cursor-pointer py-2">
-                      <Link to="/dashboard" className="flex items-center gap-2 w-full">
-                        <LayoutDashboard className="w-4 h-4" />
-                        <span>Tableau de bord</span>
-                      </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-white/10" />
                     <DropdownMenuItem onClick={handleLogout} className="focus:bg-destructive/20 focus:text-destructive rounded-xl cursor-pointer py-2 text-rose-500">
@@ -241,11 +234,6 @@ const Index = () => {
                 <span className="text-lg font-bold">Tarifs</span>
                 <Trophy className="w-5 h-5 opacity-50" />
               </Link>
-              <Link to="/community" onClick={() => setIsMobileMenuOpen(false)} 
-                 className="group flex items-center justify-between py-4 px-6 rounded-[1.8rem] bg-white text-[#1A1A1A] border border-[#E5E5E5] shadow-sm">
-                <span className="text-lg font-bold">Communauté</span>
-                <MessageSquare className="w-5 h-5 opacity-50" />
-              </Link>
 
               {!user ? (
                 <div className="mt-4 flex flex-col gap-3">
@@ -271,10 +259,11 @@ const Index = () => {
         )}
       </AnimatePresence>
 
-      <main className="relative z-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] bg-blend-overlay">
+      <main className="relative z-10">
         
         {/* HERO SECTION - Wispr Flow Inspired */}
-        <section className="relative pt-40 pb-32 px-6 overflow-hidden min-h-[90vh] flex flex-col items-center justify-center text-center">
+        <section className="relative pt-40 pb-32 px-6 overflow-hidden min-h-[90vh] flex flex-col items-center justify-center text-center bg-doodle-watermark">
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay pointer-events-none" />
           
           {/* Abstract Hand-drawn SVG Wires */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
@@ -438,6 +427,22 @@ const Index = () => {
           </div>
         </section>
 
+        {/* VIDEO EXPLAINER SECTION */}
+        <section className="py-24 px-6 max-w-5xl mx-auto relative z-20">
+          <FadeIn>
+            <div className="text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-serif text-[#0F3B2E] mb-4">Découvrez Hippocampus en action</h2>
+              <p className="text-[#1A1A1A]/60 text-lg">Une plateforme conçue pour révolutionner votre mémorisation.</p>
+            </div>
+            <div className="w-full aspect-video bg-[#1A1A1A] rounded-[2rem] shadow-2xl border-4 border-white overflow-hidden relative group cursor-pointer flex items-center justify-center">
+              <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&q=80')] opacity-50 bg-cover bg-center mix-blend-overlay transition-transform duration-700 group-hover:scale-105" />
+              <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center group-hover:scale-110 group-hover:bg-emerald-500 transition-all duration-300 z-10">
+                <div className="w-0 h-0 border-t-[12px] border-t-transparent border-l-[20px] border-l-white border-b-[12px] border-b-transparent ml-2" />
+              </div>
+            </div>
+          </FadeIn>
+        </section>
+
         {/* MOR AGENT SECTION - Dark, Neural, Glowing */}
         <section id="mor" className="py-32 px-6 relative overflow-hidden bg-[#1A1A1A] text-white mt-12 rounded-[3rem] md:rounded-[4rem] mx-4 md:mx-8 shadow-[0_30px_60px_rgba(0,0,0,0.5)]">
           {/* Abstract Synapse Glows */}
@@ -497,35 +502,49 @@ const Index = () => {
           </div>
         </section>
 
-        {/* TESTIMONIALS - Elegant Cards */}
-        <section className="py-32 px-6 max-w-7xl mx-auto">
-          <FadeIn className="text-center mb-20">
+        {/* TESTIMONIALS - Elegant Cards Marquee */}
+        <section className="py-32 px-0 relative overflow-hidden bg-doodle-watermark bg-[#FDFBF7]">
+          <style dangerouslySetInnerHTML={{__html: `
+            .marquee-container { display: flex; width: max-content; animation: marquee 40s linear infinite; }
+            .marquee-container:hover { animation-play-state: paused; }
+            @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+          `}} />
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay pointer-events-none w-full" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#FDFBF7] via-transparent to-[#FDFBF7] z-10 pointer-events-none w-full" />
+          
+          <div className="text-center mb-16 px-6 relative z-20">
             <h2 className="text-4xl md:text-5xl font-serif text-[#0F3B2E] mb-6">Ils ont transformé leurs études</h2>
-            <p className="text-[#1A1A1A]/60 text-lg">Rejoignez des milliers d'étudiants en santé qui ont fait le choix de l'excellence.</p>
-          </FadeIn>
+            <p className="text-[#1A1A1A]/60 text-lg">Rejoignez des centaines d'étudiants en santé vers l'excellence.</p>
+          </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { name: "Julie M.", role: "Externat D2", text: "Je ne passe plus des heures à faire des fiches. L'IA génère les flashcards instantanément. Un gain de temps énorme et mes notes ont décollé." },
-              { name: "Thomas L.", role: "PACES", text: "La fonction tuteur est bluffante. Quand je me trompe, l'explication est claire et me permet de comprendre mon erreur au lieu de juste apprendre par cœur." },
-              { name: "Sarah K.", role: "Interne", text: "Idéal pour réviser rapidement entre deux gardes. Les questions sont pointues et correspondent exactement au niveau d'exigence des ECNi." }
-            ].map((t, i) => (
-              <FadeIn key={i} delay={0.1 * i} yOffset={40} className="bg-white border border-[#E5E5E5] p-10 rounded-[2rem] hover:-translate-y-2 transition-transform duration-500 shadow-sm hover:shadow-xl relative group">
-                <div className="absolute top-8 right-8 text-[#E5E5E5] group-hover:text-amber-200 transition-colors">
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
-                </div>
-                <p className="text-lg font-medium mb-10 leading-relaxed text-[#1A1A1A]/80 relative z-10 pt-4">"{t.text}"</p>
-                <div className="flex items-center gap-4 border-t border-[#E5E5E5] pt-6">
-                  <div className="w-12 h-12 bg-[#0F3B2E] rounded-full flex items-center justify-center text-white font-serif font-bold text-lg">
-                    {t.name.charAt(0)}
+          <div className="overflow-hidden relative z-20 py-8">
+            <div className="marquee-container flex gap-8 px-4">
+              {[
+                { name: "Fatou N.", role: "Externat D2 - UCAD", text: "Je ne passe plus des heures à faire des fiches. L'IA génère les flashcards instantanément. Un gain de temps énorme." },
+                { name: "Amadou C.", role: "PACES - UGB", text: "La fonction tuteur est bluffante. Quand je me trompe, l'explication est claire et me permet de comprendre mon erreur." },
+                { name: "Aïssatou D.", role: "Interne des hôpitaux", text: "Idéal pour réviser rapidement entre deux gardes. Les questions sont pointues et correspondent au niveau d'exigence." },
+                // Duplicate for seamless loop
+                { name: "Fatou N.", role: "Externat D2 - UCAD", text: "Je ne passe plus des heures à faire des fiches. L'IA génère les flashcards instantanément. Un gain de temps énorme." },
+                { name: "Amadou C.", role: "PACES - UGB", text: "La fonction tuteur est bluffante. Quand je me trompe, l'explication est claire et me permet de comprendre mon erreur." },
+                { name: "Aïssatou D.", role: "Interne des hôpitaux", text: "Idéal pour réviser rapidement entre deux gardes. Les questions sont pointues et correspondent au niveau d'exigence." }
+              ].map((t, i) => (
+                <div key={i} className="bg-white border border-[#E5E5E5] p-8 rounded-[2rem] hover:-translate-y-4 transition-all duration-500 shadow-sm hover:shadow-2xl relative group w-[400px] flex-shrink-0 cursor-pointer">
+                  <div className="absolute top-8 right-8 text-[#E5E5E5] group-hover:text-emerald-200 transition-colors">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
                   </div>
-                  <div>
-                    <div className="font-bold text-[#1A1A1A]">{t.name}</div>
-                    <div className="text-sm text-[#1A1A1A]/50 font-medium">{t.role}</div>
+                  <p className="text-lg font-medium mb-10 leading-relaxed text-[#1A1A1A]/80 group-hover:text-emerald-700 transition-colors duration-300 relative z-10 pt-4">"{t.text}"</p>
+                  <div className="flex items-center gap-4 border-t border-[#E5E5E5] pt-6 relative z-10">
+                    <div className="w-12 h-12 bg-[#0F3B2E] rounded-full flex items-center justify-center text-white font-serif font-bold text-lg group-hover:bg-emerald-600 transition-colors">
+                      {t.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="font-bold text-[#1A1A1A] group-hover:text-emerald-900 transition-colors">{t.name}</div>
+                      <div className="text-sm text-[#1A1A1A]/50 font-medium">{t.role}</div>
+                    </div>
                   </div>
                 </div>
-              </FadeIn>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
 

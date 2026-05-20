@@ -47,7 +47,7 @@ const Terms = () => {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-[#1A1A1A] font-sans selection:bg-[#0F3B2E]/20">
-      <LandingHeader />
+      <LandingHeader forceSolid={true} />
       
       {/* Hero Section */}
       <div className="pt-32 pb-16 px-6 relative overflow-hidden bg-[#0F3B2E] text-[#FDFBF7]">
