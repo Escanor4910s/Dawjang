@@ -5,11 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Mail, Lock, GraduationCap, Eye, EyeOff, User, Building, Hash,
-  Brain, FileText, Sparkles, ArrowRight, CheckCircle2, Shield, Zap, Flame, Infinity as InfinityIcon, Loader2
+  Shield, Loader2, BookOpen
 } from "lucide-react";
 import HippocampusLogo from "@/components/landing/HippocampusLogo";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,16 +34,6 @@ function scorePassword(pwd: string) {
   return s;
 }
 
-const FloatingTag = ({ text, delay, duration, yRange, xRange, colorClass }: any) => (
-  <motion.div
-    animate={{ y: yRange, x: xRange, rotate: [-2, 2, -2] }}
-    transition={{ duration, repeat: Infinity, repeatType: "reverse", ease: "easeInOut", delay }}
-    className={`absolute hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-xl backdrop-blur-md cursor-default text-xs font-black uppercase tracking-wider ${colorClass}`}
-  >
-    <Hash className="w-3 h-3" /> {text}
-  </motion.div>
-);
-
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -67,7 +56,7 @@ const Auth = () => {
   }, [navigate]);
 
   const pwdScore = scorePassword(formData.password);
-  const pwdColors = ["bg-muted", "bg-rose-500", "bg-amber-500", "bg-emerald-400", "bg-emerald-500"];
+  const pwdColors = ["bg-[#E5E5E5]", "bg-rose-500", "bg-amber-500", "bg-emerald-400", "bg-[#0F3B2E]"];
   const pwdLabels = ["", "Très faible", "Moyen", "Bon", "Excellent"];
 
   const handleAuthError = (error: any, isSignup: boolean) => {
@@ -84,7 +73,7 @@ const Auth = () => {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: formData.email, password: formData.password });
       if (error) throw error;
-      toast({ title: "Bienvenue de retour 👋", description: "Connexion réussie." });
+      toast({ title: "Bienvenue de retour", description: "Connexion réussie." });
       navigate("/dashboard");
     } catch (err) {
       handleAuthError(err, false);
@@ -121,7 +110,7 @@ const Auth = () => {
         },
       });
       if (error) throw error;
-      toast({ title: "Compte créé avec succès 🎉", description: "Vérifiez votre boîte mail pour confirmer votre inscription." });
+      toast({ title: "Compte créé", description: "Vérifiez votre boîte mail pour confirmer votre inscription." });
       setTab("login");
     } catch (err) {
       handleAuthError(err, true);
@@ -140,113 +129,46 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] grid lg:grid-cols-[1.1fr_1fr] overflow-hidden selection:bg-primary/30 font-sans">
+    <div className="min-h-screen bg-[#FDFBF7] grid lg:grid-cols-2 selection:bg-[#0F3B2E]/20 text-[#1A1A1A] font-sans">
       
-      {/* ─── LEFT PANE (Cyber-Futuristic Visuals) ───────────────────────── */}
-      <div className="hidden lg:flex flex-col p-12 lg:p-20 relative overflow-hidden">
+      {/* ─── LEFT PANE (Editorial Visuals) ───────────────────────── */}
+      <div className="hidden lg:flex flex-col p-12 lg:p-20 relative bg-[#0F3B2E] text-[#FDFBF7]">
         
-        {/* Dynamic Dark Gradient Background */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#0B0F19] to-black" />
-        
-        {/* Glowing Orbs & Grids */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay" />
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px]" />
-          
-          <motion.div 
-            animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3], rotate: [0, 90, 0] }}
-            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-            className="absolute top-[-15%] right-[-10%] w-[600px] h-[600px] bg-indigo-600/30 rounded-full blur-[120px] mix-blend-screen"
-          />
-          <motion.div 
-            animate={{ scale: [1, 1.5, 1], opacity: [0.2, 0.5, 0.2] }}
-            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-            className="absolute bottom-[-15%] left-[-15%] w-[500px] h-[500px] bg-primary/40 rounded-full blur-[150px] mix-blend-screen"
-          />
-        </div>
-
-        {/* Floating Tags */}
-        <div className="absolute inset-0 pointer-events-none z-20">
-          <FloatingTag text="PACES" delay={0} duration={4} yRange={[20, -20]} xRange={[0, 15]} colorClass="top-[15%] left-[20%] text-indigo-400 bg-indigo-500/10 border-indigo-500/30" />
-          <FloatingTag text="Anatomie" delay={1} duration={5} yRange={[-30, 30]} xRange={[-10, 10]} colorClass="top-[30%] right-[15%] text-emerald-400 bg-emerald-500/10 border-emerald-500/30" />
-          <FloatingTag text="Flashcards" delay={2} duration={4.5} yRange={[15, -15]} xRange={[20, -10]} colorClass="bottom-[25%] left-[10%] text-amber-400 bg-amber-500/10 border-amber-500/30" />
-          <FloatingTag text="ECN" delay={1.5} duration={6} yRange={[-25, 25]} xRange={[-15, 15]} colorClass="bottom-[15%] right-[25%] text-rose-400 bg-rose-500/10 border-rose-500/30" />
-        </div>
+        {/* Subtle noise texture */}
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none" />
 
         {/* Logo */}
-        <div className="relative z-30 mb-16">
-          <Link to="/" className="inline-block hover:scale-105 transition-transform">
+        <div className="relative z-30 mb-auto">
+          <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
             <HippocampusLogo size="xl" variant="white" />
           </Link>
         </div>
 
         {/* Main Value Prop */}
-        <div className="relative z-30 flex-grow flex flex-col justify-center">
-          <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }} className="mb-12">
-            <Badge className="bg-white/10 text-white border-white/20 px-3 py-1 mb-6 text-[10px] font-black uppercase tracking-widest backdrop-blur-md">
-              <Zap className="h-3 w-3 mr-1.5 text-primary" /> Nouvelle Ère
-            </Badge>
-            <h1 className="text-5xl lg:text-7xl font-black text-white leading-[1.1] mb-6 tracking-tight">
-              Unlock ta<br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-indigo-400 to-cyan-400">
-                mémoire.
-              </span>
-            </h1>
-            <p className="text-xl text-white/60 font-medium leading-relaxed max-w-md">
-              Rejoins l'élite. Apprends 3x plus vite avec l'IA et la répétition espacée.
-            </p>
-          </motion.div>
+        <div className="relative z-30 mb-auto mt-20">
+          <h1 className="text-5xl lg:text-[4rem] font-serif leading-[1.1] mb-8 tracking-tight text-[#FDFBF7]">
+            Révisez moins,<br />
+            <span className="italic text-[#D4C3A3] font-light">retenez plus.</span>
+          </h1>
+          <p className="text-lg lg:text-xl text-[#FDFBF7]/80 font-light leading-relaxed max-w-md">
+            L'outil de formation médicale le plus avancé. Des fiches, des QCM intelligents et un tuteur IA conçus pour l'excellence académique.
+          </p>
+        </div>
 
-          {/* Futuristic Glowing Cards */}
-          <div className="relative h-[220px] w-full max-w-lg perspective-1000">
-            {/* Card 1 */}
-            <motion.div
-              initial={{ opacity: 0, x: -50, y: 50, rotateY: 15 }}
-              animate={{ opacity: 1, x: 0, y: [0, -15, 0], rotateY: 0 }}
-              transition={{ x: { delay: 0.4, type: "spring" }, opacity: { delay: 0.4 }, y: { duration: 6, repeat: Infinity, ease: "easeInOut", delay: 0.4 } }}
-              className="absolute top-0 left-0 bg-white/5 backdrop-blur-2xl border border-white/10 p-5 rounded-3xl shadow-2xl flex items-center gap-4 w-[280px] hover:bg-white/10 transition-all cursor-default z-20 group"
-            >
-              <div className="bg-primary/20 p-3.5 rounded-2xl ring-1 ring-primary/30 group-hover:ring-primary/60 transition-all">
-                <Brain className="w-6 h-6 text-primary-glow" />
-              </div>
-              <div>
-                <h4 className="text-white font-bold text-sm tracking-wide">Tuteur Mor (IA)</h4>
-                <p className="text-white/50 text-[11px] mt-0.5 font-semibold uppercase tracking-wider">Dispo H24</p>
-              </div>
-            </motion.div>
-
-            {/* Card 2 */}
-            <motion.div
-              initial={{ opacity: 0, x: 50, y: 50, rotateY: -15 }}
-              animate={{ opacity: 1, x: 0, y: [0, 15, 0], rotateY: 0 }}
-              transition={{ x: { delay: 0.6, type: "spring" }, opacity: { delay: 0.6 }, y: { duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.6 } }}
-              className="absolute top-20 right-0 bg-white/5 backdrop-blur-2xl border border-white/10 p-5 rounded-3xl shadow-2xl flex items-center gap-4 w-[280px] hover:bg-white/10 transition-all cursor-default z-10 group"
-            >
-              <div className="bg-cyan-500/20 p-3.5 rounded-2xl ring-1 ring-cyan-500/30 group-hover:ring-cyan-500/60 transition-all">
-                <InfinityIcon className="w-6 h-6 text-cyan-400" />
-              </div>
-              <div>
-                <h4 className="text-white font-bold text-sm tracking-wide">QCM & ECOS</h4>
-                <p className="text-white/50 text-[11px] mt-0.5 font-semibold uppercase tracking-wider">Génération Infinie</p>
-              </div>
-            </motion.div>
-          </div>
+        <div className="relative z-30 flex items-center gap-4 text-sm font-medium tracking-wide text-[#FDFBF7]/60">
+          <BookOpen className="w-5 h-5 opacity-80" />
+          Rejoignez l'élite des étudiants en médecine.
         </div>
       </div>
       
-      {/* ─── RIGHT PANE (Form with Glassmorphism) ──────────────────────── */}
+      {/* ─── RIGHT PANE (Form) ──────────────────────── */}
       <div className="flex items-center justify-center p-6 sm:p-12 relative min-h-screen overflow-y-auto">
-        
-        {/* Subtle background glow for right pane */}
-        <div className="absolute inset-0 bg-black" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent opacity-50 blur-3xl" />
-        
-        <div className="w-full max-w-[480px] relative z-10 py-12">
+        <div className="w-full max-w-[420px] relative z-10 py-12">
           
           {/* Mobile Logo */}
           <div className="lg:hidden flex justify-center mb-10">
-            <Link to="/" className="inline-block hover:scale-105 transition-transform duration-300">
-              <HippocampusLogo size="xl" variant="white" />
+            <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
+              <HippocampusLogo size="xl" />
             </Link>
           </div>
 
@@ -254,13 +176,13 @@ const Auth = () => {
             
             {/* ─── RESET PASSWORD FORM ─── */}
             {showResetForm ? (
-              <motion.div key="reset" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl">
-                <div className="text-center mb-8">
-                  <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-primary ring-1 ring-primary/30">
-                    <Shield className="w-8 h-8" />
+              <motion.div key="reset" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white rounded-3xl p-8 shadow-sm border border-[#E5E5E5]">
+                <div className="mb-8">
+                  <div className="w-12 h-12 bg-[#FDFBF7] rounded-full flex items-center justify-center mb-6 text-[#0F3B2E] border border-[#E5E5E5]">
+                    <Shield className="w-6 h-6" />
                   </div>
-                  <h2 className="text-3xl font-black tracking-tight mb-2 text-white">Récupération</h2>
-                  <p className="text-white/60 font-medium">Un lien magique sera envoyé par mail.</p>
+                  <h2 className="text-2xl font-serif text-[#1A1A1A] mb-2">Réinitialisation</h2>
+                  <p className="text-[#1A1A1A]/60 text-sm">Nous vous enverrons un lien sécurisé par email.</p>
                 </div>
 
                 <form onSubmit={async (e) => {
@@ -272,43 +194,40 @@ const Auth = () => {
                   else { toast({ title: "Email envoyé", description: "Vérifiez votre boîte de réception." }); setShowResetForm(false); }
                 }} className="space-y-5">
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-white/70">Email</Label>
-                    <Input type="email" placeholder="nom@universite.fr" className="h-14 bg-black/40 border-white/10 text-white rounded-2xl focus:bg-black/60 focus:border-primary focus:ring-1 focus:ring-primary transition-all font-medium" value={resetEmail} onChange={e => setResetEmail(e.target.value)} required />
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[#1A1A1A]/70">Adresse e-mail</Label>
+                    <Input type="email" placeholder="nom@universite.fr" className="h-12 bg-[#FDFBF7] border-[#E5E5E5] text-[#1A1A1A] rounded-xl focus:bg-white focus:border-[#0F3B2E] focus:ring-1 focus:ring-[#0F3B2E] transition-all font-medium" value={resetEmail} onChange={e => setResetEmail(e.target.value)} required />
                   </div>
-                  <Button type="submit" className="w-full h-14 text-base font-black rounded-2xl shadow-[0_0_20px_rgba(var(--primary),0.3)] bg-gradient-to-r from-primary to-indigo-600 hover:from-primary/90 hover:to-indigo-600/90 text-white" disabled={isLoading}>
+                  <Button type="submit" className="w-full h-12 text-sm font-semibold rounded-xl bg-[#0F3B2E] hover:bg-[#0F3B2E]/90 text-white" disabled={isLoading}>
                     {isLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Envoyer le lien"}
                   </Button>
-                  <Button type="button" variant="ghost" onClick={() => setShowResetForm(false)} className="w-full h-12 font-bold text-white/50 hover:text-white hover:bg-white/5 rounded-2xl">
-                    Annuler
+                  <Button type="button" variant="ghost" onClick={() => setShowResetForm(false)} className="w-full h-12 text-sm font-medium text-[#1A1A1A]/60 hover:text-[#1A1A1A] hover:bg-[#FDFBF7] rounded-xl">
+                    Retour
                   </Button>
                 </form>
               </motion.div>
             ) : (
               
               /* ─── LOGIN / SIGNUP FORM ─── */
-              <motion.div key="auth" initial="hidden" animate="visible" exit="hidden" variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } }} className="bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-6 sm:p-10 shadow-2xl relative">
+              <motion.div key="auth" initial="hidden" animate="visible" exit="hidden" variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } }} className="bg-white rounded-3xl p-8 sm:p-10 shadow-sm border border-[#E5E5E5]">
                 
-                {/* Decorative glowing edge top */}
-                <div className="absolute top-0 inset-x-10 h-[1px] bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-
-                <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="mb-10 text-center">
-                  <h2 className="text-3xl font-black tracking-tight mb-2 text-white">
+                <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }} className="mb-8">
+                  <h2 className="text-3xl font-serif text-[#1A1A1A] mb-6">
                     {tab === "login" ? "Connexion" : "Inscription"}
                   </h2>
-                  <div className="flex items-center justify-center gap-3 text-white/60 font-medium bg-black/40 w-max mx-auto p-1.5 rounded-full border border-white/5">
-                    <button onClick={() => setTab("login")} className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${tab === "login" ? "bg-white/10 text-white shadow-lg" : "hover:text-white"}`}>
+                  <div className="flex items-center gap-1 bg-[#FDFBF7] p-1 rounded-xl border border-[#E5E5E5] w-full">
+                    <button onClick={() => setTab("login")} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${tab === "login" ? "bg-white text-[#1A1A1A] shadow-sm border border-[#E5E5E5]" : "text-[#1A1A1A]/60 hover:text-[#1A1A1A]"}`}>
                       Se Connecter
                     </button>
-                    <button onClick={() => setTab("signup")} className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${tab === "signup" ? "bg-white/10 text-white shadow-lg" : "hover:text-white"}`}>
+                    <button onClick={() => setTab("signup")} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${tab === "signup" ? "bg-white text-[#1A1A1A] shadow-sm border border-[#E5E5E5]" : "text-[#1A1A1A]/60 hover:text-[#1A1A1A]"}`}>
                       Créer un compte
                     </button>
                   </div>
                 </motion.div>
 
-                <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }}>
+                <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
                   <Button 
                     onClick={handleGoogleAuth} disabled={isLoading} variant="outline" 
-                    className="w-full h-14 rounded-2xl mb-6 font-bold border-white/10 bg-black/40 text-white hover:bg-white/10 hover:border-white/20 transition-all duration-300"
+                    className="w-full h-12 rounded-xl mb-6 font-medium border-[#E5E5E5] bg-white text-[#1A1A1A] hover:bg-[#FDFBF7] transition-all"
                   >
                   <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -320,51 +239,51 @@ const Auth = () => {
                   </Button>
                 </motion.div>
 
-                <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="relative flex items-center py-2 mb-6 opacity-50">
-                  <div className="flex-grow border-t border-white/20"></div>
-                  <span className="flex-shrink-0 mx-4 text-white text-[10px] font-black uppercase tracking-widest">Ou email classique</span>
-                  <div className="flex-grow border-t border-white/20"></div>
+                <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }} className="relative flex items-center py-2 mb-6">
+                  <div className="flex-grow border-t border-[#E5E5E5]"></div>
+                  <span className="flex-shrink-0 mx-4 text-[#1A1A1A]/40 text-xs font-semibold uppercase tracking-wider">Ou avec l'email</span>
+                  <div className="flex-grow border-t border-[#E5E5E5]"></div>
                 </motion.div>
 
                 <form onSubmit={tab === "login" ? handleLogin : handleSignup} className="space-y-4">
                   
                   {/* Email & Password */}
                   <div className="space-y-4">
-                    <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="space-y-2">
-                      <Label className="text-xs font-bold uppercase tracking-widest text-white/70 ml-1">Email</Label>
+                    <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }} className="space-y-2">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#1A1A1A]/70 ml-1">Adresse e-mail</Label>
                       <div className="relative group">
-                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/40 group-focus-within:text-primary transition-colors" />
-                        <Input type="email" placeholder="nom@exemple.com" className="pl-12 h-14 bg-black/40 border-white/10 text-white rounded-2xl hover:border-white/20 focus:bg-black/60 focus:border-primary focus:ring-1 focus:ring-primary transition-all font-medium shadow-inner" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
+                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#1A1A1A]/40 group-focus-within:text-[#0F3B2E] transition-colors" />
+                        <Input type="email" placeholder="nom@exemple.com" className="pl-11 h-12 bg-[#FDFBF7] border-[#E5E5E5] text-[#1A1A1A] rounded-xl hover:border-[#1A1A1A]/20 focus:bg-white focus:border-[#0F3B2E] focus:ring-1 focus:ring-[#0F3B2E] transition-all font-medium" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
                       </div>
                     </motion.div>
                     
-                    <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="space-y-2">
+                    <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }} className="space-y-2">
                       <div className="flex justify-between items-center ml-1">
-                        <Label className="text-xs font-bold uppercase tracking-widest text-white/70">Mot de passe</Label>
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-[#1A1A1A]/70">Mot de passe</Label>
                         {tab === "login" && (
-                          <button type="button" onClick={() => setShowResetForm(true)} className="text-[11px] text-primary font-bold hover:underline tracking-wider uppercase">
-                            Oublié ?
+                          <button type="button" onClick={() => setShowResetForm(true)} className="text-xs text-[#0F3B2E] font-semibold hover:underline">
+                            Mot de passe oublié ?
                           </button>
                         )}
                       </div>
                       <div className="relative group">
-                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/40 group-focus-within:text-primary transition-colors" />
-                        <Input type={showPassword ? "text" : "password"} placeholder="••••••••" className="pl-12 pr-12 h-14 bg-black/40 border-white/10 text-white rounded-2xl hover:border-white/20 focus:bg-black/60 focus:border-primary focus:ring-1 focus:ring-primary transition-all font-medium shadow-inner tracking-[0.2em]" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required />
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
-                          {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#1A1A1A]/40 group-focus-within:text-[#0F3B2E] transition-colors" />
+                        <Input type={showPassword ? "text" : "password"} placeholder="••••••••" className="pl-11 pr-11 h-12 bg-[#FDFBF7] border-[#E5E5E5] text-[#1A1A1A] rounded-xl hover:border-[#1A1A1A]/20 focus:bg-white focus:border-[#0F3B2E] focus:ring-1 focus:ring-[#0F3B2E] transition-all font-medium" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#1A1A1A]/40 hover:text-[#1A1A1A] transition-colors">
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
                       
                       {tab === "signup" && formData.password && (
                         <div className="pt-2 px-1">
-                          <div className="flex gap-1 h-1.5 mb-2">
+                          <div className="flex gap-1 h-1 mb-2">
                             {[1, 2, 3, 4].map((i) => (
-                              <div key={i} className={`flex-1 rounded-full transition-all duration-500 ${i <= pwdScore ? pwdColors[pwdScore] : "bg-white/10"}`} />
+                              <div key={i} className={`flex-1 rounded-full transition-all duration-500 ${i <= pwdScore ? pwdColors[pwdScore] : "bg-[#E5E5E5]"}`} />
                             ))}
                           </div>
                           <p className="text-[10px] uppercase font-bold tracking-wider flex justify-between">
-                            <span className="text-white/50">Sécurité</span>
-                            <span className={pwdScore >= 3 ? "text-emerald-400" : "text-amber-400"}>{pwdLabels[pwdScore]}</span>
+                            <span className="text-[#1A1A1A]/40">Sécurité</span>
+                            <span className={pwdScore >= 3 ? "text-emerald-600" : "text-amber-600"}>{pwdLabels[pwdScore]}</span>
                           </p>
                         </div>
                       )}
@@ -373,78 +292,75 @@ const Auth = () => {
 
                   {/* Signup Details */}
                   {tab === "signup" && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-4 pt-4 mt-2">
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-4 pt-2">
                       
                       <div className="space-y-2">
-                        <Label className="text-xs font-bold uppercase tracking-widest text-white/70 ml-1">Confirmation</Label>
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-[#1A1A1A]/70 ml-1">Confirmation du mot de passe</Label>
                         <div className="relative group">
-                          <CheckCircle2 className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/40 group-focus-within:text-primary transition-colors" />
-                          <Input type="password" placeholder="••••••••" className="pl-12 h-14 bg-black/40 border-white/10 text-white rounded-2xl hover:border-white/20 focus:bg-black/60 focus:border-primary focus:ring-1 focus:ring-primary transition-all font-medium tracking-[0.2em]" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} required />
+                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#1A1A1A]/40 group-focus-within:text-[#0F3B2E] transition-colors" />
+                          <Input type="password" placeholder="••••••••" className="pl-11 h-12 bg-[#FDFBF7] border-[#E5E5E5] text-[#1A1A1A] rounded-xl hover:border-[#1A1A1A]/20 focus:bg-white focus:border-[#0F3B2E] focus:ring-1 focus:ring-[#0F3B2E] transition-all font-medium" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} required />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold uppercase tracking-widest text-white/70 ml-1">Prénom</Label>
+                          <Label className="text-xs font-semibold uppercase tracking-wider text-[#1A1A1A]/70 ml-1">Prénom</Label>
                           <div className="relative group">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-primary transition-colors" />
-                            <Input placeholder="Jean" className="pl-9 h-12 bg-black/40 border-white/10 text-white rounded-xl focus:border-primary focus:ring-1 focus:ring-primary transition-all" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} required />
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#1A1A1A]/40 group-focus-within:text-[#0F3B2E] transition-colors" />
+                            <Input placeholder="Jean" className="pl-9 h-12 bg-[#FDFBF7] border-[#E5E5E5] text-[#1A1A1A] rounded-xl focus:border-[#0F3B2E] focus:ring-1 focus:ring-[#0F3B2E] transition-all" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} required />
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold uppercase tracking-widest text-white/70 ml-1">Nom</Label>
-                          <Input placeholder="Dupont" className="h-12 bg-black/40 border-white/10 text-white rounded-xl px-4 focus:border-primary focus:ring-1 focus:ring-primary transition-all" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} required />
+                          <Label className="text-xs font-semibold uppercase tracking-wider text-[#1A1A1A]/70 ml-1">Nom</Label>
+                          <Input placeholder="Dupont" className="h-12 bg-[#FDFBF7] border-[#E5E5E5] text-[#1A1A1A] rounded-xl px-4 focus:border-[#0F3B2E] focus:ring-1 focus:ring-[#0F3B2E] transition-all" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} required />
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-xs font-bold uppercase tracking-widest text-white/70 ml-1">Faculté</Label>
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-[#1A1A1A]/70 ml-1">Faculté</Label>
                         <div className="relative group">
-                          <Building className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-primary transition-colors" />
-                          <Input placeholder="Ex: Sorbonne Université" className="pl-11 h-12 bg-black/40 border-white/10 text-white rounded-xl focus:border-primary focus:ring-1 focus:ring-primary transition-all" value={formData.university} onChange={e => setFormData({...formData, university: e.target.value})} required />
+                          <Building className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#1A1A1A]/40 group-focus-within:text-[#0F3B2E] transition-colors" />
+                          <Input placeholder="Ex: Sorbonne Université" className="pl-11 h-12 bg-[#FDFBF7] border-[#E5E5E5] text-[#1A1A1A] rounded-xl focus:border-[#0F3B2E] focus:ring-1 focus:ring-[#0F3B2E] transition-all" value={formData.university} onChange={e => setFormData({...formData, university: e.target.value})} required />
                         </div>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold uppercase tracking-widest text-white/70 ml-1">Niveau</Label>
+                          <Label className="text-xs font-semibold uppercase tracking-wider text-[#1A1A1A]/70 ml-1">Niveau d'études</Label>
                           <Select onValueChange={(v) => setFormData({ ...formData, studyLevel: v })}>
-                            <SelectTrigger className="h-12 bg-black/40 border-white/10 text-white rounded-xl focus:border-primary focus:ring-1 focus:ring-primary">
-                              <GraduationCap className="h-4 w-4 text-white/40 mr-2" />
+                            <SelectTrigger className="h-12 bg-[#FDFBF7] border-[#E5E5E5] text-[#1A1A1A] rounded-xl focus:border-[#0F3B2E] focus:ring-1 focus:ring-[#0F3B2E]">
+                              <GraduationCap className="h-4 w-4 text-[#1A1A1A]/40 mr-2" />
                               <SelectValue placeholder="Niveau" />
                             </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-white/10 text-white rounded-xl">
-                              {studyLevels.map((l) => <SelectItem key={l.value} value={l.value} className="focus:bg-white/10 focus:text-white cursor-pointer">{l.label}</SelectItem>)}
+                            <SelectContent className="bg-white border-[#E5E5E5] text-[#1A1A1A] rounded-xl">
+                              {studyLevels.map((l) => <SelectItem key={l.value} value={l.value} className="focus:bg-[#FDFBF7] cursor-pointer">{l.label}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold uppercase tracking-widest text-white/70 ml-1">N° Étudiant</Label>
+                          <Label className="text-xs font-semibold uppercase tracking-wider text-[#1A1A1A]/70 ml-1">N° Étudiant</Label>
                           <div className="relative group">
-                            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-primary transition-colors" />
-                            <Input placeholder="Facultatif" className="pl-9 h-12 bg-black/40 border-white/10 text-white rounded-xl focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm" value={formData.studentNumber} onChange={e => setFormData({...formData, studentNumber: e.target.value})} />
+                            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#1A1A1A]/40 group-focus-within:text-[#0F3B2E] transition-colors" />
+                            <Input placeholder="Facultatif" className="pl-9 h-12 bg-[#FDFBF7] border-[#E5E5E5] text-[#1A1A1A] rounded-xl focus:border-[#0F3B2E] focus:ring-1 focus:ring-[#0F3B2E] transition-all" value={formData.studentNumber} onChange={e => setFormData({...formData, studentNumber: e.target.value})} />
                           </div>
                         </div>
                       </div>
                     </motion.div>
                   )}
 
-                  <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }}>
-                    <Button type="submit" className="w-full h-14 mt-6 text-base font-black uppercase tracking-wider rounded-2xl bg-gradient-to-r from-primary to-indigo-600 hover:from-primary/90 hover:to-indigo-600/90 text-white shadow-[0_0_20px_rgba(var(--primary),0.3)] transition-all duration-300 hover:shadow-[0_0_30px_rgba(var(--primary),0.5)] hover:-translate-y-1 group" disabled={isLoading}>
+                  <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                    <Button type="submit" className="w-full h-12 mt-4 text-sm font-semibold rounded-xl bg-[#0F3B2E] hover:bg-[#0F3B2E]/90 text-white transition-all duration-300" disabled={isLoading}>
                       {isLoading ? (
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-white" />
+                        <Loader2 className="w-5 h-5 animate-spin mx-auto text-white" />
                       ) : (
-                        <span className="flex items-center justify-center gap-2 relative z-10">
-                          {tab === "login" ? "Entrer" : "Rejoindre l'élite"}
-                          <Flame className="w-5 h-5 text-amber-400 group-hover:scale-125 transition-transform duration-300" />
-                        </span>
+                        <span>{tab === "login" ? "Accéder à l'espace" : "Finaliser l'inscription"}</span>
                       )}
                     </Button>
                   </motion.div>
                   
                   {tab === "signup" && (
-                    <motion.p variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }} className="text-center text-[10px] font-bold text-white/40 uppercase tracking-widest mt-6">
-                      En continuant, tu acceptes nos <Link to="/terms" className="text-primary hover:underline">Conditions</Link> et <Link to="/privacy" className="text-primary hover:underline">Confidentialité</Link>.
+                    <motion.p variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }} className="text-center text-xs text-[#1A1A1A]/40 mt-4">
+                      En continuant, vous acceptez nos <Link to="/terms" className="text-[#0F3B2E] hover:underline">Conditions</Link> et <Link to="/privacy" className="text-[#0F3B2E] hover:underline">Confidentialité</Link>.
                     </motion.p>
                   )}
                 </form>

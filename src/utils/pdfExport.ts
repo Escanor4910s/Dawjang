@@ -74,15 +74,15 @@ export const exportQuizToPDF = (quizData: QuizData) => {
   // ─────────────────────────────────────────────────────────
   //  TYPOGRAPHY CONSTANTS
   // ─────────────────────────────────────────────────────────
-  const QUESTION_FONT_SIZE  = 11.5;
-  const CHOICE_FONT_SIZE    = 10.5;
-  const EXPL_FONT_SIZE      = 10;
-  const QUESTION_LINE_H     = 5.5;
-  const CHOICE_LINE_H       = 5;
-  const EXPL_LINE_H         = 4.8;
-  const CHOICE_GAP          = 2.5;   // vertical gap between choices
-  const POST_QUESTION_GAP   = 12;    // gap after a full question block
-  const SEPARATOR_GAP       = 8;     // extra gap for the decorative rule
+  const QUESTION_FONT_SIZE  = 10.5;
+  const CHOICE_FONT_SIZE    = 10;
+  const EXPL_FONT_SIZE      = 9.5;
+  const QUESTION_LINE_H     = 5;
+  const CHOICE_LINE_H       = 4.5;
+  const EXPL_LINE_H         = 4.5;
+  const CHOICE_GAP          = 1.5;   // vertical gap between choices
+  const POST_QUESTION_GAP   = 6;     // gap after a full question block
+  const SEPARATOR_GAP       = 4;     // extra gap for the decorative rule
   const HEADER_ZONE         = 22;    // reserved for header
   const FOOTER_ZONE         = 20;    // reserved for footer
   const USABLE_BOTTOM       = pageHeight - FOOTER_ZONE;
@@ -161,20 +161,20 @@ export const exportQuizToPDF = (quizData: QuizData) => {
   // ─────────────────────────────────────────────────────────
   /** Estimate total height of a question block (tag + text + all choices + gaps) */
   const estimateQuestionBlockHeight = (question: Question): number => {
-    // Tag line
-    let h = 14; // tag rect (8) + gap to question text (6)
+    let h = 0;
 
-    // Question text
+    // Question text (includes "X. " prefix)
     pdf.setFont("times", "bold");
     pdf.setFontSize(QUESTION_FONT_SIZE);
-    const qLines = pdf.splitTextToSize(cleanForPDF(question.question), contentWidth - 8);
-    h += qLines.length * QUESTION_LINE_H + 6; // +6 gap before choices
+    // prefix is usually 3 chars: "10. "
+    const qLines = pdf.splitTextToSize(`10. ${cleanForPDF(question.question)}`, contentWidth);
+    h += qLines.length * QUESTION_LINE_H + 3; // +3 gap before choices
 
-    // Each choice
+    // Each choice (includes "A. " prefix)
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(CHOICE_FONT_SIZE);
     question.choices.forEach((choice) => {
-      const cLines = pdf.splitTextToSize(cleanForPDF(choice), contentWidth - 18);
+      const cLines = pdf.splitTextToSize(`A. ${cleanForPDF(choice)}`, contentWidth - 6);
       h += cLines.length * CHOICE_LINE_H + CHOICE_GAP;
     });
 
@@ -332,54 +332,37 @@ export const exportQuizToPDF = (quizData: QuizData) => {
     const blockHeight = estimateQuestionBlockHeight(question);
     ensureSpace(blockHeight, "Analyse des questions");
 
-    // ── Question number tag ──
-    pdf.setFillColor(...colors.bgCard);
-    pdf.roundedRect(margin, yPosition - 4.5, 30, 8, 1.5, 1.5, "F");
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(8);
-    pdf.setTextColor(...colors.accentIndigo);
-    pdf.text(`Question ${index + 1}`, margin + 3.5, yPosition + 1);
-
-    // Small accent line next to tag
-    pdf.setDrawColor(...colors.accentIndigo);
-    pdf.setLineWidth(0.4);
-    pdf.line(margin + 31, yPosition - 2, margin + 31, yPosition + 2);
-
-    yPosition += 10;
-
-    // ── Question text ──
+    // ── Question text (with number prefix) ──
     pdf.setFont("times", "bold");
     pdf.setFontSize(QUESTION_FONT_SIZE);
     pdf.setTextColor(...colors.textDark);
-    const questionText = cleanForPDF(question.question);
-    const questionLines = pdf.splitTextToSize(questionText, contentWidth - 8);
-    pdf.text(questionLines, margin + 2, yPosition);
-    yPosition += questionLines.length * QUESTION_LINE_H + 6;
+    const questionText = `${index + 1}. ${cleanForPDF(question.question)}`;
+    const questionLines = pdf.splitTextToSize(questionText, contentWidth);
+    pdf.text(questionLines, margin, yPosition);
+    yPosition += questionLines.length * QUESTION_LINE_H + 3;
 
     // ── Choices ──
     question.choices.forEach((choice, choiceIndex) => {
       const letter = String.fromCharCode(65 + choiceIndex);
 
-      // Letter circle/box
-      pdf.setDrawColor(...colors.ruleMedium);
-      pdf.setLineWidth(0.3);
-      pdf.setFillColor(...colors.white);
-      pdf.roundedRect(margin + 4, yPosition - 3.8, 6.5, 6.5, 1, 1, "FD");
-
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(...colors.accentIndigo);
-      pdf.text(letter, margin + 7.25, yPosition + 0.5, { align: "center" });
-
-      // Choice text
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(CHOICE_FONT_SIZE);
       pdf.setTextColor(...colors.textBody);
-      const choiceText = cleanForPDF(choice);
-      const choiceLines = pdf.splitTextToSize(choiceText, contentWidth - 18);
-      pdf.text(choiceLines, margin + 14, yPosition);
+      
+      const choiceText = `${letter}. ${cleanForPDF(choice)}`;
+      const choiceLines = pdf.splitTextToSize(choiceText, contentWidth - 6);
+      
+      // We draw the letter in bold to make it pop slightly
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`${letter}.`, margin + 6, yPosition);
+      
+      // Draw the rest of the text normally, offset slightly
+      pdf.setFont("helvetica", "normal");
+      // Split the text without the prefix for actual rendering next to the letter
+      const pureChoiceLines = pdf.splitTextToSize(cleanForPDF(choice), contentWidth - 12);
+      pdf.text(pureChoiceLines, margin + 12, yPosition);
 
-      yPosition += choiceLines.length * CHOICE_LINE_H + CHOICE_GAP;
+      yPosition += pureChoiceLines.length * CHOICE_LINE_H + CHOICE_GAP;
     });
 
     yPosition += POST_QUESTION_GAP;

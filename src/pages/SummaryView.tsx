@@ -148,68 +148,10 @@ const SummaryView = () => {
         lineSpacing: number,
         bulletPrefix?: string,
       ) => {
-        // If no bold markers, fast-path
-        if (!rawText.includes("**")) {
-          wrapAndRender(rawText, fontSize, fontFamily, "normal", textColor, xOffset, lineSpacing, bulletPrefix);
-          return;
-        }
-
-        // Split into segments: alternating normal / bold
-        const parts = rawText.split(/\*\*/);
-        // Flatten into a single string for wrapping (jsPDF can't mix fonts in one splitTextToSize)
-        // Strategy: render entire text as wrapped lines, then for each line figure out bold ranges.
-        // Simpler robust approach: just build a plain string, wrap it, and for each output line render segments.
-        const plainText = parts.join("");
-        pdf.setFontSize(fontSize);
-        pdf.setFont(fontFamily, "normal");
-        const wrappedLines: string[] = pdf.splitTextToSize(plainText, contentW - xOffset);
-
-        // Build a char→bold map from the original parts
-        const boldMap: boolean[] = [];
-        parts.forEach((part, idx) => {
-          const isBold = idx % 2 === 1;
-          for (let c = 0; c < part.length; c++) boldMap.push(isBold);
-        });
-
-        let charIdx = 0;
-        for (let li = 0; li < wrappedLines.length; li++) {
-          const wLine = wrappedLines[li];
-          ensureSpace(lineSpacing);
-          let x = margin + xOffset;
-
-          if (li === 0 && bulletPrefix) {
-            pdf.setFont("helvetica", "normal");
-            pdf.setFontSize(fontSize);
-            pdf.text(bulletPrefix, margin + xOffset - 5, cursorY);
-          }
-
-          // Walk through the wrapped line and group consecutive chars by bold flag
-          let seg = "";
-          let segBold = boldMap[charIdx] ?? false;
-          for (let ci = 0; ci < wLine.length; ci++) {
-            const chBold = boldMap[charIdx] ?? false;
-            if (chBold !== segBold) {
-              // flush segment
-              pdf.setFont(fontFamily, segBold ? "bold" : "normal");
-              pdf.setFontSize(fontSize);
-              pdf.setTextColor(...(segBold ? [26, 37, 47] as [number, number, number] : textColor));
-              pdf.text(seg, x, cursorY);
-              x += pdf.getTextWidth(seg);
-              seg = "";
-              segBold = chBold;
-            }
-            seg += wLine[ci];
-            charIdx++;
-          }
-          // flush last segment
-          if (seg) {
-            pdf.setFont(fontFamily, segBold ? "bold" : "normal");
-            pdf.setFontSize(fontSize);
-            pdf.setTextColor(...(segBold ? [26, 37, 47] as [number, number, number] : textColor));
-            pdf.text(seg, x, cursorY);
-          }
-          cursorY += lineSpacing;
-        }
+        // Safe robust rendering: avoid character mapping bugs with jsPDF splitTextToSize
+        const isFullyBold = rawText.trim().startsWith("**") && rawText.trim().endsWith("**");
+        const cleanText = rawText.replace(/\*\*/g, "");
+        wrapAndRender(cleanText, fontSize, fontFamily, isFullyBold ? "bold" : "normal", isFullyBold ? [26, 37, 47] : textColor, xOffset, lineSpacing, bulletPrefix);
       };
 
       // ── First-page Header & Footer ──────────────────────────────
