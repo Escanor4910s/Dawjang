@@ -13,6 +13,7 @@ import { UserPreferencesProvider } from "./hooks/useUserPreferences";
 import { PlanGuard } from "./components/PlanGuard";
 import { registerSW } from 'virtual:pwa-register';
 import { toast } from "sonner";
+import { Analytics } from '@vercel/analytics/react';
 import "./lib/i18n";
 
 // Register PWA with notification
@@ -115,6 +116,7 @@ const App = () => (
               </Routes>
             </Suspense>
           </BrowserRouter>
+          <Analytics />
         </TooltipProvider>
       </UserPreferencesProvider>
     </ThemeProvider>
