@@ -285,7 +285,7 @@ const Pricing = () => {
                 )}
                 
                 <div className="mb-8">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-6 ${tier.highlight ? 'bg-white/20' : tier.name === "Excellence" ? 'bg-white/10' : 'bg-white shadow-sm'}`}>
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-6 ${tier.highlight ? 'bg-white/20' : tier.name === "Excellence" ? 'bg-white/10' : 'bg-card shadow-sm'}`}>
                     <Icon className={`w-6 h-6 ${tier.highlight ? 'text-white' : tier.name === "Excellence" ? 'text-primary' : 'text-[#111]'}`} />
                   </div>
                   <h3 className="text-2xl font-bold mb-2">{tier.name}</h3>
@@ -311,7 +311,7 @@ const Pricing = () => {
 
                 <Button asChild className={`w-full rounded-full h-14 text-base font-semibold border-0 ${
                   tier.highlight 
-                    ? 'bg-white text-primary hover:bg-white/90 shadow-lg' 
+                    ? 'bg-card text-primary hover:bg-card/90 shadow-lg' 
                     : tier.name === "Excellence"
                       ? 'bg-primary text-white hover:bg-primary-hover shadow-lg'
                       : 'bg-[#111] text-white hover:bg-black shadow-lg'
@@ -330,7 +330,7 @@ const Pricing = () => {
             <p className="text-black/60">Toutes les fonctionnalités dont vous avez besoin pour exceller.</p>
           </div>
 
-          <div className="bg-white rounded-[2rem] p-6 md:p-12 shadow-xl border border-black/5 overflow-x-auto">
+          <div className="bg-card rounded-[2rem] p-6 md:p-12 shadow-xl border border-black/5 overflow-x-auto">
             <table className="w-full text-left min-w-[600px]">
               <thead>
                 <tr className="border-b border-black/10">

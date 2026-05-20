@@ -31,6 +31,7 @@ const MyPlan = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Attempt to update the plan to "gratuit"
       const { error } = await supabase
         .from("profiles")
         .update({ plan: "gratuit" })
@@ -38,16 +39,33 @@ const MyPlan = () => {
 
       if (error) throw error;
 
-      toast.success("Votre abonnement a été résilié avec succès. Votre compte a été rétrogradé au plan gratuit.");
-      
-      if (profile) {
-        setProfile({ ...profile, plan: "gratuit" });
+      // Verify the update actually persisted (RLS may silently block it)
+      const { data: verifyProfile } = await supabase
+        .from("profiles")
+        .select("plan")
+        .eq("id", user.id)
+        .single();
+
+      if (verifyProfile?.plan && verifyProfile.plan !== "gratuit") {
+        // RLS blocked the update — the plan is still premium/pro
+        toast.error(
+          "La résiliation n'a pas pu être effectuée (restriction serveur). Contactez le support pour résilier votre abonnement.",
+          { duration: 6000 }
+        );
+        setIsCancelling(false);
+        setIsConfirmingCancel(false);
+        return;
       }
-      setIsConfirmingCancel(false);
+
+      toast.success("Votre abonnement a été résilié avec succès. Rechargement en cours...");
+      
+      // Force a full page reload to sync all components (sidebar, subscription page, etc.)
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     } catch (err: any) {
       console.error(err);
       toast.error("Erreur lors de la résiliation de l'abonnement.");
-    } finally {
       setIsCancelling(false);
     }
   };

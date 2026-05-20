@@ -241,7 +241,7 @@ const Settings = () => {
 
           {/* Profile Tab */}
           <TabsContent value="profile">
-            <Card className="bg-white dark:bg-slate-900 border-border/50 shadow-lg">
+            <Card className="bg-card border-border/50 shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><User className="h-5 w-5 text-foreground" />Informations personnelles</CardTitle>
                 <CardDescription>Gérez vos informations de profil</CardDescription>
@@ -459,8 +459,21 @@ const Settings = () => {
                                 try {
                                   const { error } = await supabase.from("profiles").update({ plan: "gratuit" }).eq("id", user.id);
                                   if (error) throw error;
-                                  setProfile({ ...profile, plan: "gratuit" });
-                                  toast({ title: "Abonnement résilié", description: "Vous êtes repassé au plan gratuit." });
+
+                                  // Verify the update actually persisted (RLS may silently block it)
+                                  const { data: verifyProfile } = await supabase
+                                    .from("profiles")
+                                    .select("plan")
+                                    .eq("id", user.id)
+                                    .single();
+
+                                  if (verifyProfile?.plan && verifyProfile.plan !== "gratuit") {
+                                    toast({ title: "Erreur", description: "La résiliation n'a pas pu être effectuée (restriction serveur). Contactez le support.", variant: "destructive" });
+                                    return;
+                                  }
+
+                                  toast({ title: "Abonnement résilié", description: "Vous êtes repassé au plan gratuit. Rechargement..." });
+                                  setTimeout(() => { window.location.reload(); }, 1500);
                                 } catch (e) {
                                   toast({ title: "Erreur", description: "Impossible de résilier l'abonnement", variant: "destructive" });
                                 }

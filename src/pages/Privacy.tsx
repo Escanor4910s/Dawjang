@@ -79,7 +79,7 @@ const Privacy = () => {
           {/* Sidebar Navigation */}
           <div className="hidden md:block w-64 flex-shrink-0">
             <div className="sticky top-32 space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-[#1A1A1A]/40 mb-6 ml-4">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-foreground/40 mb-6 ml-4">
                 Sommaire
               </h3>
               {sections.map((section) => {
@@ -91,11 +91,11 @@ const Privacy = () => {
                     onClick={() => scrollToSection(section.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
                       isActive 
-                        ? "bg-white text-[#0F3B2E] shadow-sm border border-[#E5E5E5] scale-105" 
-                        : "text-[#1A1A1A]/60 hover:text-[#1A1A1A] hover:bg-white/50"
+                        ? "bg-card text-primary shadow-sm border border-border scale-105" 
+                        : "text-foreground/60 hover:text-foreground hover:bg-card/50"
                     }`}
                   >
-                    <Icon className={`w-4 h-4 ${isActive ? "text-[#0F3B2E]" : "text-[#1A1A1A]/40"}`} />
+                    <Icon className={`w-4 h-4 ${isActive ? "text-primary" : "text-foreground/40"}`} />
                     {section.title}
                   </button>
                 );
@@ -107,30 +107,30 @@ const Privacy = () => {
           <div className="flex-1 space-y-24">
             
             <section id="collecte" className="scroll-mt-32">
-              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
-                <Database className="w-8 h-8 text-[#D4C3A3]" />
+              <h2 className="text-3xl font-serif text-foreground mb-6 flex items-center gap-3">
+                <Database className="w-8 h-8 text-muted-foreground" />
                 1. Collecte des données
               </h2>
-              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+              <div className="prose prose-lg prose-neutral dark:prose-invert max-w-none text-foreground/80 font-light leading-relaxed">
                 <p>
                   Afin de vous fournir une expérience académique personnalisée, Hippocampus collecte de manière transparente et limitée les données suivantes :
                 </p>
                 <div className="grid sm:grid-cols-2 gap-6 mt-8">
-                  <div className="bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm hover:shadow-md transition-shadow">
-                    <h3 className="text-lg font-bold text-[#1A1A1A] mb-3">Identité & Profil</h3>
+                  <div className="bg-card p-6 rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow">
+                    <h3 className="text-lg font-bold text-foreground mb-3">Identité & Profil</h3>
                     <ul className="space-y-2 text-sm m-0 p-0 list-none">
-                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Nom et Prénom</li>
-                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Adresse e-mail</li>
-                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Faculté de médecine</li>
-                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Année d'étude</li>
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary" /> Nom et Prénom</li>
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary" /> Adresse e-mail</li>
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary" /> Faculté de médecine</li>
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary" /> Année d'étude</li>
                     </ul>
                   </div>
-                  <div className="bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm hover:shadow-md transition-shadow">
-                    <h3 className="text-lg font-bold text-[#1A1A1A] mb-3">Activité d'Apprentissage</h3>
+                  <div className="bg-card p-6 rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow">
+                    <h3 className="text-lg font-bold text-foreground mb-3">Activité d'Apprentissage</h3>
                     <ul className="space-y-2 text-sm m-0 p-0 list-none">
-                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Documents téléchargés</li>
-                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Résultats de QCM</li>
-                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Statistiques de progression</li>
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary" /> Documents téléchargés</li>
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary" /> Résultats de QCM</li>
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary" /> Statistiques de progression</li>
                     </ul>
                   </div>
                 </div>
@@ -138,11 +138,11 @@ const Privacy = () => {
             </section>
 
             <section id="utilisation" className="scroll-mt-32">
-              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
-                <FileText className="w-8 h-8 text-[#D4C3A3]" />
+              <h2 className="text-3xl font-serif text-foreground mb-6 flex items-center gap-3">
+                <FileText className="w-8 h-8 text-muted-foreground" />
                 2. Utilisation des données
               </h2>
-              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+              <div className="prose prose-lg prose-neutral max-w-none text-foreground/80 font-light leading-relaxed">
                 <p>
                   L'intégralité des données collectées est mobilisée dans un but unique : <strong>optimiser votre réussite académique</strong>.
                 </p>
@@ -155,12 +155,12 @@ const Privacy = () => {
             </section>
 
             <section id="securite" className="scroll-mt-32">
-              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
-                <Lock className="w-8 h-8 text-[#D4C3A3]" />
+              <h2 className="text-3xl font-serif text-foreground mb-6 flex items-center gap-3">
+                <Lock className="w-8 h-8 text-muted-foreground" />
                 3. Stockage et Sécurité de niveau Enterprise
               </h2>
-              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
-                <div className="bg-[#0F3B2E]/5 border border-[#0F3B2E]/10 rounded-2xl p-6 mb-8 text-[#0F3B2E]">
+              <div className="prose prose-lg prose-neutral max-w-none text-foreground/80 font-light leading-relaxed">
+                <div className="bg-primary/5 border border-primary/10 rounded-2xl p-6 mb-8 text-primary">
                   <strong>Notre engagement de sécurité :</strong> Vos données sont stockées au sein de l'Union Européenne, bénéficiant des normes de protection les plus strictes au monde.
                 </div>
                 <p>
@@ -170,18 +170,18 @@ const Privacy = () => {
             </section>
 
             <section id="partage" className="scroll-mt-32">
-              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
-                <Users className="w-8 h-8 text-[#D4C3A3]" />
+              <h2 className="text-3xl font-serif text-foreground mb-6 flex items-center gap-3">
+                <Users className="w-8 h-8 text-muted-foreground" />
                 4. Partage des données
               </h2>
-              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
-                <div className="flex items-start gap-4 bg-emerald-50 border border-emerald-100 rounded-2xl p-6 mb-6">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-emerald-600">
+              <div className="prose prose-lg prose-neutral max-w-none text-foreground/80 font-light leading-relaxed">
+                <div className="flex items-start gap-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl p-6 mb-6">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center flex-shrink-0 text-emerald-600 dark:text-emerald-400">
                     <Shield className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-emerald-900 font-bold m-0 mb-1">Zéro Vente de Données</h3>
-                    <p className="text-emerald-800 m-0 text-sm">Nous ne vendrons <strong>jamais</strong> vos informations à des annonceurs, courtiers en données ou autres entités commerciales. C'est notre promesse.</p>
+                    <h3 className="text-emerald-900 dark:text-emerald-300 font-bold m-0 mb-1">Zéro Vente de Données</h3>
+                    <p className="text-emerald-800 dark:text-emerald-400 m-0 text-sm">Nous ne vendrons <strong>jamais</strong> vos informations à des annonceurs, courtiers en données ou autres entités commerciales. C'est notre promesse.</p>
                   </div>
                 </div>
                 <p>
@@ -191,11 +191,11 @@ const Privacy = () => {
             </section>
 
             <section id="ia" className="scroll-mt-32">
-              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
-                <Brain className="w-8 h-8 text-[#D4C3A3]" />
+              <h2 className="text-3xl font-serif text-foreground mb-6 flex items-center gap-3">
+                <Brain className="w-8 h-8 text-muted-foreground" />
                 5. Intelligence Artificielle et Confidentialité
               </h2>
-              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+              <div className="prose prose-lg prose-neutral max-w-none text-foreground/80 font-light leading-relaxed">
                 <p>
                   Hippocampus intègre les modèles d'Intelligence Artificielle d'OpenAI pour analyser vos cours et créer des QCM. Nous garantissons que :
                 </p>
@@ -208,11 +208,11 @@ const Privacy = () => {
             </section>
 
             <section id="droits" className="scroll-mt-32">
-              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
-                <Shield className="w-8 h-8 text-[#D4C3A3]" />
+              <h2 className="text-3xl font-serif text-foreground mb-6 flex items-center gap-3">
+                <Shield className="w-8 h-8 text-muted-foreground" />
                 6. Vos droits (Conformité RGPD)
               </h2>
-              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+              <div className="prose prose-lg prose-neutral max-w-none text-foreground/80 font-light leading-relaxed">
                 <p>
                   Vous avez un contrôle total sur vos informations, conformément au Règlement Général sur la Protection des Données (RGPD) :
                 </p>
@@ -222,9 +222,9 @@ const Privacy = () => {
                     "Droit à l'oubli", "Droit à la portabilité",
                     "Droit d'opposition"
                   ].map((droit, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-white border border-[#E5E5E5] p-4 rounded-xl shadow-sm">
-                      <div className="w-2 h-2 rounded-full bg-[#0F3B2E]" />
-                      <span className="font-semibold text-[#1A1A1A]">{droit}</span>
+                    <div key={i} className="flex items-center gap-3 bg-card border border-border p-4 rounded-xl shadow-sm">
+                      <div className="w-2 h-2 rounded-full bg-primary" />
+                      <span className="font-semibold text-foreground">{droit}</span>
                     </div>
                   ))}
                 </div>
@@ -232,11 +232,11 @@ const Privacy = () => {
             </section>
 
             <section id="cookies" className="scroll-mt-32">
-              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
-                <Cookie className="w-8 h-8 text-[#D4C3A3]" />
+              <h2 className="text-3xl font-serif text-foreground mb-6 flex items-center gap-3">
+                <Cookie className="w-8 h-8 text-muted-foreground" />
                 7. Politique relative aux Cookies
               </h2>
-              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+              <div className="prose prose-lg prose-neutral max-w-none text-foreground/80 font-light leading-relaxed">
                 <p>
                   Fidèles à notre philosophie sans superflu, nous n'utilisons <strong>aucun cookie publicitaire ou de traçage tiers</strong>.
                 </p>
@@ -247,19 +247,19 @@ const Privacy = () => {
             </section>
 
             <section id="contact" className="scroll-mt-32">
-              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
-                <Mail className="w-8 h-8 text-[#D4C3A3]" />
+              <h2 className="text-3xl font-serif text-foreground mb-6 flex items-center gap-3">
+                <Mail className="w-8 h-8 text-muted-foreground" />
                 8. Nous contacter
               </h2>
-              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+              <div className="prose prose-lg prose-neutral max-w-none text-foreground/80 font-light leading-relaxed">
                 <p>
                   Pour toute question concernant cette politique ou pour exercer vos droits, notre équipe juridique et de support est à votre entière disposition.
                 </p>
-                <div className="inline-flex flex-col sm:flex-row items-center gap-4 bg-white border border-[#E5E5E5] rounded-2xl p-2 pr-6 mt-4 shadow-sm">
-                  <div className="w-12 h-12 bg-[#0F3B2E]/5 rounded-xl flex items-center justify-center text-[#0F3B2E]">
+                <div className="inline-flex flex-col sm:flex-row items-center gap-4 bg-card border border-border rounded-2xl p-2 pr-6 mt-4 shadow-sm">
+                  <div className="w-12 h-12 bg-primary/5 rounded-xl flex items-center justify-center text-primary">
                     <Mail className="w-5 h-5" />
                   </div>
-                  <span className="font-medium text-[#1A1A1A]">privacy@hippocampus.fr</span>
+                  <span className="font-medium text-foreground">privacy@hippocampus.fr</span>
                 </div>
               </div>
             </section>
