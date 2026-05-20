@@ -428,7 +428,7 @@ const Index = () => {
         </section>
 
         {/* VIDEO EXPLAINER SECTION */}
-        <section className="py-24 px-6 max-w-5xl mx-auto relative z-20">
+        <section id="demo" className="py-24 px-6 max-w-5xl mx-auto relative z-20">
           <FadeIn>
             <div className="text-center mb-12">
               <h2 className="text-3xl md:text-4xl font-serif text-[#0F3B2E] mb-4">Découvrez Hippocampus en action</h2>

@@ -89,10 +89,10 @@ export const UserPreferencesProvider = ({ children }: { children: React.ReactNod
       }
 
       if (prefsData) {
-        // 🔑 FIX: localStorage is the source of truth for theme.
-        // If the user has explicitly chosen a theme (stored in localStorage),
-        // that takes priority over what the DB returns, preventing the flash/reset bug.
-        const localStorageTheme = localStorage.getItem("vite-ui-theme") as UserPreferences["theme"] | null;
+        // 🔑 FIX: localStorage is the SINGLE source of truth for theme.
+        // The key MUST match what ThemeProvider uses ("quizmed-ui-theme").
+        const THEME_STORAGE_KEY = "quizmed-ui-theme";
+        const localStorageTheme = localStorage.getItem(THEME_STORAGE_KEY) as UserPreferences["theme"] | null;
 
         const newPrefs: UserPreferences = {
           // Use localStorage theme if explicitly set, otherwise fall back to DB value
@@ -109,10 +109,11 @@ export const UserPreferencesProvider = ({ children }: { children: React.ReactNod
         };
         
         setPreferences(newPrefs);
-        // Only call setTheme if it differs from what ThemeProvider already applied
-        // to avoid a redundant DOM class toggle that causes the flash
-        if (!localStorageTheme || localStorageTheme !== newPrefs.theme) {
-          setTheme(newPrefs.theme);
+        // Only sync theme if localStorage didn't already have a value.
+        // If localStorage already has the theme, ThemeProvider already applied it,
+        // so calling setTheme again would cause a redundant flash.
+        if (!localStorageTheme && prefsData.theme) {
+          setTheme(prefsData.theme as UserPreferences["theme"]);
         }
         applyPreferencesToDocument(newPrefs);
       }

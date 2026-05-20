@@ -10,6 +10,7 @@ import { User } from "@supabase/supabase-js";
 const navLinks = [
   { label: "Fonctionnalités", href: "#features" },
   { label: "Comment ça marche", href: "#how-it-works" },
+  { label: "Démo", href: "#demo" },
   { label: "Tarifs", href: "/pricing", route: true },
   { label: "FAQ", href: "#faq" },
 ];
@@ -44,7 +45,12 @@ const LandingHeader = ({ forceSolid = false }: { forceSolid?: boolean }) => {
     }
     if (href.startsWith("#")) {
       const element = document.querySelector(href);
-      element?.scrollIntoView({ behavior: "smooth" });
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth" });
+      } else {
+        // If the element doesn't exist on the current page, navigate to the landing page with the hash
+        navigate("/" + href);
+      }
     }
   };
 
