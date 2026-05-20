@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ShieldAlert, Activity, FileText, CheckCircle, XCircle, ArrowRight, RotateCcw, 
-  UserCheck, Award, AlertCircle, Heart, Zap, Sparkles, Search, Dices, BookOpen, Loader2, Timer
+  UserCheck, Award, AlertCircle, Heart, Zap, Sparkles, Search, Dices, BookOpen, Loader2, Timer, Mic, Volume2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -255,6 +255,75 @@ const EcosPage = () => {
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+
+  // Vocal Feature States
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceModeEnabled, setVoiceModeEnabled] = useState(true);
+
+  // Text-to-Speech (Agent MOR)
+  useEffect(() => {
+    if (morComment && voiceModeEnabled && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(morComment);
+      utterance.lang = "fr-FR";
+      utterance.rate = 1.05;
+      utterance.pitch = 1.1; // Slightly robotic/AI pitch
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    }
+    return () => {
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    }
+  }, [morComment, voiceModeEnabled]);
+
+  // Speech-to-Text (Microphone)
+  const toggleListening = () => {
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error("Votre navigateur ne supporte pas la reconnaissance vocale.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "fr-FR";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      toast.info("À l'écoute... Dites A, B, C, D ou le numéro de la réponse.", { duration: 2000 });
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = (event: any) => {
+      console.error("Speech reco error:", event.error);
+      setIsListening(false);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript.toLowerCase();
+      toast.success(`Entendu : "${transcript}"`);
+      
+      if (selectedCase && !hasAnswered) {
+        // Simple heuristic matching
+        if (transcript.match(/\b(a|1|un|premier)\b/i)) handleAnswerSubmit(0);
+        else if (transcript.match(/\b(b|2|deux|deuxième)\b/i)) handleAnswerSubmit(1);
+        else if (transcript.match(/\b(c|3|trois|troisième)\b/i)) handleAnswerSubmit(2);
+        else if (transcript.match(/\b(d|4|quatre|quatrième)\b/i)) handleAnswerSubmit(3);
+        else {
+           toast.warning("Réponse non reconnue. Veuillez cliquer ou répéter (A, B, C, D).");
+        }
+      }
+    };
+
+    recognition.start();
+  };
 
   // Immersive Urgency Mode 60s
   const [isUrgencyMode, setIsUrgencyMode] = useState(false);
@@ -1160,6 +1229,36 @@ const EcosPage = () => {
                       {selectedCase.questions[currentStep].text}
                     </h3>
 
+                    {/* Microphone Action Button */}
+                    {!hasAnswered && (
+                      <div className="flex justify-center pt-2">
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={toggleListening}
+                          className={cn(
+                            "flex items-center gap-3 px-6 py-3 rounded-full border shadow-sm transition-all duration-300 relative overflow-hidden",
+                            isListening 
+                              ? "bg-rose-500/10 border-rose-500/30 text-rose-500" 
+                              : "bg-background border-border hover:bg-muted text-foreground"
+                          )}
+                        >
+                          {isListening && (
+                            <div className="absolute inset-0 bg-rose-500/20 animate-[pulse_1s_infinite]" />
+                          )}
+                          <div className={cn(
+                            "p-2 rounded-full",
+                            isListening ? "bg-rose-500 text-white animate-pulse" : "bg-primary/10 text-primary"
+                          )}>
+                            <Mic className="h-4 w-4" />
+                          </div>
+                          <span className="text-xs font-black uppercase tracking-widest relative z-10">
+                            {isListening ? "Écoute en cours..." : "Dicter la réponse"}
+                          </span>
+                        </motion.button>
+                      </div>
+                    )}
+
                     {/* Choices Stagger List */}
                     <div className="grid gap-3 pt-2">
                       {selectedCase.questions[currentStep].options.map((option, idx) => {
@@ -1252,16 +1351,25 @@ const EcosPage = () => {
                     </div>
                     <span className="text-xs font-black uppercase tracking-widest text-foreground">Chef de Clinique IA</span>
                   </div>
-                  <Badge variant="outline" className="text-[8px] font-black uppercase tracking-wider">
-                    Agent MOR
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setVoiceModeEnabled(!voiceModeEnabled)} className={cn("p-1.5 rounded-full transition-colors", voiceModeEnabled ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
+                      <Volume2 className="h-3.5 w-3.5" />
+                    </button>
+                    <Badge variant="outline" className="text-[8px] font-black uppercase tracking-wider">
+                      Agent MOR
+                    </Badge>
+                  </div>
                 </div>
 
                 <CardContent className="p-5 space-y-5">
                   {/* Mor Character Visual representation */}
                   <div className="flex items-center gap-3 bg-[#0c111d] p-3 rounded-2xl border border-white/5 shadow-inner">
                     <div className="relative">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-violet-500 to-indigo-500 flex items-center justify-center text-white font-black text-xs shadow-md">
+                      <div className={cn(
+                        "h-10 w-10 rounded-full bg-gradient-to-tr flex items-center justify-center text-white font-black text-xs shadow-md transition-all duration-300",
+                        morStatus === "warning" ? "from-rose-500 to-red-500" : morStatus === "success" ? "from-emerald-500 to-green-500" : "from-violet-500 to-indigo-500",
+                        isSpeaking && "animate-pulse ring-4 ring-primary/20"
+                      )}>
                         MOR
                       </div>
                       <div className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#0c111d] ${

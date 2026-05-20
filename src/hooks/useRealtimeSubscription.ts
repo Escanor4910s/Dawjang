@@ -33,7 +33,6 @@ export const useRealtimeSubscription = ({
             filter: filter || `user_id=eq.${user.id}`,
           },
           (payload) => {
-            console.log(`Realtime update on ${table}:`, payload);
             onUpdate();
           }
         )

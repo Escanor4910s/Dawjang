@@ -11,6 +11,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { DashboardSkeleton } from "@/components/DashboardSkeleton";
 import { uiAudio } from "@/utils/audio";
 
+interface ActiveFocusUser {
+  user_id: string;
+  first_name: string;
+  avatar_url: string | null;
+  is_focusing: boolean;
+}
+
 interface QuizResult {
   id: string;
   course_id: string;
@@ -36,6 +43,7 @@ const Dashboard = () => {
   const [focusTimeLeft, setFocusTimeLeft] = useState(25 * 60);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isBinauralPlaying, setIsBinauralPlaying] = useState(false);
+  const [activeFocusUsers, setActiveFocusUsers] = useState<ActiveFocusUser[]>([]);
   
   const navigate = useNavigate();
   const { steps, completionPercentage, isComplete, refreshState } = useOnboardingContext();
@@ -101,6 +109,38 @@ const Dashboard = () => {
       uiAudio.stopBinauralBeats();
     };
   }, []);
+
+  // Supabase Presence for Social Focus
+  useEffect(() => {
+    if (!firstName) return;
+
+    const presenceChannel = supabase.channel('focus_room');
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const newState = presenceChannel.presenceState();
+        const users = Object.values(newState).flatMap(p => p as unknown as ActiveFocusUser[]);
+        // Deduplicate
+        const uniqueUsers = Array.from(new Map(users.map(item => [item.user_id, item])).values());
+        // Only show users who are focusing AND not the current user (if we want, or keep current user to test)
+        setActiveFocusUsers(uniqueUsers.filter(u => u.is_focusing));
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          const { data } = await supabase.auth.getUser();
+          await presenceChannel.track({
+            user_id: data.user?.id,
+            first_name: firstName,
+            avatar_url: avatarUrl,
+            is_focusing: isTimerRunning
+          });
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(presenceChannel);
+    };
+  }, [firstName, avatarUrl, isTimerRunning]);
 
   const averageScore = results.length > 0 ? Math.round((results.reduce((acc, r) => acc + (r.score / r.total_questions) * 100, 0) / results.length)) : 0;
   const successRate = results.length > 0 ? Math.round((results.filter(r => (r.score / r.total_questions) * 100 >= 60).length / results.length) * 100) : 0;
@@ -507,6 +547,40 @@ const Dashboard = () => {
                   <span>Binaural</span>
                 </button>
               </div>
+
+              {/* Social Focus Area */}
+              {activeFocusUsers.length > 0 && (
+                <div className="mt-6 pt-5 border-t border-white/10 z-10 relative">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-white/70">
+                      Salles de Focus
+                    </h4>
+                    <span className="text-[10px] font-bold text-primary animate-pulse flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                      {activeFocusUsers.length} en ligne
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {activeFocusUsers.map(user => (
+                      <div key={user.user_id} className="relative group cursor-help">
+                        <div className="w-8 h-8 rounded-full bg-muted border-2 border-primary/50 overflow-hidden shadow-lg hover:scale-110 transition-transform">
+                          {user.avatar_url ? (
+                            <img src={user.avatar_url} alt={user.first_name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-primary/20 text-primary text-xs font-bold uppercase">
+                              {user.first_name?.[0] || "?"}
+                            </div>
+                          )}
+                        </div>
+                        {/* Tooltip */}
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/80 rounded border border-white/10 text-[9px] font-bold text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                          {user.first_name}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </motion.div>
         </div>

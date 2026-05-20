@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Brain, Calendar, ChevronLeft, ChevronRight, RotateCw,
   CheckCircle, XCircle, ThumbsUp, ThumbsDown, Zap,
-  BookOpen, TrendingUp, Target, Sparkles,
+  BookOpen, TrendingUp, Target, Sparkles, Bell, BellRing, Timer
 } from "lucide-react";
 import { useSpacedRepetition, type ReviewCard } from "@/hooks/useSpacedRepetition";
 import { toast } from "sonner";
@@ -26,6 +26,48 @@ const ReviewPlanner = () => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(0);
   const [isReviewing, setIsReviewing] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [sessionTime, setSessionTime] = useState(0);
+
+  // Timer effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isReviewing) {
+      interval = setInterval(() => setSessionTime((t) => t + 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isReviewing]);
+
+  // Check notification permission
+  useEffect(() => {
+    if ("Notification" in window) {
+      setNotificationsEnabled(Notification.permission === "granted");
+    }
+  }, []);
+
+  const enableNotifications = async () => {
+    if (!("Notification" in window)) {
+      toast.error("Votre navigateur ne supporte pas les notifications.");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      setNotificationsEnabled(true);
+      toast.success("Notifications activées !");
+      new Notification("Hippocampus", {
+        body: "Les rappels de révision sont maintenant actifs.",
+        icon: "/vite.svg"
+      });
+    } else {
+      toast.error("Permission refusée pour les notifications.");
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+    const s = (seconds % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
 
   const currentCard: ReviewCard | undefined = dueCards[currentIndex];
 
@@ -77,9 +119,15 @@ const ReviewPlanner = () => {
               <Button variant="ghost" size="sm" onClick={() => setIsReviewing(false)}>
                 <ChevronLeft className="h-4 w-4 mr-1" />Quitter
               </Button>
-              <Badge variant="outline" className="text-sm">
-                {sessionCompleted} révisée{sessionCompleted > 1 ? "s" : ""} · {dueCards.length} restante{dueCards.length > 1 ? "s" : ""}
-              </Badge>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="flex items-center gap-1.5 px-3 py-1 bg-background/50 backdrop-blur-md">
+                  <Timer className="h-3.5 w-3.5 text-primary" />
+                  <span className="font-mono">{formatTime(sessionTime)}</span>
+                </Badge>
+                <Badge variant="outline" className="text-sm bg-background/50 backdrop-blur-md">
+                  {sessionCompleted} révisée{sessionCompleted > 1 ? "s" : ""} · {dueCards.length} restante{dueCards.length > 1 ? "s" : ""}
+                </Badge>
+              </div>
             </div>
 
             <Progress value={progress} className="h-2" />
@@ -146,9 +194,20 @@ const ReviewPlanner = () => {
               Répétition espacée intelligente · Algorithme SM-2
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => refreshCards()} className="border-foreground/30">
-            <RotateCw className="h-4 w-4 mr-1" /> Actualiser
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button 
+              variant={notificationsEnabled ? "default" : "outline"} 
+              size="sm" 
+              onClick={enableNotifications} 
+              className={`border-foreground/30 shadow-sm ${notificationsEnabled ? "bg-emerald-500 hover:bg-emerald-600 text-white border-transparent" : ""}`}
+            >
+              {notificationsEnabled ? <BellRing className="h-4 w-4 mr-1.5" /> : <Bell className="h-4 w-4 mr-1.5" />}
+              {notificationsEnabled ? "Rappels activés" : "Activer les rappels"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => refreshCards()} className="border-foreground/30 shadow-sm">
+              <RotateCw className="h-4 w-4 mr-1" /> Actualiser
+            </Button>
+          </div>
         </div>
 
         {/* Stats Grid */}

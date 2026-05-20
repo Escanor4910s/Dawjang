@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -296,18 +297,40 @@ const Flashcards = () => {
             <Badge variant="secondary" className="max-w-[200px] truncate">{filteredFlashcards[currentIndex]?.courses?.title}</Badge>
           </div>
 
-          <Card className="min-h-[320px] sm:min-h-[400px] cursor-pointer bg-card/70 backdrop-blur-xl border border-border rounded-[2rem] shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden" onClick={() => setIsFlipped(!isFlipped)}>
-            <div className={`absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent transition-opacity duration-500 ${isFlipped ? 'opacity-100' : 'opacity-0'}`} />
-            <CardContent className="flex flex-col items-center justify-center min-h-[320px] sm:min-h-[400px] p-6 sm:p-12 relative z-10">
-              <div className="text-center w-full">
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/80 mb-6">{isFlipped ? "Réponse" : "Question"}</p>
-                <p className="text-2xl sm:text-4xl font-light leading-relaxed text-foreground">{isFlipped ? filteredFlashcards[currentIndex]?.answer : filteredFlashcards[currentIndex]?.question}</p>
-                <p className="text-xs font-medium text-muted-foreground mt-12 flex items-center justify-center gap-1">
-                  <RotateCw className="w-3 h-3 group-hover:animate-spin" /> Cliquez pour retourner
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+            <div className="relative [perspective:2000px] w-full max-w-4xl mx-auto">
+              <motion.div
+                className="min-h-[400px] sm:min-h-[500px] w-full cursor-pointer relative preserve-3d"
+              animate={{ rotateY: isFlipped ? 180 : 0 }}
+              transition={{ type: "spring", stiffness: 120, damping: 20 }}
+              onClick={() => setIsFlipped(!isFlipped)}
+              whileHover={{ scale: 1.02 }}
+            >
+              {/* FRONT */}
+                <Card className="absolute inset-0 w-full h-full bg-card/95 backdrop-blur-2xl border border-border/50 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] overflow-hidden [backface-visibility:hidden]">
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-80" />
+                <CardContent className="flex flex-col items-center justify-center h-full p-6 sm:p-12 relative z-10">
+                  <div className="text-center w-full">
+                    <p className="text-xs font-bold uppercase tracking-widest text-primary/80 mb-6">Question</p>
+                    <p className="text-2xl sm:text-4xl font-light leading-relaxed text-foreground">{filteredFlashcards[currentIndex]?.question}</p>
+                    <p className="text-xs font-medium text-muted-foreground mt-12 flex items-center justify-center gap-1 opacity-50 hover:opacity-100 transition-opacity">
+                      <RotateCw className="w-3 h-3" /> Cliquez pour retourner
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* BACK */}
+                <Card className="absolute inset-0 w-full h-full bg-primary text-primary-foreground backdrop-blur-2xl border border-primary/30 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] overflow-hidden [backface-visibility:hidden] [transform:rotateY(180deg)]">
+                  <div className="absolute inset-0 bg-gradient-to-tl from-black/20 to-transparent opacity-60" />
+                <CardContent className="flex flex-col items-center justify-center h-full p-6 sm:p-12 relative z-10">
+                  <div className="text-center w-full">
+                    <p className="text-xs font-bold uppercase tracking-widest text-primary-foreground/60 mb-6">Réponse</p>
+                    <p className="text-2xl sm:text-4xl font-medium leading-relaxed text-primary-foreground drop-shadow-md">{filteredFlashcards[currentIndex]?.answer}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
 
           <div className="flex flex-col sm:flex-row gap-4 sm:justify-between sm:items-center">
             <Button onClick={handlePrevious} variant="outline" disabled={filteredFlashcards.length <= 1} className="w-full sm:w-32 rounded-full h-12 border-border hover:bg-muted text-foreground font-medium shadow-sm">Précédent</Button>

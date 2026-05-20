@@ -285,8 +285,8 @@ const MorChatWidget = () => {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 50, opacity: 0, scale: 0.95 }}
             transition={{ type: "spring", damping: 25, stiffness: 220 }}
-            className="fixed right-3 sm:right-6 bottom-4 sm:bottom-6 z-50 bg-white/95 dark:bg-[#0d121f]/95 border border-slate-200/80 dark:border-white/10 backdrop-blur-2xl rounded-[2rem] shadow-[0_15px_50px_rgba(0,0,0,0.12)] dark:shadow-[0_0_80px_rgba(0,0,0,0.65)] overflow-hidden w-[calc(100vw-2rem)] max-w-[44rem] sm:w-[42rem] flex flex-col"
-            style={{ height: isMinimized ? "52px" : "750px", maxHeight: "90vh", transformOrigin: 'bottom right' }}
+            className="fixed right-3 sm:right-6 bottom-4 sm:bottom-6 z-50 bg-white/95 dark:bg-[#0f172a]/95 border border-slate-200/80 dark:border-white/10 backdrop-blur-2xl rounded-[2rem] shadow-[0_15px_50px_rgba(0,0,0,0.12)] dark:shadow-[0_0_80px_rgba(0,0,0,0.65)] overflow-hidden w-[calc(100vw-2rem)] max-w-[48rem] sm:w-[48rem] flex flex-col"
+            style={{ height: isMinimized ? "52px" : "85vh", maxHeight: "900px", transformOrigin: 'bottom right' }}
           >
             {/* Header */}
             <div
@@ -347,7 +347,7 @@ const MorChatWidget = () => {
                 </div>
 
                 {/* Messages Viewport */}
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-white dark:bg-transparent">
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-white dark:bg-slate-900">
                   {isLoadingData ? (
                     <div className="flex items-center justify-center h-full">
                       <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -358,10 +358,10 @@ const MorChatWidget = () => {
                         <div className={`max-w-[85%] rounded-[1.8rem] px-4.5 py-3.5 ${
                           message.role === "user"
                             ? "bg-primary text-primary-foreground rounded-br-md shadow-lg shadow-primary/10"
-                            : "bg-slate-100/90 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-slate-800 dark:text-white rounded-bl-md shadow-sm"
+                            : "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-bl-md shadow-sm"
                         }`}>
                           <div
-                            className="text-[15px] sm:text-[16px] leading-relaxed text-slate-800 dark:text-white/95 select-text selection:bg-primary/30 font-medium"
+                            className="text-[15px] sm:text-[16px] leading-relaxed text-slate-900 dark:text-slate-100 select-text selection:bg-primary/30 font-medium"
                             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(formatMarkdown(message.content)) }}
                           />
                           {message.sources && message.sources.length > 0 && (
@@ -401,7 +401,7 @@ const MorChatWidget = () => {
 
                 {/* Quick Replies */}
                 {showQuickReplies && (
-                  <div className="px-4 py-2 border-t border-slate-100 dark:border-white/5 flex gap-2 overflow-x-auto bg-white dark:bg-transparent">
+                  <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex gap-2 overflow-x-auto bg-slate-50 dark:bg-slate-900">
                     {["Explique plus", "Autre question", "Mes résultats"].map((label) => (
                       <button
                         key={label}
@@ -415,14 +415,14 @@ const MorChatWidget = () => {
                 )}
 
                 {/* Input Area */}
-                <div className="p-3.5 border-t border-slate-150 dark:border-white/5 bg-slate-50 dark:bg-slate-950">
+                <div className="p-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
                   <div className="flex gap-2">
                     <Input
                       value={question}
                       onChange={(e) => setQuestion(e.target.value)}
                       onKeyPress={handleKeyPress}
                       placeholder="Pose ta question clinique..."
-                      className="h-12 text-sm sm:text-base px-4 rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/40 focus:border-primary/80 focus:ring-1 focus:ring-primary/80 transition-all font-medium"
+                      className="h-12 text-sm sm:text-base px-4 rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-1 focus:ring-primary transition-all font-medium"
                       disabled={isLoading}
                     />
                     <Button onClick={() => handleSend()} disabled={isLoading || !question.trim()} className="h-12 w-12 shrink-0 rounded-xl bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-lg flex items-center justify-center">

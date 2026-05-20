@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, CheckCircle, Brain, RefreshCw, RotateCcw, Trash2, CheckSquare } from "lucide-react";
+import { AlertCircle, CheckCircle, Brain, RefreshCw, RotateCcw, Trash2, CheckSquare, Sparkles } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { calculateSM2, getQualityLabel, getQualityColor } from "@/lib/sm2Algorithm";
@@ -174,39 +175,44 @@ const Review = () => {
             <Badge variant="secondary" className="max-w-[200px] truncate">{current.courses?.title}</Badge>
           </div>
 
-          <Card className="min-h-[350px] bg-card/70 backdrop-blur-xl border border-border rounded-[2rem] shadow-sm relative overflow-hidden">
-            <CardHeader className="p-6 sm:p-10 border-b border-border">
+          <Card className="min-h-[350px] bg-card/80 backdrop-blur-xl border border-white/10 rounded-[2rem] shadow-2xl relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-50 pointer-events-none" />
+            <CardHeader className="p-6 sm:p-10 border-b border-border/50 relative z-10">
               <div className="flex items-start gap-3">
-                <AlertCircle className="h-6 w-6 text-primary flex-shrink-0" />
-                <CardTitle className="text-2xl sm:text-3xl font-light leading-relaxed">{current.question}</CardTitle>
+                <AlertCircle className="h-6 w-6 text-primary flex-shrink-0 animate-pulse" />
+                <CardTitle className="text-2xl sm:text-3xl font-light leading-relaxed text-foreground">{current.question}</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="space-y-8 p-6 sm:p-10">
+            <CardContent className="space-y-8 p-6 sm:p-10 relative z-10">
+              <AnimatePresence mode="wait">
               {showAnswer ? (
-                <>
-                  <div className="p-6 bg-green-50/80 backdrop-blur-md rounded-2xl border border-green-200">
-                    <p className="text-xs font-bold uppercase tracking-widest text-green-800 mb-3">Réponse :</p>
-                    <p className="text-xl sm:text-2xl text-green-900 font-medium leading-relaxed">{current.answer}</p>
+                <motion.div key="answer" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                  <div className="p-6 bg-gradient-to-br from-green-50/90 to-emerald-50/50 dark:from-green-900/20 dark:to-emerald-900/10 backdrop-blur-md rounded-2xl border border-green-200/50 dark:border-green-800/30 shadow-inner">
+                    <p className="text-xs font-bold uppercase tracking-widest text-green-700 dark:text-green-400 mb-3 flex items-center gap-2"><Sparkles className="h-4 w-4" /> Réponse :</p>
+                    <p className="text-xl sm:text-2xl text-green-900 dark:text-green-100 font-medium leading-relaxed">{current.answer}</p>
                   </div>
-                  <div className="space-y-4 pt-4 border-t border-border">
-                    <p className="text-sm font-medium text-center text-muted-foreground uppercase tracking-widest">Comment avez-vous trouvé cette carte ?</p>
+                  <div className="space-y-4 pt-6 mt-6 border-t border-border/50">
+                    <p className="text-sm font-bold text-center text-muted-foreground uppercase tracking-widest">Comment avez-vous trouvé cette carte ?</p>
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                      {[0, 1, 2, 3, 4, 5].map((q) => (
-                        <Button key={q} variant={q >= 3 ? "default" : "outline"} size="sm" disabled={updating} onClick={() => handleRate(q)} className={`flex flex-col h-16 rounded-xl border-border transition-transform hover:scale-105 shadow-sm ${getQualityColor(q)} ${q >= 3 ? 'text-background' : ''}`}>
-                          <span className="text-2xl font-light">{q}</span>
-                          <span className="text-[10px] font-bold uppercase tracking-wider">{getQualityLabel(q)}</span>
-                        </Button>
+                      {[0, 1, 2, 3, 4, 5].map((q, idx) => (
+                        <motion.div key={q} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.05 }}>
+                          <Button variant={q >= 3 ? "default" : "outline"} size="sm" disabled={updating} onClick={() => handleRate(q)} className={`w-full flex flex-col h-16 rounded-xl border-border/50 transition-all hover:scale-105 shadow-sm hover:shadow-md ${getQualityColor(q)} ${q >= 3 ? 'text-white' : 'hover:bg-muted/50'}`}>
+                            <span className="text-2xl font-light">{q}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider">{getQualityLabel(q)}</span>
+                          </Button>
+                        </motion.div>
                       ))}
                     </div>
                   </div>
-                </>
+                </motion.div>
               ) : (
-                <div className="pt-12 pb-6">
-                  <Button onClick={() => setShowAnswer(true)} variant="outline" className="w-full h-14 rounded-full border-border hover:bg-muted text-foreground font-medium shadow-sm text-lg">
-                    <RotateCcw className="h-5 w-5 mr-3" />Voir la réponse
+                <motion.div key="reveal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pt-12 pb-6">
+                  <Button onClick={() => setShowAnswer(true)} variant="outline" className="w-full h-14 rounded-full border-border/50 bg-background/50 hover:bg-muted text-foreground font-medium shadow-sm hover:shadow-md text-lg transition-all group">
+                    <RotateCcw className="h-5 w-5 mr-3 group-hover:-rotate-90 transition-transform duration-500" />Voir la réponse
                   </Button>
-                </div>
+                </motion.div>
               )}
+              </AnimatePresence>
             </CardContent>
           </Card>
         </>

@@ -63,6 +63,10 @@ function extractRelevantExcerpts(courseContent: string, question: string, maxLen
     .split(/\s+/)
     .filter(word => word.length > 3);
 
+  if (questionKeywords.length === 0) {
+    return "";
+  }
+
   const sentences = courseContent.split(/[.!?]+/).filter(s => s.trim().length > 20);
   
   const scoredSentences = sentences.map(sentence => {
@@ -79,14 +83,14 @@ function extractRelevantExcerpts(courseContent: string, question: string, maxLen
     .filter(s => s.score > 0)
     .map(s => s.sentence);
 
+  if (relevantSentences.length === 0) {
+    return "";
+  }
+
   let excerpt = relevantSentences.join(". ") + ".";
   
   if (excerpt.length > maxLength) {
     excerpt = excerpt.substring(0, maxLength) + "...";
-  }
-
-  if (excerpt.length < 100) {
-    excerpt = courseContent.substring(0, maxLength) + (courseContent.length > maxLength ? "..." : "");
   }
 
   return excerpt;
@@ -175,19 +179,9 @@ serve(async (req) => {
     const sources: Source[] = [];
 
     // Build context with course content
-    let contextPrompt = `📚 CONTENU DU COURS "${course.title}" :
-
-${relevantContent}
-
----
-
-Question de l'étudiant : ${question}
-
-Instructions :
-1. Réponds en t'appuyant PRIORITAIREMENT sur le contenu du cours ci-dessus
-2. Complète avec tes connaissances médicales générales si le cours ne couvre pas tout
-3. Indique clairement si l'info vient du cours ou de connaissances générales
-4. Sois pédagogue et structure ta réponse`;
+    let contextPrompt = relevantContent.length > 0 
+      ? `📚 CONTENU DU COURS "${course.title}" :\n\n${relevantContent}\n\n---\n\nQuestion de l'étudiant : ${question}\n\nInstructions :\n1. Réponds en t'appuyant PRIORITAIREMENT sur le contenu du cours ci-dessus\n2. Complète avec tes connaissances médicales générales si le cours ne couvre pas tout\n3. Indique clairement si l'info vient du cours ou de connaissances générales\n4. Sois pédagogue et structure ta réponse`
+      : `Question de l'étudiant : ${question}\n\nInstructions :\nSi l'étudiant te salue ou pose une question générale, réponds de façon amicale en te présentant comme Mor, et demande-lui comment tu peux l'aider avec son cours "${course.title}". N'invente pas de détails sur le cours s'il n'y a pas de question précise.`;
 
     // Add course source
     if (relevantContent.length > 100) {

@@ -431,8 +431,49 @@ const Settings = () => {
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between p-4 rounded-lg bg-foreground/5 border border-foreground/10">
-                  <div><h4 className="font-medium">Plan actuel</h4><p className="text-sm text-muted-foreground capitalize">{profile?.plan || "Gratuit"}</p></div>
-                  <Button onClick={() => navigate("/subscription")} className="bg-foreground text-background hover:bg-foreground/90">Améliorer</Button>
+                  <div>
+                    <h4 className="font-medium">Plan actuel</h4>
+                    <p className="text-sm text-muted-foreground capitalize">{profile?.plan || "Gratuit"}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    {profile?.plan && profile.plan !== "gratuit" && profile.plan !== "freemium" && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20">
+                            Résilier
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Résilier votre abonnement ?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Vous passerez au plan gratuit à la fin de votre cycle de facturation actuel. Vous perdrez l'accès aux fonctionnalités premium.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={async () => {
+                                if (!user) return;
+                                try {
+                                  const { error } = await supabase.from("profiles").update({ plan: "gratuit" }).eq("id", user.id);
+                                  if (error) throw error;
+                                  setProfile({ ...profile, plan: "gratuit" });
+                                  toast({ title: "Abonnement résilié", description: "Vous êtes repassé au plan gratuit." });
+                                } catch (e) {
+                                  toast({ title: "Erreur", description: "Impossible de résilier l'abonnement", variant: "destructive" });
+                                }
+                              }}
+                            >
+                              Confirmer la résiliation
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                    <Button onClick={() => navigate("/subscription")} className="bg-foreground text-background hover:bg-foreground/90">Améliorer</Button>
+                  </div>
                 </div>
                 <Separator />
                 <div className="pt-4">

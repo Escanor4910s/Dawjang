@@ -260,43 +260,46 @@ const Community = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {sharedQuizzes.map((quiz, i) => (
                     <motion.div key={quiz.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                      <Card className="h-full border-border/50 shadow-sm hover:shadow-md hover:border-primary/30 transition-all flex flex-col relative overflow-hidden group">
+                      <Card className="h-full bg-card/80 backdrop-blur-xl border-border/50 shadow-sm hover:shadow-[0_0_30px_hsl(var(--primary)/0.15)] hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 flex flex-col relative overflow-hidden group cursor-default">
+                        {/* Shimmer effect on hover */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] group-hover:animate-[shimmer_2s_infinite] pointer-events-none" />
+                        
                         {i < 3 && (
-                          <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-accent/20 to-transparent pointer-events-none" />
+                          <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-accent/30 to-transparent pointer-events-none" />
                         )}
-                        <CardHeader className="pb-4">
+                        <CardHeader className="pb-4 relative z-10">
                           <div className="flex justify-between items-start gap-4">
                             <CardTitle className="text-lg leading-tight group-hover:text-primary transition-colors">
                               {quiz.title}
                             </CardTitle>
-                            {i === 0 && <Badge className="bg-amber-500 flex-shrink-0">Top 1</Badge>}
+                            {i === 0 && <Badge className="bg-amber-500 flex-shrink-0 animate-pulse">Top 1</Badge>}
                           </div>
-                          <CardDescription className="flex items-center gap-2 mt-2">
-                            <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                          <CardDescription className="flex items-center gap-2 mt-3">
+                            <span className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 shadow-inner">
                               {quiz.author_name?.[0]?.toUpperCase()}
                             </span>
-                            <span className="truncate">Par {quiz.author_name}</span>
+                            <span className="truncate font-medium text-foreground/70">Par {quiz.author_name}</span>
                           </CardDescription>
                         </CardHeader>
-                        <CardContent className="mt-auto pt-4 flex items-center justify-between border-t border-border/30">
+                        <CardContent className="mt-auto pt-4 flex items-center justify-between border-t border-border/30 relative z-10 bg-muted/10">
                           <div className="flex gap-3">
-                            <Badge variant="outline" className="bg-background/50">
+                            <Badge variant="outline" className="bg-background/80 shadow-sm border-white/10">
                               <CheckCircle2 className="w-3 h-3 mr-1 text-primary" /> {quiz.question_count} Qs
                             </Badge>
                             {quiz.category && (
-                              <Badge variant="outline" className="bg-background/50">
+                              <Badge variant="outline" className="bg-background/80 shadow-sm border-white/10">
                                 {quiz.category}
                               </Badge>
                             )}
                           </div>
                           
                           <Button
-                            variant={quiz.user_liked ? "default" : "ghost"}
+                            variant={quiz.user_liked ? "default" : "outline"}
                             size="sm"
                             onClick={() => handleLike(quiz.id, !!quiz.user_liked)}
-                            className={`rounded-full px-3 transition-all ${quiz.user_liked ? 'bg-rose-500 hover:bg-rose-600 text-background shadow-md shadow-rose-500/20' : 'hover:bg-rose-50 hover:text-rose-500'}`}
+                            className={`rounded-full px-4 transition-all duration-300 ${quiz.user_liked ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)] border-transparent hover:scale-110' : 'bg-background hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200'}`}
                           >
-                            <Heart className={`h-4 w-4 mr-1.5 ${quiz.user_liked ? "fill-current" : ""}`} />
+                            <Heart className={`h-4 w-4 mr-1.5 transition-transform ${quiz.user_liked ? "fill-current animate-[pulse-glow_2s_infinite]" : "group-hover:scale-110"}`} />
                             <span className="font-bold">{quiz.likes_count}</span>
                           </Button>
                         </CardContent>

@@ -116,11 +116,11 @@ serve(async (req) => {
 
     const formData = new URLSearchParams();
     formData.append("item_name", selectedPlan.name);
-    formData.append("item_price", price.toString());
+    formData.append("item_price", Math.round(price).toString());
     formData.append("currency", "XOF");
     formData.append("ref_command", refCommand);
     formData.append("command_name", `Abonnement Hipocampus - ${selectedPlan.name}`);
-    formData.append("env", "test"); // Change to "prod" when account is activated
+    formData.append("env", Deno.env.get("PAYTECH_ENV") ?? "prod");
     formData.append("ipn_url", `${Deno.env.get("SUPABASE_URL")}/functions/v1/paytech-webhook`);
     formData.append("success_url", successUrl);
     formData.append("cancel_url", cancelUrl);

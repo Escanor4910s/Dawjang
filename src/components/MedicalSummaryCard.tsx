@@ -417,11 +417,11 @@ const SectionCard: FC<{ section: ParsedSection }> = ({ section }) => {
   
   return (
     <div className={cn(
-      "rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border",
+      "rounded-[1.5rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 border bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl",
       style.borderColor
     )}>
       {/* Section Header */}
-      <div className={cn("px-4 py-3 flex items-center gap-3", style.headerBg)}>
+      <div className={cn("px-5 py-3.5 flex items-center gap-3", style.headerBg)}>
         <div className="p-1.5 bg-white/20 rounded-lg flex-shrink-0">
           <Icon className={cn("h-5 w-5", style.headerText)} />
         </div>
@@ -434,8 +434,8 @@ const SectionCard: FC<{ section: ParsedSection }> = ({ section }) => {
       </div>
       
       {/* Section Content */}
-      <div className={cn("px-4 md:px-5 py-4", style.contentBg)}>
-        <div className="space-y-1.5 text-[13px] md:text-sm leading-relaxed text-foreground font-[system-ui,-apple-system,sans-serif]">
+      <div className={cn("px-5 md:px-6 py-5", style.contentBg)}>
+        <div className="space-y-2 text-[14px] md:text-[15px] leading-relaxed text-foreground font-[system-ui,-apple-system,sans-serif]">
           {section.content.map((line, idx) => formatLine(line, idx, style.accentColor))}
         </div>
       </div>
