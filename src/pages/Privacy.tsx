@@ -1,62 +1,276 @@
+import { useEffect, useState } from "react";
 import LandingHeader from "@/components/landing/LandingHeader";
 import LandingFooter from "@/components/landing/LandingFooter";
+import { motion } from "framer-motion";
+import { Shield, Database, Lock, Users, Brain, FileText, Cookie, Mail } from "lucide-react";
 
-const Privacy = () => (
-  <div className="min-h-screen bg-background">
-    <LandingHeader />
-    <main className="container mx-auto px-4 py-20 max-w-3xl prose prose-neutral dark:prose-invert">
-      <h1>Politique de Confidentialité</h1>
-      <p className="text-muted-foreground">Dernière mise à jour : Février 2026</p>
+const sections = [
+  { id: "collecte", title: "Collecte des données", icon: Database },
+  { id: "utilisation", title: "Utilisation des données", icon: FileText },
+  { id: "securite", title: "Stockage et sécurité", icon: Lock },
+  { id: "partage", title: "Partage des données", icon: Users },
+  { id: "ia", title: "Intelligence artificielle", icon: Brain },
+  { id: "droits", title: "Vos droits (RGPD)", icon: Shield },
+  { id: "cookies", title: "Cookies", icon: Cookie },
+  { id: "contact", title: "Contact", icon: Mail },
+];
 
-      <h2>1. Collecte des données</h2>
-      <p>Hippocampus collecte les données suivantes :</p>
-      <ul>
-        <li><strong>Données d'inscription :</strong> nom, prénom, adresse e-mail, université, année d'étude</li>
-        <li><strong>Données d'utilisation :</strong> cours téléchargés, résultats de QCM, progression, statistiques</li>
-        <li><strong>Données techniques :</strong> adresse IP, type de navigateur, appareil utilisé</li>
-      </ul>
+const Privacy = () => {
+  const [activeSection, setActiveSection] = useState("collecte");
 
-      <h2>2. Utilisation des données</h2>
-      <p>Vos données sont utilisées pour :</p>
-      <ul>
-        <li>Fournir et améliorer nos services</li>
-        <li>Personnaliser votre expérience d'apprentissage</li>
-        <li>Générer des QCM et résumés adaptés</li>
-        <li>Calculer vos statistiques de progression</li>
-        <li>Vous envoyer des notifications de révision (si activées)</li>
-      </ul>
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollPosition = window.scrollY + 200; // offset
+      for (const section of [...sections].reverse()) {
+        const element = document.getElementById(section.id);
+        if (element && element.offsetTop <= scrollPosition) {
+          setActiveSection(section.id);
+          break;
+        }
+      }
+    };
 
-      <h2>3. Stockage et sécurité</h2>
-      <p>Vos données sont stockées de manière sécurisée sur les serveurs Supabase (hébergés dans l'Union Européenne). Toutes les communications sont chiffrées via HTTPS. Les politiques de sécurité au niveau des lignes (RLS) protègent vos données personnelles.</p>
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
-      <h2>4. Partage des données</h2>
-      <p>Vos données ne sont jamais vendues à des tiers. Seules les données suivantes peuvent être partagées :</p>
-      <ul>
-        <li>Votre nom et score dans le classement communautaire (si vous y participez)</li>
-        <li>Vos messages dans le chat communautaire</li>
-      </ul>
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      window.scrollTo({
+        top: element.offsetTop - 100,
+        behavior: "smooth"
+      });
+    }
+  };
 
-      <h2>5. Intelligence artificielle</h2>
-      <p>Les cours que vous téléchargez sont traités par des modèles d'IA (OpenAI) pour générer des QCM et résumés. Ces données ne sont pas utilisées pour entraîner les modèles.</p>
+  return (
+    <div className="min-h-screen bg-[#FDFBF7] text-[#1A1A1A] font-sans selection:bg-[#0F3B2E]/20">
+      <LandingHeader />
+      
+      {/* Hero Section */}
+      <div className="pt-32 pb-16 px-6 relative overflow-hidden bg-[#0F3B2E] text-[#FDFBF7]">
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none" />
+        <div className="max-w-5xl mx-auto relative z-10 text-center">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 bg-[#FDFBF7]/10 rounded-2xl flex items-center justify-center border border-[#FDFBF7]/20 backdrop-blur-sm">
+                <Shield className="w-8 h-8 text-[#D4C3A3]" />
+              </div>
+            </div>
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif leading-[1.1] tracking-tight mb-6">
+              Politique de Confidentialité
+            </h1>
+            <p className="text-lg md:text-xl text-[#FDFBF7]/80 font-light max-w-2xl mx-auto">
+              Votre confiance est notre priorité absolue. Découvrez comment nous protégeons et gérons vos données avec la plus haute rigueur.
+            </p>
+            <div className="mt-8 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#FDFBF7]/10 border border-[#FDFBF7]/20 text-sm font-medium text-[#D4C3A3]">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              Dernière mise à jour : Février 2026
+            </div>
+          </motion.div>
+        </div>
+      </div>
 
-      <h2>6. Vos droits (RGPD)</h2>
-      <p>Conformément au RGPD, vous disposez des droits suivants :</p>
-      <ul>
-        <li><strong>Droit d'accès :</strong> consulter vos données personnelles</li>
-        <li><strong>Droit de rectification :</strong> modifier vos informations</li>
-        <li><strong>Droit à l'effacement :</strong> supprimer votre compte et toutes vos données</li>
-        <li><strong>Droit à la portabilité :</strong> exporter vos données</li>
-        <li><strong>Droit d'opposition :</strong> vous opposer au traitement de vos données</li>
-      </ul>
+      {/* Main Content Split */}
+      <main className="max-w-6xl mx-auto px-6 py-16 md:py-24">
+        <div className="flex flex-col md:flex-row gap-12 lg:gap-24 relative">
+          
+          {/* Sidebar Navigation */}
+          <div className="hidden md:block w-64 flex-shrink-0">
+            <div className="sticky top-32 space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-[#1A1A1A]/40 mb-6 ml-4">
+                Sommaire
+              </h3>
+              {sections.map((section) => {
+                const Icon = section.icon;
+                const isActive = activeSection === section.id;
+                return (
+                  <button
+                    key={section.id}
+                    onClick={() => scrollToSection(section.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                      isActive 
+                        ? "bg-white text-[#0F3B2E] shadow-sm border border-[#E5E5E5] scale-105" 
+                        : "text-[#1A1A1A]/60 hover:text-[#1A1A1A] hover:bg-white/50"
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${isActive ? "text-[#0F3B2E]" : "text-[#1A1A1A]/40"}`} />
+                    {section.title}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-      <h2>7. Cookies</h2>
-      <p>Hippocampus utilise des cookies essentiels pour le fonctionnement de l'application (session d'authentification, préférences utilisateur). Aucun cookie publicitaire n'est utilisé.</p>
+          {/* Content Area */}
+          <div className="flex-1 space-y-24">
+            
+            <section id="collecte" className="scroll-mt-32">
+              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
+                <Database className="w-8 h-8 text-[#D4C3A3]" />
+                1. Collecte des données
+              </h2>
+              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+                <p>
+                  Afin de vous fournir une expérience académique personnalisée, Hippocampus collecte de manière transparente et limitée les données suivantes :
+                </p>
+                <div className="grid sm:grid-cols-2 gap-6 mt-8">
+                  <div className="bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm hover:shadow-md transition-shadow">
+                    <h3 className="text-lg font-bold text-[#1A1A1A] mb-3">Identité & Profil</h3>
+                    <ul className="space-y-2 text-sm m-0 p-0 list-none">
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Nom et Prénom</li>
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Adresse e-mail</li>
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Faculté de médecine</li>
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Année d'étude</li>
+                    </ul>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm hover:shadow-md transition-shadow">
+                    <h3 className="text-lg font-bold text-[#1A1A1A] mb-3">Activité d'Apprentissage</h3>
+                    <ul className="space-y-2 text-sm m-0 p-0 list-none">
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Documents téléchargés</li>
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Résultats de QCM</li>
+                      <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#0F3B2E]" /> Statistiques de progression</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </section>
 
-      <h2>8. Contact</h2>
-      <p>Pour exercer vos droits ou pour toute question relative à la protection de vos données, contactez-nous à : privacy@hippocampus.fr</p>
-    </main>
-    <LandingFooter />
-  </div>
-);
+            <section id="utilisation" className="scroll-mt-32">
+              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
+                <FileText className="w-8 h-8 text-[#D4C3A3]" />
+                2. Utilisation des données
+              </h2>
+              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+                <p>
+                  L'intégralité des données collectées est mobilisée dans un but unique : <strong>optimiser votre réussite académique</strong>.
+                </p>
+                <ul className="mt-6 space-y-4">
+                  <li><strong>Personnalisation :</strong> Ajuster la difficulté des QCM et des flashcards selon votre niveau.</li>
+                  <li><strong>Analyse prédictive :</strong> Générer vos statistiques de révision et anticiper vos besoins d'apprentissage.</li>
+                  <li><strong>Amélioration continue :</strong> Identifier les bugs et optimiser la vitesse de l'application.</li>
+                </ul>
+              </div>
+            </section>
+
+            <section id="securite" className="scroll-mt-32">
+              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
+                <Lock className="w-8 h-8 text-[#D4C3A3]" />
+                3. Stockage et Sécurité de niveau Enterprise
+              </h2>
+              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+                <div className="bg-[#0F3B2E]/5 border border-[#0F3B2E]/10 rounded-2xl p-6 mb-8 text-[#0F3B2E]">
+                  <strong>Notre engagement de sécurité :</strong> Vos données sont stockées au sein de l'Union Européenne, bénéficiant des normes de protection les plus strictes au monde.
+                </div>
+                <p>
+                  Les infrastructures d'Hippocampus s'appuient sur les serveurs sécurisés de <strong>Supabase</strong>. Les communications entre votre appareil et nos serveurs sont protégées par un chiffrement SSL/TLS (HTTPS) de bout en bout. L'accès à la base de données est restreint par des politiques de sécurité au niveau des lignes (RLS), garantissant que seul vous avez accès à vos documents personnels.
+                </p>
+              </div>
+            </section>
+
+            <section id="partage" className="scroll-mt-32">
+              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
+                <Users className="w-8 h-8 text-[#D4C3A3]" />
+                4. Partage des données
+              </h2>
+              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+                <div className="flex items-start gap-4 bg-emerald-50 border border-emerald-100 rounded-2xl p-6 mb-6">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-emerald-600">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-emerald-900 font-bold m-0 mb-1">Zéro Vente de Données</h3>
+                    <p className="text-emerald-800 m-0 text-sm">Nous ne vendrons <strong>jamais</strong> vos informations à des annonceurs, courtiers en données ou autres entités commerciales. C'est notre promesse.</p>
+                  </div>
+                </div>
+                <p>
+                  Les seules situations où certaines de vos informations sont visibles par autrui concernent les fonctionnalités communautaires que vous décidez d'utiliser, telles que le classement global (votre nom et score) ou vos messages publics dans l'espace "Communauté".
+                </p>
+              </div>
+            </section>
+
+            <section id="ia" className="scroll-mt-32">
+              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
+                <Brain className="w-8 h-8 text-[#D4C3A3]" />
+                5. Intelligence Artificielle et Confidentialité
+              </h2>
+              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+                <p>
+                  Hippocampus intègre les modèles d'Intelligence Artificielle d'OpenAI pour analyser vos cours et créer des QCM. Nous garantissons que :
+                </p>
+                <ul className="space-y-3 mt-6">
+                  <li>Vos documents soumis sont utilisés <strong>exclusivement</strong> pour traiter votre propre requête d'analyse.</li>
+                  <li>Vos cours ou vos données ne sont <strong>pas</strong> utilisés pour entraîner les modèles d'IA d'OpenAI ou d'Hippocampus.</li>
+                  <li>Les analyses sont supprimées de la mémoire temporaire dès la fin de la génération du contenu.</li>
+                </ul>
+              </div>
+            </section>
+
+            <section id="droits" className="scroll-mt-32">
+              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
+                <Shield className="w-8 h-8 text-[#D4C3A3]" />
+                6. Vos droits (Conformité RGPD)
+              </h2>
+              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+                <p>
+                  Vous avez un contrôle total sur vos informations, conformément au Règlement Général sur la Protection des Données (RGPD) :
+                </p>
+                <div className="grid sm:grid-cols-2 gap-4 mt-8">
+                  {[
+                    "Droit d'accès", "Droit de rectification", 
+                    "Droit à l'oubli", "Droit à la portabilité",
+                    "Droit d'opposition"
+                  ].map((droit, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-white border border-[#E5E5E5] p-4 rounded-xl shadow-sm">
+                      <div className="w-2 h-2 rounded-full bg-[#0F3B2E]" />
+                      <span className="font-semibold text-[#1A1A1A]">{droit}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section id="cookies" className="scroll-mt-32">
+              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
+                <Cookie className="w-8 h-8 text-[#D4C3A3]" />
+                7. Politique relative aux Cookies
+              </h2>
+              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+                <p>
+                  Fidèles à notre philosophie sans superflu, nous n'utilisons <strong>aucun cookie publicitaire ou de traçage tiers</strong>.
+                </p>
+                <p>
+                  Les seuls cookies déployés sur votre appareil sont strictement nécessaires au fonctionnement technique de la plateforme (maintien de votre session sécurisée, préservation de vos préférences locales).
+                </p>
+              </div>
+            </section>
+
+            <section id="contact" className="scroll-mt-32">
+              <h2 className="text-3xl font-serif text-[#0F3B2E] mb-6 flex items-center gap-3">
+                <Mail className="w-8 h-8 text-[#D4C3A3]" />
+                8. Nous contacter
+              </h2>
+              <div className="prose prose-lg prose-neutral max-w-none text-[#1A1A1A]/80 font-light leading-relaxed">
+                <p>
+                  Pour toute question concernant cette politique ou pour exercer vos droits, notre équipe juridique et de support est à votre entière disposition.
+                </p>
+                <div className="inline-flex flex-col sm:flex-row items-center gap-4 bg-white border border-[#E5E5E5] rounded-2xl p-2 pr-6 mt-4 shadow-sm">
+                  <div className="w-12 h-12 bg-[#0F3B2E]/5 rounded-xl flex items-center justify-center text-[#0F3B2E]">
+                    <Mail className="w-5 h-5" />
+                  </div>
+                  <span className="font-medium text-[#1A1A1A]">privacy@hippocampus.fr</span>
+                </div>
+              </div>
+            </section>
+
+          </div>
+        </div>
+      </main>
+
+      <LandingFooter />
+    </div>
+  );
+};
 
 export default Privacy;
