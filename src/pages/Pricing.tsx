@@ -1,37 +1,61 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Check, Sparkles, Zap, Crown, Brain, MessageSquare, Trophy, CheckCircle2, Minus } from "lucide-react";
+import { Check, Sparkles, Zap, Crown, Brain, MessageSquare, Trophy, CheckCircle2, Minus, ArrowRight, ShieldCheck } from "lucide-react";
 import LandingHeader from "@/components/landing/LandingHeader";
+import LandingFooter from "@/components/landing/LandingFooter";
 
 import { PRICING_TIERS } from "@/config/pricing";
 
+// ─── STYLES D'ÉLITE (Inspiration Dashboard) ───
 const tiers = PRICING_TIERS.map(tier => ({
   ...tier,
   price: tier.monthlyPrice.toLocaleString('fr-FR'),
   icon: tier.id === "freemium" ? Sparkles : tier.id === "premium" ? Zap : Crown,
   tagline: tier.description,
-  color: tier.id === "premium" 
-    ? "bg-primary text-white shadow-[0_0_40px_rgba(30,200,120,0.3)]" 
-    : tier.id === "pro" 
-      ? "bg-[#111] text-white" 
-      : "bg-black/5"
+  // Architecture des couleurs calquée sur l'interface d'administration
+  style: tier.id === "premium" 
+    ? {
+        bg: "bg-[#111111] text-white",
+        border: "border-[#111111] dark:border-white/10",
+        shadow: "shadow-[0_20px_50px_-15px_rgba(91,33,182,0.4)] hover:shadow-[0_30px_60px_-15px_rgba(91,33,182,0.6)]",
+        btn: "bg-white text-[#111111] hover:bg-[#5B21B6] hover:text-white",
+        iconBg: "bg-[#5B21B6] text-white shadow-inner",
+        check: "text-[#5B21B6] fill-white"
+      }
+    : tier.id === "pro" || tier.name === "Excellence"
+      ? {
+          bg: "bg-white dark:bg-[#161614] text-[#111111] dark:text-white",
+          border: "border-[#5B21B6]/20",
+          shadow: "shadow-[0_10px_30px_-15px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_-15px_rgba(91,33,182,0.15)]",
+          btn: "bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-white border border-black/5 hover:border-[#5B21B6] hover:text-[#5B21B6]",
+          iconBg: "bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] border border-black/5",
+          check: "text-[#111111] dark:text-white"
+        }
+      : {
+          bg: "bg-white dark:bg-[#161614] text-[#111111] dark:text-white",
+          border: "border-black/5 dark:border-white/5",
+          shadow: "shadow-[0_10px_30px_-15px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]",
+          btn: "bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-white border border-black/5 hover:border-black/20",
+          iconBg: "bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#888888] border border-black/5",
+          check: "text-[#888888]"
+        }
 }));
 
 const featureComparison = [
   {
-    category: "Apprentissage Actif",
+    category: "Moteurs d'Apprentissage",
     icon: Brain,
     items: [
       { name: "Génération de QCM par IA", discovery: "5 / jour", premium: "Illimité", excellence: "Illimité" },
       { name: "Génération de Résumés", discovery: "1 / jour", premium: "Illimité", excellence: "Illimité" },
-      { name: "Flashcards (Spaced Repetition)", discovery: false, premium: true, excellence: true },
+      { name: "Flashcards (Algorithme SM-2)", discovery: false, premium: true, excellence: true },
       { name: "Cas Cliniques Complexes", discovery: false, premium: false, excellence: true },
     ]
   },
   {
-    category: "Entraînement & Évaluation",
+    category: "Simulation & Évaluation",
     icon: Trophy,
     items: [
       { name: "Mode Examen", discovery: false, premium: true, excellence: true },
@@ -40,176 +64,244 @@ const featureComparison = [
     ]
   },
   {
-    category: "Accompagnement",
+    category: "Intelligence & Support",
     icon: MessageSquare,
     items: [
       { name: "Assistant MOR (Explications IA)", discovery: false, premium: "Standard", excellence: "Prioritaire" },
+      { name: "Modèle de Raisonnement", discovery: "Standard", premium: "Avancé", excellence: "Synaptik-1 (Maximum)" },
       { name: "Support Client", discovery: "Standard", premium: "Rapide", excellence: "Prioritaire 7j/7" },
     ]
   }
 ];
 
+// --- COMPOSANTS D'ANIMATION FLUIDES ---
 const FadeIn = ({ children, delay = 0, className = "" }: any) => (
-  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay }} className={className}>
+  <motion.div 
+    initial={{ opacity: 0, y: 30 }} 
+    whileInView={{ opacity: 1, y: 0 }} 
+    viewport={{ once: true, margin: "-50px" }} 
+    transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }} 
+    className={className}
+  >
     {children}
   </motion.div>
-);
-
-const WatermarkPattern = () => (
-  <div className="absolute inset-0 z-0 opacity-[0.02] pointer-events-none overflow-hidden flex flex-wrap justify-center items-center gap-20 p-10">
-    {Array.from({ length: 40 }).map((_, i) => (
-      <Brain key={i} className="w-24 h-24 text-[#111]" />
-    ))}
-  </div>
 );
 
 const Pricing = () => {
   const [annual, setAnnual] = useState(true);
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans-serif selection:bg-primary selection:text-white pb-24 relative overflow-hidden">
-      <WatermarkPattern />
+    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans selection:bg-[#5B21B6]/20 transition-colors duration-500">
       
-      {/* Use the shared LandingHeader for consistent navigation */}
       <LandingHeader forceSolid />
-      <main className="pt-28 max-w-6xl mx-auto px-6">
-        <FadeIn className="text-center max-w-3xl mx-auto mb-16">
-          <h1 className="text-5xl md:text-7xl font-serif leading-[1.05] tracking-tight mb-6">
-            Investissez dans votre <span className="italic text-primary">réussite</span>.
-          </h1>
-          <p className="text-lg md:text-xl text-black/60 font-light mb-10">
-            Des forfaits transparents conçus pour s'adapter à votre rythme d'apprentissage. Sans engagement.
-          </p>
-          
-          <div className="inline-flex bg-black/5 p-1.5 rounded-full relative">
-            <div className={`absolute inset-y-1.5 w-[calc(50%-6px)] bg-white rounded-full shadow-sm transition-all duration-300 ${annual ? 'left-1.5' : 'left-[calc(50%+4px)]'}`} />
-            <button onClick={() => setAnnual(true)} className={`relative z-10 px-6 py-2 rounded-full text-sm font-semibold transition-colors ${annual ? 'text-black' : 'text-black/50 hover:text-black'}`}>
-              Annuel (-20%)
-            </button>
-            <button onClick={() => setAnnual(false)} className={`relative z-10 px-6 py-2 rounded-full text-sm font-semibold transition-colors ${!annual ? 'text-black' : 'text-black/50 hover:text-black'}`}>
-              Mensuel
-            </button>
-          </div>
-        </FadeIn>
+      
+      <main className="pt-32 pb-24 relative z-10 max-w-[1400px] mx-auto px-6">
+        
+        {/* ─── EN-TÊTE TYPOGRAPHIQUE (Style Éditorial) ─── */}
+        <div className="max-w-4xl mx-auto text-center mb-24">
+          <FadeIn>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-black/5 dark:border-white/5 bg-white/50 dark:bg-[#161614]/50 backdrop-blur-md mb-8 shadow-sm">
+              <ShieldCheck className="h-4 w-4 text-[#5B21B6]" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Investissement Académique</span>
+            </div>
+            
+            <h1 className="text-5xl md:text-7xl font-serif leading-[1.05] tracking-tight mb-8 text-[#111111] dark:text-white">
+              L'excellence clinique <br />
+              <span className="italic text-[#5B21B6] relative inline-block">
+                a un prix.
+                <svg className="absolute w-full h-3 -bottom-1 left-0 text-[#5B21B6]/20" viewBox="0 0 100 20" preserveAspectRatio="none"><path d="M0 15 Q 50 0 100 15" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/></svg>
+              </span>
+            </h1>
+            
+            <p className="text-lg md:text-xl text-[#666666] dark:text-[#8E8E8A] font-medium max-w-2xl mx-auto mb-14 leading-relaxed">
+              Une architecture tarifaire transparente. Conçue pour accompagner l'étudiant de la première année jusqu'à l'internat.
+            </p>
+            
+            {/* SÉLECTEUR DE FACTURATION (Interaction Physique) */}
+            <div className="inline-flex bg-white dark:bg-[#161614] p-1.5 rounded-full relative border border-black/5 dark:border-white/5 shadow-sm hover:shadow-md transition-shadow duration-300">
+              <motion.div 
+                className="absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 rounded-full shadow-sm z-0"
+                animate={{ left: annual ? "6px" : "calc(50% + 0px)" }}
+                transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              />
+              <button onClick={() => setAnnual(true)} className={`relative z-10 w-44 py-3.5 text-xs font-bold uppercase tracking-widest transition-colors duration-300 flex items-center justify-center gap-2 ${annual ? 'text-[#111111] dark:text-white' : 'text-[#888888] hover:text-[#111111] dark:hover:text-white'}`}>
+                Annuel <span className="bg-[#5B21B6]/10 text-[#5B21B6] dark:text-violet-300 border border-[#5B21B6]/20 px-2 py-0.5 rounded-md text-[9px]">-20%</span>
+              </button>
+              <button onClick={() => setAnnual(false)} className={`relative z-10 w-44 py-3.5 text-xs font-bold uppercase tracking-widest transition-colors duration-300 ${!annual ? 'text-[#111111] dark:text-white' : 'text-[#888888] hover:text-[#111111] dark:hover:text-white'}`}>
+                Mensuel
+              </button>
+            </div>
+          </FadeIn>
+        </div>
 
-        {/* PRICING CARDS */}
-        <div className="grid md:grid-cols-3 gap-6 mb-32">
+        {/* ─── LES CARTES DE PRIX (Élévation et Micro-animations) ─── */}
+        <div className="grid lg:grid-cols-3 gap-8 items-center mb-32">
           {tiers.map((tier, index) => {
             const Icon = tier.icon;
             const displayPrice = annual && tier.monthlyPrice > 0 ? tier.yearlyPrice : tier.monthlyPrice;
-            const price = displayPrice.toLocaleString('fr-FR');
+            const isPremium = tier.highlight;
             
             return (
-              <FadeIn key={tier.name} delay={index * 0.1} className={`rounded-[2rem] p-8 border border-black/5 relative flex flex-col transition-transform hover:-translate-y-2 ${tier.color}`}>
-                {tier.highlight && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#111] text-white text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider">
-                    Le plus choisi
+              <FadeIn 
+                key={tier.name} 
+                delay={index * 0.1} 
+                className={`relative group h-full ${isPremium ? 'lg:scale-105 z-20' : 'z-10'}`}
+              >
+                {/* LA CARTE (Comportement Physique) */}
+                <div className={`relative h-full rounded-[3rem] p-10 md:p-12 flex flex-col transition-all duration-500 border
+                  ${tier.style.bg} ${tier.style.border} ${tier.style.shadow} hover:-translate-y-3
+                `}>
+                  {/* Badge Exclusif */}
+                  {isPremium && (
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#5B21B6] text-white text-[10px] font-black px-6 py-2 rounded-full uppercase tracking-widest shadow-md">
+                      Le plus choisi
+                    </div>
+                  )}
+                  
+                  {/* En-tête de carte */}
+                  <div className="mb-10">
+                    <div className={`w-14 h-14 rounded-[1.25rem] flex items-center justify-center mb-6 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 ${tier.style.iconBg}`}>
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-3xl font-serif font-bold mb-3 tracking-tight">{tier.name}</h3>
+                    <p className={`text-sm font-medium leading-relaxed min-h-[40px] ${isPremium ? 'text-white/70' : 'text-[#888888]'}`}>
+                      {tier.tagline}
+                    </p>
                   </div>
-                )}
-                
-                <div className="mb-8">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-6 ${tier.highlight ? 'bg-white/20' : tier.name === "Excellence" ? 'bg-white/10' : 'bg-card shadow-sm'}`}>
-                    <Icon className={`w-6 h-6 ${tier.highlight ? 'text-white' : tier.name === "Excellence" ? 'text-primary' : 'text-[#111]'}`} />
+
+                  {/* Prix */}
+                  <div className="mb-12 border-b border-black/5 dark:border-white/5 pb-10">
+                    <div className="flex items-end gap-2 mb-2">
+                      <span className="text-5xl lg:text-6xl font-light tracking-tighter">
+                        {displayPrice === 0 ? 'Gratuit' : displayPrice.toLocaleString('fr-FR')}
+                      </span>
+                      {displayPrice > 0 && <span className={`text-sm font-bold mb-2 ${isPremium ? 'text-white/50' : 'text-[#888888]'}`}>FCFA</span>}
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${isPremium ? 'text-white/50' : 'text-[#888888]'}`}>
+                      {displayPrice === 0 ? 'Accès illimité' : annual ? "Facturé annuellement" : "Facturé mensuellement"}
+                    </span>
                   </div>
-                  <h3 className="text-2xl font-bold mb-2">{tier.name}</h3>
-                  <p className={`text-sm ${tier.highlight || tier.name === "Excellence" ? 'text-white/70' : 'text-black/60'}`}>{tier.tagline}</p>
+
+                  {/* Fonctionnalités */}
+                  <ul className="space-y-5 mb-14 flex-1">
+                    {tier.features.map((feature, i) => (
+                      <li key={i} className="flex items-start gap-4 text-sm font-medium">
+                        <CheckCircle2 className={`w-5 h-5 flex-shrink-0 ${tier.style.check}`} />
+                        <span className={isPremium ? 'text-white' : 'text-[#111111] dark:text-[#F4F4F2]'}>
+                          {feature}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* Bouton d'Action Magnétique */}
+                  <Button asChild className={`w-full rounded-2xl h-16 text-xs font-black uppercase tracking-widest transition-all duration-300 shadow-sm outline-none group/btn ${tier.style.btn}`}>
+                    <Link to={`/subscription?plan=${tier.id}`} className="flex items-center justify-center gap-3">
+                      {tier.cta} 
+                      <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                    </Link>
+                  </Button>
                 </div>
-
-                <div className="mb-8">
-                  <span className="text-5xl font-black">{price}</span>
-                  <span className={`text-sm font-medium ${tier.highlight || tier.name === "Excellence" ? 'text-white/70' : 'text-black/60'}`}>
-                    {annual && tier.id !== "freemium" ? " FCFA / an" : " FCFA / mois"}
-                  </span>
-                  {annual && tier.id !== "freemium" && <p className={`text-xs mt-2 ${tier.highlight ? 'text-white/90 font-medium' : 'text-primary font-medium'}`}>-20% inclus !</p>}
-                </div>
-
-                <ul className="space-y-4 mb-10 flex-1">
-                  {tier.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-3 text-sm">
-                      <CheckCircle2 className={`w-5 h-5 flex-shrink-0 ${tier.highlight ? 'text-white' : 'text-primary'}`} />
-                      <span className={tier.highlight || tier.name === "Excellence" ? 'text-white/90' : 'text-black/80'}>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <Button asChild className={`w-full rounded-full h-14 text-base font-semibold border-0 ${
-                  tier.highlight 
-                    ? 'bg-card text-primary hover:bg-card/90 shadow-lg' 
-                    : tier.name === "Excellence"
-                      ? 'bg-primary text-white hover:bg-primary-hover shadow-lg'
-                      : 'bg-[#111] text-white hover:bg-black shadow-lg'
-                }`}>
-                  <Link to="/auth">{tier.cta}</Link>
-                </Button>
               </FadeIn>
             );
           })}
         </div>
 
-        {/* DETAILED COMPARISON */}
-        <FadeIn delay={0.4}>
+        {/* ─── LE REGISTRE DE COMPARAISON (Le "Grand Livre" Suisse) ─── */}
+        <FadeIn delay={0.2} className="max-w-[1100px] mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-5xl font-serif mb-6">Comparez en détail</h2>
-            <p className="text-black/60">Toutes les fonctionnalités dont vous avez besoin pour exceller.</p>
+            <h2 className="text-3xl md:text-5xl font-serif text-[#111111] dark:text-white mb-4 tracking-tight">Comparaison Exhaustive</h2>
+            <p className="text-[#888888] font-medium">L'architecture détaillée de nos offres académiques.</p>
           </div>
 
-          <div className="bg-card rounded-[2rem] p-6 md:p-12 shadow-xl border border-black/5 overflow-x-auto">
-            <table className="w-full text-left min-w-[600px]">
-              <thead>
-                <tr className="border-b border-black/10">
-                  <th className="pb-6 font-semibold w-2/5">Fonctionnalité</th>
-                  <th className="pb-6 font-semibold text-center w-1/5 text-black/60">Découverte</th>
-                  <th className="pb-6 font-bold text-center w-1/5 text-primary">Premium</th>
-                  <th className="pb-6 font-semibold text-center w-1/5">Excellence</th>
-                </tr>
-              </thead>
-              <tbody>
-                {featureComparison.map((category, idx) => (
-                  <React.Fragment key={category.category}>
-                    <tr>
-                      <td colSpan={4} className="py-6">
-                        <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-black/40">
-                          <category.icon className="w-4 h-4" /> {category.category}
-                        </div>
-                      </td>
-                    </tr>
-                    {category.items.map((item, itemIdx) => (
-                      <tr key={item.name} className={itemIdx !== category.items.length - 1 ? "border-b border-black/5" : ""}>
-                        <td className="py-4 text-sm font-medium">{item.name}</td>
-                        <td className="py-4 text-center">
-                          {typeof item.discovery === 'boolean' ? (
-                            item.discovery ? <Check className="w-5 h-5 mx-auto text-black/40" /> : <Minus className="w-5 h-5 mx-auto text-black/20" />
-                          ) : (
-                            <span className="text-sm text-black/60">{item.discovery}</span>
-                          )}
-                        </td>
-                        <td className="py-4 text-center bg-primary/5">
-                          {typeof item.premium === 'boolean' ? (
-                            item.premium ? <Check className="w-5 h-5 mx-auto text-primary" /> : <Minus className="w-5 h-5 mx-auto text-black/20" />
-                          ) : (
-                            <span className="text-sm font-semibold text-primary">{item.premium}</span>
-                          )}
-                        </td>
-                        <td className="py-4 text-center">
-                          {typeof item.excellence === 'boolean' ? (
-                            item.excellence ? <Check className="w-5 h-5 mx-auto text-[#111]" /> : <Minus className="w-5 h-5 mx-auto text-black/20" />
-                          ) : (
-                            <span className="text-sm font-semibold">{item.excellence}</span>
-                          )}
+          <div className="bg-white dark:bg-[#161614] rounded-[3rem] border border-black/5 dark:border-white/5 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-500">
+            <div className="overflow-x-auto editorial-scrollbar">
+              <table className="w-full text-left min-w-[800px] border-collapse">
+                <thead>
+                  <tr>
+                    <th className="py-8 px-10 font-black text-[#888888] uppercase tracking-widest text-[10px] w-2/5 border-b border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#0E0E0C]">
+                      Fonctionnalités
+                    </th>
+                    <th className="py-8 px-6 font-bold text-[#111111] dark:text-white text-center w-1/5 text-xs uppercase tracking-widest border-b border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#0E0E0C]">
+                      Découverte
+                    </th>
+                    <th className="py-8 px-6 font-black text-[#5B21B6] dark:text-violet-400 text-center w-1/5 text-xs uppercase tracking-widest relative border-b border-[#5B21B6]/20 bg-[#5B21B6]/[0.02]">
+                      Premium
+                      <div className="absolute top-0 left-0 right-0 h-1 bg-[#5B21B6]" />
+                    </th>
+                    <th className="py-8 px-6 font-bold text-[#111111] dark:text-white text-center w-1/5 text-xs uppercase tracking-widest border-b border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#0E0E0C]">
+                      Excellence
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/5 dark:divide-white/5">
+                  {featureComparison.map((category) => (
+                    <React.Fragment key={category.category}>
+                      {/* En-tête de Catégorie */}
+                      <tr>
+                        <td colSpan={4} className="pt-12 pb-6 px-10 bg-white dark:bg-[#161614]">
+                          <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#5B21B6] dark:text-violet-400">
+                            <div className="p-2 rounded-lg bg-[#5B21B6]/10 border border-[#5B21B6]/20">
+                              <category.icon className="w-4 h-4" /> 
+                            </div>
+                            {category.category}
+                          </div>
                         </td>
                       </tr>
-                    ))}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
+                      {/* Lignes de spécifications */}
+                      {category.items.map((item) => (
+                        <tr key={item.name} className="hover:bg-[#FAFAF8] dark:hover:bg-white/[0.02] transition-colors group">
+                          <td className="py-5 px-10 text-sm font-medium text-[#111111] dark:text-[#F4F4F2]">{item.name}</td>
+                          
+                          <td className="py-5 px-6 text-center">
+                            {typeof item.discovery === 'boolean' ? (
+                              item.discovery ? <Check className="w-5 h-5 mx-auto text-[#111111] dark:text-white" /> : <Minus className="w-4 h-4 mx-auto text-[#888888]/50" />
+                            ) : (
+                              <span className="text-sm font-medium text-[#666666] dark:text-[#8E8E8A]">{item.discovery}</span>
+                            )}
+                          </td>
+                          
+                          <td className="py-5 px-6 text-center bg-[#5B21B6]/[0.02] border-x border-[#5B21B6]/10 transition-colors group-hover:bg-[#5B21B6]/[0.04]">
+                            {typeof item.premium === 'boolean' ? (
+                              item.premium ? <CheckCircle2 className="w-5 h-5 mx-auto text-[#5B21B6] dark:text-violet-400" /> : <Minus className="w-4 h-4 mx-auto text-[#888888]/50" />
+                            ) : (
+                              <span className="text-sm font-black text-[#5B21B6] dark:text-violet-400">{item.premium}</span>
+                            )}
+                          </td>
+                          
+                          <td className="py-5 px-6 text-center">
+                            {typeof item.excellence === 'boolean' ? (
+                              item.excellence ? <Check className="w-5 h-5 mx-auto text-[#111111] dark:text-white" /> : <Minus className="w-4 h-4 mx-auto text-[#888888]/50" />
+                            ) : (
+                              <span className="text-sm font-bold text-[#111111] dark:text-white">{item.excellence}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </FadeIn>
 
-        <div className="mt-20 text-center text-sm text-black/50">
-          <p>Besoin d'une offre pour votre université ou association étudiante ? <Link to="/contact" className="underline hover:text-black">Contactez-nous</Link>.</p>
-        </div>
+        {/* ─── SECTION CONTACT INSTITUTIONNEL ─── */}
+        <FadeIn delay={0.4} className="mt-32 text-center">
+          <div className="inline-flex flex-col items-center p-12 rounded-[3rem] border border-black/5 dark:border-white/5 bg-white dark:bg-[#161614] shadow-sm hover:shadow-md transition-shadow">
+            <h3 className="text-2xl font-serif text-[#111111] dark:text-white mb-4">Déploiement Universitaire ?</h3>
+            <p className="text-sm font-medium text-[#888888] mb-8 max-w-md leading-relaxed">
+              Facultés de médecine ou associations étudiantes : nous concevons des architectures sur mesure pour votre promotion.
+            </p>
+            <Button asChild className="rounded-full h-12 px-8 bg-[#FAFAF8] dark:bg-[#0E0E0C] hover:bg-black/5 text-[#111111] dark:text-white border border-black/10 dark:border-white/10 transition-all font-bold text-xs uppercase tracking-widest">
+              <Link to="/contact">Contacter l'équipe</Link>
+            </Button>
+          </div>
+        </FadeIn>
+
       </main>
+      
+      <LandingFooter />
     </div>
   );
 };

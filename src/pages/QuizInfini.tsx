@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { Infinity as InfinityIcon, CheckCircle2, XCircle, Loader2, StopCircle, Sparkles } from "lucide-react";
+import { generateQuizWithPuter } from "@/lib/puterAiService";
 
 interface InfQuestion { question: string; choices: string[]; correct: number[]; explanation?: string; }
 
@@ -41,14 +42,11 @@ const QuizInfini = () => {
     setPicked([]);
     try {
       const askedSummary = history.slice(-5).map(h => `- ${h.q.question.slice(0, 80)}`).join("\n");
-      const { data, error } = await supabase.functions.invoke("generate-quiz-openai", {
-        body: {
-          content: `${content}\n\n[CONTEXTE: questions déjà posées, ne pas répéter]\n${askedSummary}`,
-          nbQuestions: 1, type, difficulty,
-        },
-      });
-      if (error) throw error;
-      const q = data?.qcm?.[0];
+      const generatedQuestions = await generateQuizWithPuter(
+        `${content}\n\n[CONTEXTE: questions déjà posées, ne pas répéter]\n${askedSummary}`,
+        1, type, difficulty
+      );
+      const q = generatedQuestions[0];
       if (!q || !Array.isArray(q.choices) || !Array.isArray(q.correct)) throw new Error("Format invalide");
       setCurrent(q);
     } catch (e: any) {

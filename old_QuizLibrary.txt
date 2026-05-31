@@ -1,0 +1,398 @@
+src/pages/QuizLibrary.tsx
+```tsx
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { FileText, Play, Calendar, Plus, Trash2, Download, FileDown, CheckCircle, Clock, Timer } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { exportQuizToPDF, exportQuizListToPDF } from "@/utils/pdfExport";
+import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
+
+interface QCMSession {
+  id: string;
+  title: string;
+  questions: any;
+  question_count: number;
+  question_type?: string;
+  ai_model?: string;
+  status: string;
+  created_at: string;
+  courses?: {
+    id: string;
+    title: string;
+    content?: string;
+    file_name?: string;
+  };
+}
+
+const QuizLibrary = () => {
+  const [sessions, setSessions] = useState<QCMSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    checkAuth();
+    fetchSessions();
+  }, []);
+
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate("/auth");
+    }
+  };
+
+  const fetchSessions = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("qcm_sessions")
+        .select(`
+          *,
+          courses (
+            id,
+            title,
+            content,
+            file_name
+          )
+        `)
+        .eq("user_id", user.id)
+        .eq("status", "completed")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setSessions(data || []);
+    } catch (error) {
+      console.error("Error fetching sessions:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les QCM",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteSession = async (sessionId: string) => {
+    try {
+      const { error } = await supabase
+        .from("qcm_sessions")
+        .delete()
+        .eq("id", sessionId);
+
+      if (error) throw error;
+
+      setSessions(sessions.filter(session => session.id !== sessionId));
+      toast({
+        title: "QCM supprimé",
+        description: "Le QCM a été supprimé avec succès",
+      });
+    } catch (error) {
+      console.error("Error deleting session:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le QCM",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Real-time subscription for QCM updates
+  useRealtimeSubscription({
+    table: "qcm_sessions",
+    event: "*",
+    onUpdate: fetchSessions,
+  });
+
+  const handleExportPDF = (session: QCMSession) => {
+    try {
+      const questions = Array.isArray(session.questions) ? session.questions : [];
+      exportQuizToPDF({
+        title: session.title,
+        questions: questions.map((q: any) => ({
+          question: q.question || "",
+          choices: q.choices || [],
+          correct: q.correct || [],
+          explanation: q.explanation,
+        })),
+      });
+      toast({
+        title: "PDF généré",
+        description: "Le QCM a été exporté avec succès",
+      });
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de générer le PDF",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExportAllPDF = () => {
+    try {
+      const quizData = sessions.map(session => ({
+        title: session.title,
+        questions: Array.isArray(session.questions) ? session.questions.map((q: any) => ({
+          question: q.question || "",
+          choices: q.choices || [],
+          correct: q.correct || [],
+          explanation: q.explanation,
+        })) : [],
+      }));
+      exportQuizListToPDF(quizData);
+      toast({
+        title: "PDF généré",
+        description: "Le récapitulatif a été exporté avec succès",
+      });
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de générer le PDF",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
+  const getWordCount = (content?: string) => {
+    if (!content || typeof content !== 'string') return 0;
+    const trimmed = content.trim();
+    if (!trimmed) return 0;
+    return trimmed.split(/\s+/).filter(word => word.length > 0).length;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen text-foreground font-sans px-4 pt-2 pb-6 sm:px-8 sm:pt-4 sm:pb-8 relative">
+        <div className="max-w-[1400px] mx-auto relative z-10">
+          <div className="w-full">
+            {/* Skeleton Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+              <div className="space-y-3">
+                <div className="h-10 w-48 bg-muted rounded-xl animate-pulse"></div>
+                <div className="h-4 w-32 bg-muted/60 rounded-md animate-pulse"></div>
+              </div>
+              <div className="flex gap-3 mt-4 sm:mt-0">
+                <div className="h-12 w-32 bg-muted rounded-full animate-pulse"></div>
+                <div className="h-12 w-32 bg-muted rounded-full animate-pulse"></div>
+              </div>
+            </div>
+            {/* Skeleton Cards */}
+            <div className="grid gap-6 grid-cols-1 xl:grid-cols-2">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-card/40 border border-border shadow-sm rounded-[2rem] p-6 animate-pulse">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="h-6 w-2/3 bg-muted rounded-md"></div>
+                    <div className="h-8 w-8 bg-muted rounded-md"></div>
+                  </div>
+                  <div className="flex gap-2 mb-6">
+                    <div className="h-5 w-24 bg-muted rounded-md"></div>
+                    <div className="h-5 w-16 bg-muted rounded-md"></div>
+                  </div>
+                  <div className="h-16 w-full bg-muted/50 rounded-lg mb-6"></div>
+                  <div className="flex justify-between items-center">
+                    <div className="h-6 w-20 bg-muted rounded-md"></div>
+                    <div className="flex gap-2">
+                      <div className="h-10 w-24 bg-muted rounded-full"></div>
+                      <div className="h-10 w-32 bg-muted rounded-full"></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (sessions.length === 0) {
+    return (
+      <div className="min-h-screen bg-dashboard text-foreground bg-doodle-watermark font-sans py-8 relative">
+        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+        <div className="container mx-auto px-4 relative z-10">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="mb-12">
+              <h1 className="text-4xl sm:text-5xl font-light tracking-tight text-foreground mb-4 flex items-center justify-center gap-3">
+                <FileText className="h-10 w-10 text-primary" />
+                <span>Mes QCM</span>
+              </h1>
+              <p className="text-sm font-medium text-muted-foreground">
+                Retrouvez tous vos questionnaires générés
+              </p>
+            </div>
+
+            <Card className="bg-card/40 backdrop-blur-xl border border-border shadow-sm rounded-[2rem] p-8 mt-12">
+              <CardContent className="text-center p-0">
+                <div className="bg-card/60 p-6 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center border border-border">
+                  <FileText className="h-10 w-10 text-muted-foreground" />
+                </div>
+                <h3 className="text-2xl font-light text-foreground mb-4">
+                  Aucun QCM créé pour l'instant
+                </h3>
+                <p className="text-sm font-medium text-muted-foreground mb-8">
+                  Ajoutez votre premier cours pour commencer à générer des questionnaires
+                </p>
+                <Button size="lg" asChild className="h-14 px-8 rounded-full bg-foreground text-background hover:bg-foreground/90 font-medium shadow-md">
+                  <Link to="/add-course" className="flex items-center gap-2">
+                    <Plus className="h-5 w-5" />
+                    <span>Créer mon premier QCM</span>
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen text-foreground font-sans px-4 pt-2 pb-6 sm:px-8 sm:pt-4 sm:pb-8 relative">
+      <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="max-w-[1400px] mx-auto relative z-10">
+        <div className="w-full">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 animate-fade-in">
+            <div>
+              <h1 className="text-4xl sm:text-5xl font-light tracking-tight text-foreground flex items-center gap-3">
+                <FileText className="h-10 w-10 text-primary flex-shrink-0" />
+                <span>Mes QCM</span>
+              </h1>
+              <p className="text-sm font-medium text-muted-foreground mt-2">
+                {sessions.length} questionnaire{sessions.length > 1 ? 's' : ''} disponible{sessions.length > 1 ? 's' : ''}
+              </p>
+            </div>
+            
+            {/* Buttons - Stack on mobile, row on desktop */}
+            <div className="flex gap-3 w-full sm:w-auto mt-4 sm:mt-0">
+              <Button 
+                variant="outline" 
+                onClick={handleExportAllPDF} 
+                className="flex-1 sm:flex-none h-12 rounded-full border-border hover:bg-muted text-foreground font-medium shadow-sm px-6"
+              >
+                <FileDown className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Exporter tout</span>
+              </Button>
+              <Button asChild className="flex-1 sm:flex-none h-12 rounded-full bg-foreground text-background hover:bg-foreground/90 font-medium shadow-md px-6">
+                <Link to="/add-course" className="flex items-center justify-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  <span>Nouveau</span>
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          {/* Quiz Cards */}
+          <div className="grid gap-6 grid-cols-1 xl:grid-cols-2">
+            {sessions.map((session, index) => (
+              <Card 
+                key={session.id} 
+                className="bg-card/70 backdrop-blur-xl border border-border shadow-sm rounded-[2rem] overflow-hidden hover:shadow-md transition-all duration-300 animate-slide-up"
+                style={{ animationDelay: `${index * 0.1}s` }}
+              >
+                <CardHeader className="p-6 border-b border-border">
+                  <div className="flex items-start justify-between gap-4">
+                    <CardTitle className="text-xl sm:text-2xl font-medium leading-tight flex-1">
+                      {session.title}
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteSession(session.id)}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0 h-8 w-8 p-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  <CardDescription className="text-xs sm:text-sm mt-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        <span>{formatDate(session.created_at)}</span>
+                      </span>
+                      <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground border-0">
+                        {session.question_count} Q
+                      </Badge>
+                      {session.courses?.file_name && (
+                        <Badge variant="outline" className="text-xs max-w-[120px] truncate hidden sm:inline-flex">
+                          {session.courses.file_name}
+                        </Badge>
+                      )}
+                    </div>
+                  </CardDescription>
+                </CardHeader>
+                
+                <CardContent className="p-6 pt-6 bg-card/30">
+                  <p className="text-sm font-medium text-muted-foreground line-clamp-2 mb-6 hidden sm:block">
+                    {session.courses?.content ? session.courses.content.substring(0, 150) : "Contenu non disponible"}...
+                  </p>
+                  
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge className="bg-success/20 text-success-foreground border-0 shadow-none text-xs font-bold uppercase tracking-wider px-3 py-1">
+                        <CheckCircle className="h-3 w-3 mr-1.5" />
+                        {session.status === "completed" ? "Complété" : "En cours"}
+                      </Badge>
+                      {session.ai_model && (
+                        <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 text-[10px] font-bold uppercase tracking-wider px-2 py-1 hidden sm:inline-flex">
+                          {session.ai_model}
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <Button
+                        variant="outline"
+                        onClick={() => handleExportPDF(session)}
+                        className="flex-1 sm:flex-none h-11 rounded-full border-border hover:bg-muted text-foreground font-medium"
+                      >
+                        <Download className="h-4 w-4 sm:mr-2" />
+                        <span className="sm:inline hidden">PDF</span>
+                      </Button>
+                      <Button asChild className="flex-1 sm:flex-none h-11 rounded-full bg-primary/20 text-primary hover:bg-primary/30 font-medium border-0 shadow-none">
+                        <Link to={`/exam/${session.id}`} className="flex items-center justify-center gap-2">
+                          <Timer className="h-4 w-4" />
+                          <span>Examen</span>
+                        </Link>
+                      </Button>
+                      <Button asChild className="flex-1 sm:flex-none h-11 rounded-full bg-foreground text-background hover:bg-foreground/90 font-medium shadow-md">
+                        <Link to={`/quiz/${session.id}`} className="flex items-center justify-center gap-2">
+                          <Play className="h-4 w-4" />
+                          <span>Commencer</span>
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default QuizLibrary;
+```
+
+

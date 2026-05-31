@@ -1,481 +1,419 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { 
+  Users, Activity, Database, ShieldAlert, 
+  Search, MoreVertical, Crown, Sparkles, 
+  ArrowUpRight, Server, ShieldCheck, Mail, Ban, Pencil, RefreshCw
+} from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, BookOpen, FileText, Brain, ArrowLeft, Shield, RefreshCw, Search, Copy, Pencil, ShieldAlert, Sparkles, Activity, KeyRound, Database, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { AnimatedBanner } from "@/components/AnimatedBanner";
 import { supabase } from "@/integrations/supabase/client";
-import { useUserRole } from "@/hooks/useUserRole";
 import { toast } from "sonner";
 
-interface UserProfile {
+// --- Types ---
+interface AdminUser {
   id: string;
-  name: string | null;
-  first_name: string | null;
-  avatar_url: string | null;
-  plan: string | null;
-  university: string | null;
+  name: string;
+  email: string;
+  plan: "gratuit" | "premium" | "pro";
+  status: "active" | "suspended";
+  lastActive: string;
+  qcmCount: number;
+  credits: number;
 }
 
-interface AdminStats {
-  totalUsers: number;
-  totalCourses: number;
-  totalQuizzes: number;
-  totalSummaries: number;
-}
-
-interface UserWithStats extends UserProfile {
-  courseCount: number;
-  quizCount: number;
-  summaryCount: number;
-}
-
-const Admin = () => {
-  const navigate = useNavigate();
-  const { isAdmin, loading: roleLoading } = useUserRole();
-  const [userEmail, setUserEmail] = useState("");
-  const [stats, setStats] = useState<AdminStats>({ totalUsers: 0, totalCourses: 0, totalQuizzes: 0, totalSummaries: 0 });
-  const [users, setUsers] = useState<UserWithStats[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchText, setSearchText] = useState("");
-  const [editing, setEditing] = useState<UserWithStats | null>(null);
-  const [editForm, setEditForm] = useState({ 
-    first_name: "", 
-    name: "", 
-    plan: "gratuit", 
-    credits: 100, 
-    university: "",
-    student_number: "",
-    year_of_study: ""
-  });
+export const AdminDashboard = () => {
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"users" | "system">("users");
+  const [stats, setStats] = useState({ totalUsers: 0, mrr: 0, premiumCount: 0, proCount: 0, generations: 0 });
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // States for editing
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [editForm, setEditForm] = useState({ plan: "gratuit", credits: 100 });
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUserEmail(user.email || "");
-    });
-  }, []);
-
-  // Admin status is determined SOLELY by the user_roles table via useUserRole() hook
-  // Never use hardcoded email checks — that's a client-side bypass vulnerability
-  const isActuallyAdmin = isAdmin;
-
-  const fetchAdminData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, name, first_name, avatar_url, plan, university, student_number, year_of_study");
-      if (profilesError) {
-        console.error("profiles error:", profilesError);
-        toast.error("Erreur chargement profils: " + profilesError.message);
-      }
-      const [coursesRes, quizzesRes, summariesRes] = await Promise.all([
-        supabase.from("courses").select("id, user_id"),
-        supabase.from("qcm_sessions").select("id, user_id"),
-        supabase.from("summaries").select("id, user_id"),
-      ]);
-
-      const courses = coursesRes.data || [];
-      const quizzes = quizzesRes.data || [];
-      const summaries = summariesRes.data || [];
-
-      setStats({
-        totalUsers: (profiles || []).length,
-        totalCourses: courses.length,
-        totalQuizzes: quizzes.length,
-        totalSummaries: summaries.length,
+  const fetchAdminData = async () => {
+    setIsLoading(true);
+    const { data: profiles, error: profilesError } = await supabase.from('profiles').select('*');
+    const { data: qcms } = await supabase.from('qcm_sessions').select('user_id');
+    
+    if (!profilesError && profiles) {
+      let premium = 0;
+      let pro = 0;
+      
+      const mappedUsers: AdminUser[] = profiles.map(p => {
+        const userPlan = p.plan || "gratuit";
+        if (userPlan === "premium") premium++;
+        if (userPlan === "pro") pro++;
+        
+        return {
+          id: p.id,
+          name: p.name || p.first_name || "Utilisateur",
+          email: p.university || "Non renseigné",
+          plan: userPlan as any,
+          status: "active",
+          lastActive: "Récemment",
+          qcmCount: qcms ? qcms.filter(q => q.user_id === p.id).length : 0,
+          credits: p.credits || 100
+        };
       });
-
-      const usersWithStats: UserWithStats[] = (profiles || []).map((p) => ({
-        ...p,
-        courseCount: courses.filter((c) => c.user_id === p.id).length,
-        quizCount: quizzes.filter((q) => q.user_id === p.id).length,
-        summaryCount: summaries.filter((s) => s.user_id === p.id).length,
-      }));
-
-      setUsers(usersWithStats);
-    } catch (error) {
-      console.error("Error fetching admin data:", error);
-      toast.error("Erreur lors de la récupération des données");
-    } finally { 
-      setLoading(false); 
+      
+      setUsers(mappedUsers);
+      setStats({
+        totalUsers: profiles.length,
+        premiumCount: premium,
+        proCount: pro,
+        mrr: (premium * 5000) + (pro * 10000),
+        generations: qcms ? qcms.length : 0
+      });
     }
-  }, []);
+    setIsLoading(false);
+  };
 
   useEffect(() => {
-    if (roleLoading) return;
-    if (isActuallyAdmin) fetchAdminData();
-  }, [roleLoading, isActuallyAdmin, fetchAdminData]);
+    fetchAdminData();
+  }, []);
 
-  const openEdit = (u: UserWithStats) => {
-    setEditing(u);
-    setEditForm({
-      first_name: u.first_name || "",
-      name: u.name || "",
-      plan: u.plan || "gratuit",
-      credits: 100,
-      university: u.university || "",
-      student_number: u.student_number || "",
-      year_of_study: u.year_of_study || "",
-    });
+  const filteredUsers = users.filter(u => 
+    u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleAction = (action: string, user: AdminUser) => {
+    if (action === "Modifier Plan") {
+      setEditingUser(user);
+      setEditForm({ plan: user.plan, credits: user.credits });
+      return;
+    }
+    
+    if (action === "Suspendre" || action === "Réactiver") {
+      setUsers(users.map(u => u.id === user.id ? { ...u, status: action === "Suspendre" ? "suspended" : "active" } : u));
+      toast.success(`Le statut de ${user.name} a été mis à jour.`);
+      return;
+    }
+    
+    toast.success(`Action "${action}" exécutée pour ${user.name}`);
   };
 
   const saveEdit = async () => {
-    if (!editing) return;
+    if (!editingUser) return;
     setSaving(true);
     
-    // First try standard update
     const { error } = await supabase.from("profiles").update({
-      first_name: editForm.first_name || null,
-      name: editForm.name || null,
       plan: editForm.plan,
-      university: editForm.university || null,
-      student_number: editForm.student_number || null,
-      year_of_study: editForm.year_of_study || null,
-    }).eq("id", editing.id);
-
+      credits: editForm.credits
+    }).eq("id", editingUser.id);
+    
     if (error) {
-      // Fallback to RPC if RLS blocks standard update
       const { error: rpcError } = await supabase.rpc("admin_update_profile" as any, {
-        p_user_id: editing.id,
-        p_first_name: editForm.first_name || null,
-        p_name: editForm.name || null,
+        p_user_id: editingUser.id,
         p_plan: editForm.plan,
         p_credits: editForm.credits,
-        p_university: editForm.university || null,
-        p_student_number: editForm.student_number || null,
-        p_year_of_study: editForm.year_of_study || null,
       });
       if (rpcError) {
-        toast.error("Échec de la modification: " + rpcError.message);
+        toast.error("Erreur de synchronisation.");
         setSaving(false);
         return;
       }
     }
     
-    toast.success("Profil mis à jour avec succès !");
+    toast.success("Profil synchronisé avec la base de données !");
     setSaving(false);
-    setEditing(null);
+    setEditingUser(null);
     fetchAdminData();
   };
 
-  const filteredUsers = useMemo(() => {
-    if (!searchText.trim()) return users;
-    const q = searchText.toLowerCase();
-    return users.filter(u =>
-      (u.first_name || "").toLowerCase().includes(q) ||
-      (u.name || "").toLowerCase().includes(q) ||
-      u.id.toLowerCase().includes(q) ||
-      (u.plan || "").toLowerCase().includes(q) ||
-      (u.university || "").toLowerCase().includes(q)
-    );
-  }, [users, searchText]);
-
-  const copyId = (id: string) => {
-    navigator.clipboard.writeText(id);
-    toast.success("ID copié !");
-  };
-
-  if (roleLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse flex flex-col items-center gap-4">
-          <Shield className="w-10 h-10 text-primary" />
-          <p className="text-muted-foreground font-medium">Vérification des accès...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isActuallyAdmin) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
-        <Card className="max-w-lg w-full border-destructive/20 shadow-xl overflow-hidden relative">
-          <div className="absolute top-0 left-0 w-full h-1 bg-destructive" />
-          <CardContent className="py-10 text-center">
-            <div className="w-20 h-20 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-6">
-              <ShieldAlert className="h-10 w-10 text-destructive" />
-            </div>
-            <h2 className="text-2xl font-bold mb-3 text-foreground">Accès Restreint</h2>
-            <p className="text-muted-foreground mb-6 px-4">
-              Votre compte n'est pas encore enregistré comme administrateur dans la base de données.
-            </p>
-            {userEmail && (
-              <div className="bg-muted/50 rounded-xl p-4 mb-6 text-left">
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Pour activer l'accès admin, exécutez dans Supabase SQL Editor :</p>
-                <code className="text-xs bg-background block p-3 rounded-lg border border-border/50 text-primary font-mono overflow-x-auto whitespace-pre">{`INSERT INTO user_roles (user_id, role)\nSELECT id, 'admin'\nFROM auth.users\nWHERE email = '${userEmail}'\nON CONFLICT DO NOTHING;`}</code>
-                <button
-                  onClick={() => { navigator.clipboard.writeText(`INSERT INTO user_roles (user_id, role)\nSELECT id, 'admin'\nFROM auth.users\nWHERE email = '${userEmail}'\nON CONFLICT DO NOTHING;`); toast.success("Commande SQL copiée !"); }}
-                  className="mt-2 text-xs text-primary hover:underline flex items-center gap-1"
-                >
-                  <Copy className="h-3 w-3" /> Copier la commande SQL
-                </button>
-              </div>
-            )}
-            <Button onClick={() => navigate("/dashboard")} className="bg-foreground text-background w-full sm:w-auto px-8 rounded-full h-12">
-              Retour au tableau de bord
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // --- Animations ---
+  const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+  const itemVariants = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100 } } };
 
   return (
-    <div className="min-h-screen bg-dashboard bg-doodle-watermark py-8 relative overflow-hidden">
-      {/* Background decorations */}
-      <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-accent/10 rounded-full blur-[80px] pointer-events-none" />
-      <div className="max-w-[1600px] mx-auto px-4 relative z-10">
+    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans pt-8 pb-24 w-full">
+      
+      {/* Scrollbar Éditoriale */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .editorial-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .editorial-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .editorial-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+        .editorial-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.25); }
+      `}} />
+
+      <div className="max-w-[1500px] mx-auto px-6 space-y-10">
         
-        {/* Header */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-10 gap-6 pt-8 sm:pt-0">
-          <div className="flex items-center gap-5">
-            <Button variant="outline" size="icon" onClick={() => navigate("/dashboard")} className="rounded-xl h-12 w-12 border-border/50 shadow-sm hover:bg-muted">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest mb-1.5">
-                <Shield className="h-3 w-3" /> Espace Sécurisé
+        {/* LA BANDEROLE ANIMÉE - Version Super Admin */}
+        <AnimatedBanner 
+          title="Centre de Commandement."
+          subtitle="Supervision globale, gestion des étudiants et télémétrie de l'Agent MOR."
+          rightWidgets={
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-black/20 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 shadow-inner">
+                <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-white">Système Opérationnel</span>
               </div>
-              <h1 className="text-3xl sm:text-4xl font-serif font-bold text-foreground">Panneau d'Administration</h1>
+              <button className="h-12 px-6 rounded-full bg-white text-black font-bold uppercase tracking-widest text-[10px] flex items-center gap-2 hover:bg-[#5B21B6] hover:text-white transition-all shadow-md">
+                <Database className="h-4 w-4" /> Sauvegarde BDD
+              </button>
             </div>
-          </div>
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <Badge variant="outline" className="px-3 py-1.5 h-12 flex items-center gap-2 border-border/50 shadow-sm bg-card">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Connecté en tant que: <span className="font-bold">{userEmail}</span>
-            </Badge>
-            <Button onClick={fetchAdminData} disabled={loading} className="rounded-xl h-12 shadow-sm gap-2">
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Actualiser</span>
-            </Button>
-          </div>
+          }
+        />
+
+        {/* TABS DE NAVIGATION INTERNE */}
+        <div className="flex border-b border-black/10 dark:border-white/10">
+          <button 
+            onClick={() => setActiveTab("users")}
+            className={`pb-4 px-6 text-xs font-bold uppercase tracking-widest transition-colors relative ${activeTab === "users" ? "text-[#111111] dark:text-[#F4F4F2]" : "text-[#888888] hover:text-[#111111] dark:hover:text-[#F4F4F2]"}`}
+          >
+            Utilisateurs & Plans
+            {activeTab === "users" && <motion.div layoutId="admin-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#111111] dark:bg-[#F4F4F2]" />}
+          </button>
+          <button 
+            onClick={() => setActiveTab("system")}
+            className={`pb-4 px-6 text-xs font-bold uppercase tracking-widest transition-colors relative ${activeTab === "system" ? "text-[#111111] dark:text-[#F4F4F2]" : "text-[#888888] hover:text-[#111111] dark:hover:text-[#F4F4F2]"}`}
+          >
+            Télémétrie Système
+            {activeTab === "system" && <motion.div layoutId="admin-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#111111] dark:bg-[#F4F4F2]" />}
+          </button>
         </div>
 
-        {/* Overview Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          {[
-            { icon: Users, label: "Utilisateurs Inscrits", value: stats.totalUsers, color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20" },
-            { icon: BookOpen, label: "Cours Importés", value: stats.totalCourses, color: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
-            { icon: Brain, label: "QCM Générés", value: stats.totalQuizzes, color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" },
-            { icon: FileText, label: "Résumés Créés", value: stats.totalSummaries, color: "text-purple-500", bg: "bg-purple-500/10", border: "border-purple-500/20" },
-          ].map((s, i) => (
-            <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
-              <Card className={`border ${s.border} shadow-sm bg-card hover:shadow-md transition-all overflow-hidden relative group`}>
-                <div className={`absolute top-0 right-0 w-32 h-32 ${s.bg} rounded-full blur-[40px] -mr-10 -mt-10 transition-transform group-hover:scale-150`} />
-                <CardContent className="p-6 relative z-10">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`p-3 rounded-2xl ${s.bg}`}><s.icon className={`h-6 w-6 ${s.color}`} /></div>
-                    <Activity className={`h-4 w-4 ${s.color} opacity-50`} />
+        {activeTab === "users" && (
+          <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-10">
+            
+            {/* --- LIGNE 1 : KPIs MONUMENTAUX --- */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* KPI 1 */}
+              <motion.div variants={itemVariants} className="bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 rounded-[2rem] p-8 shadow-sm hover:shadow-md hover:border-[#111111] dark:hover:border-white/30 transition-all duration-300">
+                <div className="flex justify-between items-start mb-6">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Étudiants Inscrits</span>
+                  <div className="p-2 bg-[#FAFAF8] dark:bg-[#111110] rounded-xl border border-black/5 dark:border-white/5">
+                    <Users className="h-4 w-4 text-[#111111]" />
                   </div>
-                  <div>
-                    <p className="text-4xl font-black text-foreground mb-1">{loading ? "-" : s.value}</p>
-                    <p className="text-sm font-medium text-muted-foreground">{s.label}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
+                </div>
+                <div className="flex items-end gap-3">
+                  <span className="text-6xl font-light tracking-tighter text-[#111111]">{stats.totalUsers}</span>
+                  <span className="text-sm font-bold text-emerald-500 mb-2 flex items-center gap-1"><ArrowUpRight className="h-4 w-4" /> 12%</span>
+                </div>
+              </motion.div>
 
-        {/* Database Table */}
-        <Card className="border-border/50 shadow-lg bg-card overflow-hidden">
-          <CardHeader className="border-b border-border/50 bg-muted/20 px-6 py-5">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-xl font-bold"><Database className="h-5 w-5 text-primary" /> Base de Données Utilisateurs</CardTitle>
-                <CardDescription className="mt-1">Gérez les permissions, abonnements et profils ({filteredUsers.length} résultats)</CardDescription>
-              </div>
-              <div className="relative w-full lg:w-96">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Rechercher par nom, email, ID, université..." 
-                  value={searchText} 
-                  onChange={(e) => setSearchText(e.target.value)} 
-                  className="pl-11 h-12 rounded-xl border-border/50 bg-background focus:ring-primary shadow-sm" 
-                />
-              </div>
+              {/* KPI 2 */}
+              <motion.div variants={itemVariants} className="bg-[#111111] border border-[#111111] rounded-[2rem] p-8 shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute -right-10 -top-10 opacity-5 group-hover:scale-110 transition-transform duration-700">
+                  <Crown className="w-48 h-48 text-white" />
+                </div>
+                <div className="flex justify-between items-start mb-6 relative z-10">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">Revenu Récurrent (MRR)</span>
+                </div>
+                <div className="flex items-end gap-3 relative z-10">
+                  <span className="text-6xl font-light tracking-tighter text-white">{stats.mrr.toLocaleString('fr-FR')} FCFA</span>
+                  <span className="text-sm font-bold text-emerald-400 mb-2 flex items-center gap-1"><ArrowUpRight className="h-4 w-4" /> 5%</span>
+                </div>
+                <div className="mt-6 pt-4 border-t border-white/10 relative z-10 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-white/70">
+                  <span>{stats.premiumCount} Premium</span>
+                  <span>{stats.proCount} Pro</span>
+                </div>
+              </motion.div>
+
+              {/* KPI 3 */}
+              <motion.div variants={itemVariants} className="bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 rounded-[2rem] p-8 shadow-sm hover:shadow-md hover:border-[#5B21B6] transition-all duration-300">
+                <div className="flex justify-between items-start mb-6">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Générations IA (Mois)</span>
+                  <div className="p-2 bg-[#5B21B6]/10 rounded-xl border border-[#5B21B6]/20">
+                    <Sparkles className="h-4 w-4 text-[#5B21B6]" />
+                  </div>
+                </div>
+                <div className="flex items-end gap-3">
+                  <span className="text-6xl font-light tracking-tighter text-[#5B21B6]">{stats.generations}</span>
+                </div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mt-4">QCM & Résumés créés</p>
+              </motion.div>
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-muted/30">
-                  <TableRow>
-                    <TableHead className="px-6 py-4 font-semibold text-foreground">Utilisateur</TableHead>
-                    <TableHead className="py-4 font-semibold text-foreground">ID Unique</TableHead>
-                    <TableHead className="py-4 font-semibold text-foreground">Abonnement</TableHead>
-                    <TableHead className="py-4 font-semibold text-foreground">Études</TableHead>
-                    <TableHead className="text-center py-4 font-semibold text-foreground">Activité</TableHead>
-                    <TableHead className="text-right px-6 py-4 font-semibold text-foreground">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="h-48 text-center text-muted-foreground">
-                        <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-primary" />
-                        Synchronisation en cours...
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredUsers.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="h-48 text-center text-muted-foreground">
-                        Aucun utilisateur trouvé.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredUsers.map((user) => (
-                      <TableRow key={user.id} className="hover:bg-muted/30 transition-colors group">
-                        <TableCell className="px-6 py-4">
+
+            {/* --- LIGNE 2 : LE GRAND REGISTRE (Tableau des utilisateurs) --- */}
+            <motion.div variants={itemVariants} className="bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 rounded-[2.5rem] shadow-sm flex flex-col overflow-hidden">
+              
+              {/* Header du Tableau & Filtres */}
+              <div className="p-8 border-b border-black/5 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                <div>
+                  <h3 className="text-2xl font-medium tracking-tight text-[#111111]">Registre des Étudiants</h3>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mt-1">Gérez les accès et les abonnements</p>
+                </div>
+                
+                <div className="relative w-full sm:w-96">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#888888]" />
+                  <input 
+                    type="text" 
+                    placeholder="Rechercher un médecin, un email..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-[#FAFAF8] dark:bg-[#111110] border border-black/10 dark:border-white/10 focus:border-[#5B21B6] rounded-full pl-11 pr-4 py-3 text-sm transition-all outline-none dark:text-[#F4F4F2] dark:placeholder:text-[#666]"
+                  />
+                </div>
+              </div>
+
+              {/* Le Tableau (Style Ledger Suisse) */}
+              <div className="overflow-x-auto editorial-scrollbar">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="px-8 py-5 text-[9px] font-black uppercase tracking-widest text-[#888888] bg-[#FAFAF8]/50 dark:bg-[#111110]/60 border-b border-black/5 dark:border-white/5">Utilisateur</th>
+                      <th className="px-8 py-5 text-[9px] font-black uppercase tracking-widest text-[#888888] bg-[#FAFAF8]/50 dark:bg-[#111110]/60 border-b border-black/5 dark:border-white/5">Plan Actuel</th>
+                      <th className="px-8 py-5 text-[9px] font-black uppercase tracking-widest text-[#888888] bg-[#FAFAF8]/50 dark:bg-[#111110]/60 border-b border-black/5 dark:border-white/5">Statut</th>
+                      <th className="px-8 py-5 text-[9px] font-black uppercase tracking-widest text-[#888888] bg-[#FAFAF8]/50 dark:bg-[#111110]/60 border-b border-black/5 dark:border-white/5">Usage (QCM)</th>
+                      <th className="px-8 py-5 text-[9px] font-black uppercase tracking-widest text-[#888888] bg-[#FAFAF8]/50 dark:bg-[#111110]/60 border-b border-black/5 dark:border-white/5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/5 dark:divide-white/5">
+                    {filteredUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-[#FAFAF8] dark:hover:bg-[#111110] transition-colors group">
+                        
+                        <td className="px-8 py-5">
                           <div className="flex items-center gap-4">
-                            <Avatar className="h-10 w-10 border border-border/50 shadow-sm">
-                              <AvatarImage src={user.avatar_url || undefined} />
-                              <AvatarFallback className="bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
-                                {(user.first_name || user.name || "?").charAt(0).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
+                            <div className={`h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm ${
+                              user.plan === "pro" ? "bg-amber-500" : user.plan === "premium" ? "bg-[#5B21B6]" : "bg-[#111111]"
+                            }`}>
+                              {user.name.charAt(0)}
+                            </div>
                             <div>
-                              <p className="font-bold text-foreground">{user.first_name || ""} {user.name || "Anonyme"}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">{user.university || "Université non renseignée"}</p>
+                              <p className="text-sm font-bold text-[#111111] dark:text-[#F4F4F2]">{user.name}</p>
+                              <p className="text-xs text-[#666666] dark:text-[#999999]">{user.email}</p>
                             </div>
                           </div>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <button onClick={() => copyId(user.id)} className="flex items-center gap-2 text-xs font-mono bg-muted/50 text-muted-foreground hover:text-primary hover:bg-primary/10 px-2 py-1 rounded-md transition-colors group-hover:bg-background">
-                            {user.id.substring(0, 12)}...<Copy className="h-3 w-3" />
-                          </button>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <Badge 
-                            className={`capitalize px-3 py-1 shadow-sm ${
-                              user.plan === "pro" ? "bg-primary hover:bg-primary" : 
-                              user.plan === "premium" ? "bg-accent hover:bg-accent" : 
-                              "bg-muted text-muted-foreground hover:bg-muted"
-                            }`}
-                          >
-                            {user.plan === "pro" && <Sparkles className="w-3 h-3 mr-1" />}
-                            {user.plan || "gratuit"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="flex flex-col gap-1">
-                            <Badge variant="outline" className="w-fit text-[10px] py-0 border-primary/20 text-primary bg-primary/5">
-                              {user.year_of_study || "N/A"}
-                            </Badge>
-                            <span className="text-[10px] text-muted-foreground font-mono">
-                              Matr: {user.student_number || "—"}
+                        </td>
+
+                        <td className="px-8 py-5">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${
+                            user.plan === "pro" ? "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400" :
+                            user.plan === "premium" ? "bg-[#5B21B6]/10 border-[#5B21B6]/20 text-[#5B21B6]" :
+                            "bg-[#FAFAF8] dark:bg-[#111110] border-black/10 dark:border-white/10 text-[#888888]"
+                          }`}>
+                            {user.plan === "pro" && <Crown className="h-3 w-3" />}
+                            {user.plan === "premium" && <Sparkles className="h-3 w-3" />}
+                            {user.plan}
+                          </span>
+                        </td>
+
+                        <td className="px-8 py-5">
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${user.status === "active" ? "bg-emerald-500" : "bg-red-500"}`} />
+                            <span className="text-xs font-bold text-[#111111] dark:text-[#F4F4F2]">
+                              {user.status === "active" ? "Actif" : "Suspendu"}
                             </span>
                           </div>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="flex items-center justify-center gap-3 text-xs font-medium">
-                            <div className="flex flex-col items-center" title="Cours">
-                              <BookOpen className="h-3 w-3 text-muted-foreground mb-1" />
-                              <span className="text-foreground">{user.courseCount}</span>
-                            </div>
-                            <div className="flex flex-col items-center" title="QCM">
-                              <Brain className="h-3 w-3 text-muted-foreground mb-1" />
-                              <span className="text-foreground">{user.quizCount}</span>
-                            </div>
-                            <div className="flex flex-col items-center" title="Résumés">
-                              <FileText className="h-3 w-3 text-muted-foreground mb-1" />
-                              <span className="text-foreground">{user.summaryCount}</span>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right px-6 py-4">
-                          <Button size="sm" variant="secondary" onClick={() => openEdit(user)} className="rounded-lg shadow-sm hover:bg-primary hover:text-background transition-all">
-                            <Pencil className="h-4 w-4 mr-1.5" /> Gérer
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                          <p className="text-[10px] text-[#888888] mt-1">{user.lastActive}</p>
+                        </td>
 
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="max-w-md rounded-[2rem] p-0 overflow-hidden border-border/50 shadow-2xl">
-          <div className="bg-muted/30 px-6 py-5 border-b border-border/50">
+                        <td className="px-8 py-5 font-mono text-sm text-[#111111] dark:text-[#F4F4F2]">
+                          {user.qcmCount}
+                        </td>
+
+                        <td className="px-8 py-5 text-right">
+                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => handleAction("Contacter", user)} className="h-8 w-8 rounded-lg bg-white dark:bg-[#1E1E1C] border border-black/10 dark:border-white/10 flex items-center justify-center hover:border-[#111111] dark:hover:border-white/40 hover:text-[#111111] dark:hover:text-white text-[#888888] transition-colors" title="Envoyer un email">
+                              <Mail className="h-4 w-4" />
+                            </button>
+                            <button onClick={() => handleAction("Modifier Plan", user)} className="h-8 w-8 rounded-lg bg-white dark:bg-[#1E1E1C] border border-black/10 dark:border-white/10 flex items-center justify-center hover:border-[#5B21B6] hover:text-[#5B21B6] text-[#888888] transition-colors" title="Changer l'abonnement">
+                              <Crown className="h-4 w-4" />
+                            </button>
+                            <button onClick={() => handleAction(user.status === "active" ? "Suspendre" : "Réactiver", user)} className={`h-8 w-8 rounded-lg bg-white dark:bg-[#1E1E1C] border flex items-center justify-center transition-colors ${user.status === "active" ? "border-black/10 dark:border-white/10 text-[#888888] hover:border-red-500 hover:text-red-500" : "border-emerald-500 text-emerald-500 hover:bg-emerald-500 hover:text-white"}`} title={user.status === "active" ? "Suspendre le compte" : "Réactiver"}>
+                              {user.status === "active" ? <Ban className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+                            </button>
+                          </div>
+                        </td>
+
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filteredUsers.length === 0 && (
+                  <div className="p-12 text-center text-[#888888] text-sm font-medium">
+                    Aucun étudiant trouvé correspondant à votre recherche.
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* VUE SYSTÈME (Optionnelle, pour la démo) */}
+        {activeTab === "system" && (
+          <motion.div variants={containerVariants} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 rounded-[2.5rem] p-10 shadow-sm">
+               <h3 className="text-xl font-medium tracking-tight text-[#111111] dark:text-[#F4F4F2] mb-6 flex items-center gap-3">
+                 <Server className="h-5 w-5 text-[#5B21B6]" /> État des Serveurs
+               </h3>
+               <div className="space-y-6">
+                 <div>
+                   <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-[#888888] mb-2">
+                     <span>Charge Base de données (Supabase)</span>
+                     <span className="text-[#111111] dark:text-[#F4F4F2]">24%</span>
+                   </div>
+                   <div className="w-full h-2 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+                     <div className="w-[24%] h-full bg-[#111111] dark:bg-white" />
+                   </div>
+                 </div>
+                 <div>
+                   <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-[#888888] mb-2">
+                     <span>Latence API Agent MOR</span>
+                     <span className="text-emerald-500">42ms</span>
+                   </div>
+                   <div className="w-full h-2 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+                     <div className="w-[12%] h-full bg-emerald-500" />
+                   </div>
+                 </div>
+               </div>
+            </div>
+          </motion.div>
+        )}
+
+      </div>
+      
+      {/* EDIT MODAL */}
+      <Dialog open={!!editingUser} onOpenChange={(o) => !o && setEditingUser(null)}>
+        <DialogContent className="max-w-md rounded-[2rem] p-0 overflow-hidden border-black/10 dark:border-white/10 shadow-2xl bg-[#FAFAF8] dark:bg-[#161614]">
+          <div className="bg-white dark:bg-[#1A1A18] px-6 py-5 border-b border-black/5 dark:border-white/5">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-xl"><Pencil className="h-5 w-5 text-primary" /> Modifier l'utilisateur</DialogTitle>
-              <DialogDescription>
-                Synchronisation en temps réel avec la base de données Supabase.
+              <DialogTitle className="flex items-center gap-2 text-xl dark:text-white"><Pencil className="h-5 w-5 text-[#5B21B6]" /> 
+Modifier l'utilisateur</DialogTitle>
+              <DialogDescription className="dark:text-[#999999]">
+                Synchronisation en temps réel avec Supabase.
               </DialogDescription>
             </DialogHeader>
           </div>
           
-          <div className="p-6 space-y-5 bg-background">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Prénom</Label>
-                <Input className="h-12 rounded-xl" value={editForm.first_name} onChange={(e) => setEditForm(f => ({ ...f, first_name: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Nom</Label>
-                <Input className="h-12 rounded-xl" value={editForm.name} onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))} />
-              </div>
+          <div className="p-6 space-y-6 bg-white dark:bg-[#161614]">
+            <div className="space-y-3">
+              <Label className="text-xs font-bold uppercase tracking-widest text-[#888888]">Abonnement Actuel</Label>
+              <Select value={editForm.plan} onValueChange={(v) => setEditForm({ ...editForm, plan: v })}>
+                <SelectTrigger className="w-full h-12 rounded-xl bg-[#FAFAF8] dark:bg-[#111110] border-black/10 dark:border-white/10 focus:ring-[#5B21B6] dark:text-[#F4F4F2]">
+                  <SelectValue placeholder="Sélectionner le plan" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-black/10 dark:border-white/10 bg-white dark:bg-[#161614] dark:text-[#F4F4F2]">
+                  <SelectItem value="gratuit">Gratuit</SelectItem>
+                  <SelectItem value="premium">Premium</SelectItem>
+                  <SelectItem value="pro">Pro</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             
-            <div className="space-y-2">
-              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Université / Faculté</Label>
-              <Input className="h-12 rounded-xl" value={editForm.university} onChange={(e) => setEditForm(f => ({ ...f, university: e.target.value }))} placeholder="Ex: UCAD Dakar" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Niveau d'études</Label>
-                <Input className="h-12 rounded-xl" value={editForm.year_of_study} onChange={(e) => setEditForm(f => ({ ...f, year_of_study: e.target.value }))} placeholder="Ex: L1, M2..." />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">N° Étudiant</Label>
-                <Input className="h-12 rounded-xl" value={editForm.student_number} onChange={(e) => setEditForm(f => ({ ...f, student_number: e.target.value }))} />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Abonnement</Label>
-                <Select value={editForm.plan} onValueChange={(v) => setEditForm(f => ({ ...f, plan: v }))}>
-                  <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="gratuit">Gratuit</SelectItem>
-                    <SelectItem value="premium">Premium</SelectItem>
-                    <SelectItem value="pro">Pro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Crédits (Optionnel)</Label>
-                <Input className="h-12 rounded-xl" type="number" value={editForm.credits} onChange={(e) => setEditForm(f => ({ ...f, credits: parseInt(e.target.value) || 0 }))} />
-              </div>
-            </div>
-            
-            <div className="rounded-xl bg-destructive/5 border border-destructive/10 p-4 flex items-start gap-3">
-              <KeyRound className="h-5 w-5 text-destructive flex-shrink-0" />
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                <strong className="text-destructive block mb-1">Sécurité des identifiants</strong>
-                Pour des raisons de sécurité Supabase, la modification d'email et mot de passe ne peut être faite que par l'utilisateur lui-même via son propre espace.
-              </p>
+            <div className="space-y-3">
+              <Label className="text-xs font-bold uppercase tracking-widest text-[#888888]">Crédits (QCM / Résumés)</Label>
+              <Input 
+                type="number" 
+                value={editForm.credits} 
+                onChange={(e) => setEditForm({ ...editForm, credits: parseInt(e.target.value) || 0 })}
+                className="w-full h-12 rounded-xl bg-[#FAFAF8] dark:bg-[#111110] border-black/10 dark:border-white/10 focus:border-[#5B21B6] focus:ring-1 focus:ring-[#5B21B6] transition-all dark:text-[#F4F4F2]"
+              />
             </div>
           </div>
           
-          <div className="p-4 px-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3">
-            <Button variant="outline" className="rounded-xl px-6" onClick={() => setEditing(null)}>Annuler</Button>
-            <Button className="rounded-xl px-8 shadow-sm" onClick={saveEdit} disabled={saving}>
+          <div className="p-6 bg-white dark:bg-[#161614] border-t border-black/5 dark:border-white/5 flex justify-end gap-3">
+            <Button variant="outline" className="rounded-xl px-6 border-black/10 dark:border-white/10 hover:bg-[#FAFAF8] dark:hover:bg-[#111110] text-[#111111] dark:text-[#F4F4F2]" onClick={() => setEditingUser(null)}>Annuler</Button>
+            <Button className="rounded-xl px-8 shadow-sm bg-[#111111] hover:bg-[#5B21B6] text-white transition-colors" onClick={saveEdit} disabled={saving}>
               {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Database className="h-4 w-4 mr-2" />}
               {saving ? "Synchro..." : "Sauvegarder"}
             </Button>
@@ -486,4 +424,4 @@ const Admin = () => {
   );
 };
 
-export default Admin;
+export default AdminDashboard;

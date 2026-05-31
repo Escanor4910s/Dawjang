@@ -1,0 +1,1 @@
+const fs = require('fs'); let content = fs.readFileSync('recovered_dashboard.tsx', 'utf8'); if (content.startsWith('"')) { content = content.slice(1); } if (content.endsWith('"')) { content = content.slice(0, -1); } content = content.replace(/\\n/g, '\n').replace(/\\"/g, '"'); fs.writeFileSync('src/pages/Dashboard.tsx', content); console.log('Fixed');

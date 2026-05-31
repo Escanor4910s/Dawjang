@@ -6,7 +6,7 @@ import i18n from "@/lib/i18n";
 export interface UserPreferences {
   theme: "light" | "dark" | "system";
   text_size: "small" | "medium" | "large";
-  font_family: "sans-serif" | "serif";
+  font_family: "sans-serif" | "serif" | "open-sans" | "monospace";
   summary_display: "compact" | "standard" | "extended";
   language: "fr" | "en";
   notify_weekly_results: boolean;
@@ -55,7 +55,7 @@ const applyPreferencesToDocument = (prefs: UserPreferences) => {
   root.classList.add(`text-size-${prefs.text_size}`);
   
   // Apply font family
-  root.classList.remove("font-sans-serif", "font-serif");
+  root.classList.remove("font-sans-serif", "font-serif", "font-open-sans", "font-monospace");
   root.classList.add(`font-${prefs.font_family}`);
   
   // Store language preference and sync i18n
@@ -93,12 +93,15 @@ export const UserPreferencesProvider = ({ children }: { children: React.ReactNod
         // The key MUST match what ThemeProvider uses ("quizmed-ui-theme").
         const THEME_STORAGE_KEY = "quizmed-ui-theme";
         const localStorageTheme = localStorage.getItem(THEME_STORAGE_KEY) as UserPreferences["theme"] | null;
+        
+        const FONT_STORAGE_KEY = "hippocampus-font-family";
+        const localStorageFont = localStorage.getItem(FONT_STORAGE_KEY) as UserPreferences["font_family"] | null;
 
         const newPrefs: UserPreferences = {
           // Use localStorage theme if explicitly set, otherwise fall back to DB value
           theme: localStorageTheme || (prefsData.theme as UserPreferences["theme"]) || defaultPreferences.theme,
           text_size: (prefsData.text_size as UserPreferences["text_size"]) || defaultPreferences.text_size,
-          font_family: (prefsData.font_family as UserPreferences["font_family"]) || defaultPreferences.font_family,
+          font_family: localStorageFont || (prefsData.font_family as UserPreferences["font_family"]) || defaultPreferences.font_family,
           summary_display: (prefsData.summary_display as UserPreferences["summary_display"]) || defaultPreferences.summary_display,
           language: (prefsData.language as UserPreferences["language"]) || defaultPreferences.language,
           notify_weekly_results: prefsData.notify_weekly_results ?? defaultPreferences.notify_weekly_results,
@@ -132,6 +135,10 @@ export const UserPreferencesProvider = ({ children }: { children: React.ReactNod
 
       const newPrefs = { ...preferences, ...updates };
       
+      // The database has a CHECK constraint: font_family IN ('sans-serif', 'serif'). 
+      // We map advanced typography to 'sans-serif' for DB storage, while keeping the real value in localStorage.
+      const safeDbFont = ["sans-serif", "serif"].includes(newPrefs.font_family) ? newPrefs.font_family : "sans-serif";
+
       // Update database
       const { error } = await supabase
         .from("user_preferences")
@@ -139,7 +146,7 @@ export const UserPreferencesProvider = ({ children }: { children: React.ReactNod
           user_id: user.id,
           theme: newPrefs.theme,
           text_size: newPrefs.text_size,
-          font_family: newPrefs.font_family,
+          font_family: safeDbFont,
           summary_display: newPrefs.summary_display,
           language: newPrefs.language,
           notify_weekly_results: newPrefs.notify_weekly_results,
@@ -155,6 +162,9 @@ export const UserPreferencesProvider = ({ children }: { children: React.ReactNod
       setPreferences(newPrefs);
       if (updates.theme) {
         setTheme(updates.theme);
+      }
+      if (updates.font_family) {
+        localStorage.setItem("hippocampus-font-family", newPrefs.font_family);
       }
       applyPreferencesToDocument(newPrefs);
     } catch (error) {

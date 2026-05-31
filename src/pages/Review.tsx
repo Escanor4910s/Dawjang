@@ -1,18 +1,18 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, CheckCircle, Brain, RefreshCw, RotateCcw, Trash2, CheckSquare, Sparkles } from "lucide-react";
+import { Brain, RefreshCw, Trash2, CheckSquare, Sparkles, Eye, CheckCircle2, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { calculateSM2, getQualityLabel, getQualityColor } from "@/lib/sm2Algorithm";
+import { calculateSM2, getQualityLabel } from "@/lib/sm2Algorithm";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { AnimatedBanner } from "@/components/AnimatedBanner";
 
 interface ReviewFlashcard {
   id: string; question: string; answer: string; course_id: string;
@@ -39,12 +39,11 @@ const Review = () => {
       const { data, error } = await supabase.from("flashcards").select("id, question, answer, course_id, ease_factor, interval, repetitions, next_review, courses(title)").eq("user_id", user.id).lte("next_review", today).order("next_review", { ascending: true });
       if (error) throw error;
       setCards((data as any) || []);
-    } catch (error) { console.error("Error:", error); toast.error("Erreur de chargement"); } finally { setLoading(false); }
+    } catch (error) { toast.error("Erreur de chargement"); } finally { setLoading(false); }
   }, [navigate]);
 
   useEffect(() => { fetchDueCards(); }, [fetchDueCards]);
 
-  // Get unique courses from due cards
   const cardCourses = useMemo(() => {
     const map = new Map<string, string>();
     for (const c of cards) { if (c.courses?.title && !map.has(c.course_id)) map.set(c.course_id, c.courses.title); }
@@ -68,38 +67,55 @@ const Review = () => {
       setCards(newCards);
       setCurrentIndex((prev) => (prev >= filteredCards.length - 1 ? 0 : prev));
       setShowAnswer(false);
-      toast(quality >= 3 ? "Bien joué !" : "Cette carte reviendra bientôt.", { icon: quality >= 3 ? "✅" : "🔄" });
-    } catch { toast.error("Erreur"); } finally { setUpdating(false); }
+    } catch { toast.error("Erreur de sauvegarde"); } finally { setUpdating(false); }
   };
 
   const handleMassDelete = async () => {
     const ids = Array.from(selectedIds);
     const { error } = await supabase.from("flashcards").delete().in("id", ids);
-    if (error) { toast.error("Erreur"); return; }
+    if (error) { toast.error("Erreur lors de la suppression"); return; }
     setCards(prev => prev.filter(c => !selectedIds.has(c.id)));
     setSelectedIds(new Set()); setSelectMode(false); setCurrentIndex(0);
     toast.success(`${ids.length} carte(s) supprimée(s)`);
   };
 
-  if (loading) return <div className="container mx-auto p-3 sm:p-6"><div className="animate-pulse space-y-4"><div className="h-96 bg-muted rounded-lg"></div></div></div>;
+  const selectAll = () => {
+    if (selectedIds.size === filteredCards.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredCards.map(f => f.id)));
+  };
+
+  const toggleSelect = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedIds(next);
+  };
+
+  if (loading) {
+    return <div className="min-h-screen bg-[#FDFBF7] dark:bg-[#0E0E0C] flex items-center justify-center"><div className="w-8 h-8 border-4 border-[#0F3B2E]/20 border-t-[#0F3B2E] rounded-full animate-spin" /></div>;
+  }
 
   if (cards.length === 0) {
     return (
-      <div className="min-h-screen bg-dashboard text-foreground bg-doodle-watermark font-sans px-4 pt-2 pb-6 sm:px-8 sm:pt-4 sm:pb-8 relative">
-        {/* Background glow effects */}
-        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
-        <div className="max-w-[1400px] mx-auto relative z-10">
-          <Card className="text-center py-16 bg-card/40 backdrop-blur-md rounded-[2rem] border border-border shadow-sm mt-12">
-            <CardHeader>
-              <CheckCircle className="h-20 w-20 text-success mx-auto mb-6" />
-              <CardTitle className="text-2xl sm:text-3xl font-light">Toutes vos révisions sont à jour !</CardTitle>
-              <CardDescription className="text-base mt-2">Aucune flashcard à réviser. Revenez demain !</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
-              <Button onClick={() => navigate("/flashcards")} variant="outline" className="h-12 px-8 rounded-full border-border hover:bg-muted text-foreground font-medium shadow-sm">Voir mes flashcards</Button>
-              <Button onClick={() => navigate("/quiz-library")} className="h-12 px-8 rounded-full bg-foreground text-background hover:bg-foreground/90 font-medium shadow-md">Faire un quiz</Button>
-            </CardContent>
-          </Card>
+      <div className="min-h-screen bg-[#FDFBF7] dark:bg-[#0E0E0C] text-[#1A1A1A] dark:text-[#F4F4F2] bg-doodle-watermark font-sans px-4 pt-12 pb-12 sm:px-8 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#0F3B2E]/5 rounded-full blur-[100px] pointer-events-none" />
+        <div className="max-w-[1200px] mx-auto text-center py-20 relative z-10">
+          <div className="w-24 h-24 bg-white dark:bg-[#161614] border border-black/5 dark:border-white/5 rounded-[2rem] mx-auto flex items-center justify-center mb-8 shadow-sm">
+            <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+          </div>
+          <h1 className="text-4xl sm:text-5xl font-serif text-[#0F3B2E] tracking-tight mb-4">
+            Révisions terminées
+          </h1>
+          <p className="text-[#1A1A1A]/50 font-medium max-w-md mx-auto mb-10">
+            Excellente constance. Votre algorithme d'espacement n'a aucune carte prévue pour l'instant. Profitez-en pour avancer sur de nouveaux cours.
+          </p>
+          <div className="flex justify-center gap-4">
+            <Button asChild variant="outline" className="h-14 px-8 rounded-full border-black/10 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10 font-bold text-[#1A1A1A] dark:text-[#F4F4F2]">
+              <button onClick={() => navigate("/flashcards")}>Gérer mes flashcards</button>
+            </Button>
+            <Button asChild className="h-14 px-8 rounded-full bg-[#0F3B2E] hover:bg-[#1A1A1A] text-white font-bold shadow-md active:scale-[0.98] transition-transform">
+              <button onClick={() => navigate("/dashboard")}>Retour au Dashboard</button>
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -108,115 +124,180 @@ const Review = () => {
   const current = filteredCards[currentIndex];
 
   return (
-    <div className="min-h-screen bg-dashboard text-foreground bg-doodle-watermark font-sans px-4 pt-2 pb-6 sm:px-8 sm:pt-4 sm:pb-8 relative">
-      {/* Background glow effects */}
-      <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
-      
-      <div className="max-w-[1400px] mx-auto space-y-4 sm:space-y-6 relative z-10">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 text-center sm:text-left">
-        <div>
-          <h1 className="text-4xl sm:text-5xl font-light tracking-tight text-foreground flex items-center justify-center sm:justify-start gap-3">
-            <Brain className="h-10 w-10 text-primary" />Révision
-          </h1>
-          <p className="text-sm font-medium text-muted-foreground mt-2">Algorithme SM-2 — Mémorisez durablement</p>
-        </div>
-        <div className="flex gap-2 justify-center sm:justify-end">
-          {cards.length > 0 && (
-            <Button onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }} variant={selectMode ? "default" : "outline"} size="sm" className={selectMode ? "bg-foreground text-background" : "border-foreground/30"}>
-              <CheckSquare className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Sélection</span>
-            </Button>
-          )}
-          <Button onClick={fetchDueCards} variant="outline" size="sm" className="border-foreground/30"><RefreshCw className="h-4 w-4 mr-2" />Actualiser</Button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-[#FDFBF7] dark:bg-[#0E0E0C] text-[#1A1A1A] dark:text-[#F4F4F2] bg-doodle-watermark font-sans px-4 pt-8 pb-12 sm:px-8 relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#0F3B2E]/5 rounded-full blur-[100px] pointer-events-none" />
+      <div className="max-w-[1000px] mx-auto space-y-8 relative z-10">
+        
+        {/* HEADER */}
+        <AnimatedBanner 
+          title="Révision."
+          rightWidgets={
+            <>
+              {/* Bouton Actualiser */}
+              <button 
+                onClick={fetchDueCards}
+                className="h-12 w-12 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white hover:text-black transition-all duration-300"
+                title="Actualiser"
+              >
+                <RotateCw className="h-4 w-4" />
+              </button>
 
-      {/* Filter by lesson */}
-      {cardCourses.length > 1 && (
-        <Tabs value={selectedFilter} onValueChange={(v) => { setSelectedFilter(v); setCurrentIndex(0); setShowAnswer(false); }}>
-          <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 p-1">
-            <TabsTrigger value="all" className="text-xs">Toutes ({cards.length})</TabsTrigger>
+              {/* Bouton Sélection (Correction du bug UX) */}
+              <button 
+                onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+                className={`h-12 px-6 rounded-full backdrop-blur-md border transition-all duration-300 font-bold uppercase tracking-widest text-xs flex items-center gap-2
+                  ${selectMode 
+                    ? "bg-orange-500 border-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.4)]" // État Actif
+                    : "bg-white/10 border-white/20 text-white hover:bg-white hover:text-black hover:border-white" // État Inactif + Hover parfait
+                  }
+                `}
+              >
+                <CheckSquare className="h-4 w-4" />
+                Sélection
+              </button>
+            </>
+          }
+        />
+
+        {/* FILTERS */}
+        {cardCourses.length > 1 && (
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => { setSelectedFilter("all"); setCurrentIndex(0); setShowAnswer(false); }} className={`px-4 py-2 rounded-full text-xs font-bold transition-all border ${selectedFilter === "all" ? "bg-[#1A1A1A] text-white border-[#1A1A1A]" : "bg-white dark:bg-[#161614] text-[#1A1A1A]/60 dark:text-[#F4F4F2]/60 border-black/5 dark:border-white/5 hover:border-black/20 dark:hover:border-white/20"}`}>
+              Toutes ({cards.length})
+            </button>
             {cardCourses.map(c => (
-              <TabsTrigger key={c.id} value={c.id} className="text-xs truncate max-w-[150px]">
+              <button key={c.id} onClick={() => { setSelectedFilter(c.id); setCurrentIndex(0); setShowAnswer(false); }} className={`px-4 py-2 rounded-full text-xs font-bold transition-all border max-w-[200px] truncate ${selectedFilter === c.id ? "bg-[#0F3B2E] text-white border-[#0F3B2E]" : "bg-white dark:bg-[#161614] text-[#1A1A1A]/60 dark:text-[#F4F4F2]/60 border-black/5 dark:border-white/5 hover:border-black/20 dark:hover:border-white/20"}`}>
                 {c.title} ({cards.filter(card => card.course_id === c.id).length})
-              </TabsTrigger>
+              </button>
             ))}
-          </TabsList>
-        </Tabs>
-      )}
-
-      {/* Mass delete */}
-      {selectMode && selectedIds.size > 0 && (
-        <div className="flex items-center justify-between bg-destructive/10 border border-destructive/30 rounded-lg p-3">
-          <span className="text-sm font-medium">{selectedIds.size} sélectionnée(s)</span>
-          <AlertDialog>
-            <AlertDialogTrigger asChild><Button variant="destructive" size="sm"><Trash2 className="h-4 w-4 mr-1" />Supprimer</Button></AlertDialogTrigger>
-            <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Supprimer {selectedIds.size} carte(s) ?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Annuler</AlertDialogCancel><AlertDialogAction onClick={handleMassDelete}>Supprimer</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
-          </AlertDialog>
-        </div>
-      )}
-
-      {selectMode ? (
-        <div className="space-y-2">
-          {filteredCards.map((card) => (
-            <div key={card.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedIds.has(card.id) ? "bg-destructive/5 border-destructive/30" : "bg-card border-border/50 hover:bg-muted/30"}`}
-              onClick={() => { const next = new Set(selectedIds); if (next.has(card.id)) next.delete(card.id); else next.add(card.id); setSelectedIds(next); }}>
-              <Checkbox checked={selectedIds.has(card.id)} className="flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{card.question}</p>
-                <p className="text-xs text-muted-foreground truncate">{card.courses?.title}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : current ? (
-        <>
-          <div className="flex items-center justify-between">
-            <Badge variant="outline">{currentIndex + 1} / {filteredCards.length} à réviser</Badge>
-            <Badge variant="secondary" className="max-w-[200px] truncate">{current.courses?.title}</Badge>
           </div>
+        )}
 
-          <Card className="min-h-[350px] bg-card/80 backdrop-blur-xl border border-white/10 rounded-[2rem] shadow-2xl relative overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-50 pointer-events-none" />
-            <CardHeader className="p-6 sm:p-10 border-b border-border/50 relative z-10">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-6 w-6 text-primary flex-shrink-0 animate-pulse" />
-                <CardTitle className="text-2xl sm:text-3xl font-light leading-relaxed text-foreground">{current.question}</CardTitle>
+        {/* MASS DELETE BAR */}
+        <AnimatePresence>
+          {selectMode && selectedIds.size > 0 && (
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex items-center justify-between bg-rose-50 border border-rose-100 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center gap-4">
+                <Button variant="ghost" size="sm" onClick={selectAll} className="text-rose-700 hover:bg-rose-100 font-semibold text-xs rounded-full">
+                  {selectedIds.size === filteredCards.length ? "Tout désélectionner" : "Tout sélectionner"}
+                </Button>
+                <span className="text-sm font-bold text-rose-900">{selectedIds.size} carte(s) sélectionnée(s)</span>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-8 p-6 sm:p-10 relative z-10">
-              <AnimatePresence mode="wait">
-              {showAnswer ? (
-                <motion.div key="answer" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-                  <div className="p-6 bg-gradient-to-br from-green-50/90 to-emerald-50/50 dark:from-green-900/20 dark:to-emerald-900/10 backdrop-blur-md rounded-2xl border border-green-200/50 dark:border-green-800/30 shadow-inner">
-                    <p className="text-xs font-bold uppercase tracking-widest text-green-700 dark:text-green-400 mb-3 flex items-center gap-2"><Sparkles className="h-4 w-4" /> Réponse :</p>
-                    <p className="text-xl sm:text-2xl text-green-900 dark:text-green-100 font-medium leading-relaxed">{current.answer}</p>
-                  </div>
-                  <div className="space-y-4 pt-6 mt-6 border-t border-border/50">
-                    <p className="text-sm font-bold text-center text-muted-foreground uppercase tracking-widest">Comment avez-vous trouvé cette carte ?</p>
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                      {[0, 1, 2, 3, 4, 5].map((q, idx) => (
-                        <motion.div key={q} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.05 }}>
-                          <Button variant={q >= 3 ? "default" : "outline"} size="sm" disabled={updating} onClick={() => handleRate(q)} className={`w-full flex flex-col h-16 rounded-xl border-border/50 transition-all hover:scale-105 shadow-sm hover:shadow-md ${getQualityColor(q)} ${q >= 3 ? 'text-white' : 'hover:bg-muted/50'}`}>
-                            <span className="text-2xl font-light">{q}</span>
-                            <span className="text-[10px] font-bold uppercase tracking-wider">{getQualityLabel(q)}</span>
-                          </Button>
-                        </motion.div>
-                      ))}
+              <AlertDialog>
+                <AlertDialogTrigger asChild><Button variant="destructive" size="sm" className="rounded-full shadow-sm"><Trash2 className="h-4 w-4 mr-2" /> Supprimer</Button></AlertDialogTrigger>
+                <AlertDialogContent className="rounded-3xl border-black/5 shadow-2xl">
+                  <AlertDialogHeader><AlertDialogTitle className="font-serif text-2xl text-[#1A1A1A]">Suppression définitive</AlertDialogTitle><AlertDialogDescription className="text-base text-[#1A1A1A]/60">Vous allez effacer ces cartes de votre cycle de révision.</AlertDialogDescription></AlertDialogHeader>
+                  <AlertDialogFooter><AlertDialogCancel className="rounded-full">Annuler</AlertDialogCancel><AlertDialogAction onClick={handleMassDelete} className="rounded-full bg-rose-600 hover:bg-rose-700 text-white">Confirmer</AlertDialogAction></AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* REVIEW AREA */}
+        {selectMode ? (
+          <div className="grid gap-3">
+            {filteredCards.map((card) => (
+              <div key={card.id} onClick={() => toggleSelect(card.id)} className={`flex items-start gap-4 p-5 rounded-2xl border transition-colors cursor-pointer ${selectedIds.has(card.id) ? "bg-rose-50/50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-700" : "bg-white dark:bg-[#161614] border-black/5 dark:border-white/5 hover:border-black/20 dark:hover:border-white/20"}`}>
+                <Checkbox checked={selectedIds.has(card.id)} className={`mt-1 rounded-sm ${selectedIds.has(card.id) ? "data-[state=checked]:bg-rose-600 data-[state=checked]:border-rose-600" : ""}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-serif text-[#1A1A1A] mb-1">{card.question}</p>
+                  <p className="text-xs font-bold text-[#1A1A1A]/40 uppercase tracking-wider truncate">{card.courses?.title}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : current ? (
+          <div className="flex flex-col items-center">
+            
+            <div className="w-full flex items-center justify-between mb-8 px-2">
+              <span className="text-xs font-bold text-[#1A1A1A]/40 uppercase tracking-widest">
+                Carte {currentIndex + 1} sur {filteredCards.length}
+              </span>
+              <span className="text-[10px] font-bold text-[#0F3B2E] bg-[#0F3B2E]/5 px-3 py-1.5 rounded-md truncate max-w-[250px]">
+                {current.courses?.title}
+              </span>
+            </div>
+
+            {/* Scrollbar luxueuse invisible - moved to index.css */}
+
+            <Card className="min-h-[450px] bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow duration-300 relative flex flex-col group">
+              <CardHeader className="p-8 md:p-12 border-b border-black/5 dark:border-white/5 flex-shrink-0">
+                <div className="flex items-start gap-4">
+                  <Brain className="h-6 w-6 text-[#5B21B6] flex-shrink-0 mt-1" />
+                  <CardTitle className="text-2xl md:text-3xl font-serif leading-relaxed text-[#111111] dark:text-white">
+                    {current.question}
+                  </CardTitle>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="flex flex-col flex-grow p-8 md:p-12 min-h-0">
+                <AnimatePresence mode="wait">
+                {showAnswer ? (
+                  <motion.div 
+                    key="answer" 
+                    initial={{ opacity: 0, y: 10 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    exit={{ opacity: 0, y: -10 }}
+                    className="flex flex-col h-full"
+                  >
+                    {/* Conteneur de réponse scrollable */}
+                    <div className="flex-grow overflow-y-auto editorial-scrollbar pr-4 mb-8">
+                      <div className="p-6 bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 rounded-2xl">
+                        <p className="text-xs font-bold uppercase tracking-widest text-[#5B21B6] mb-4 flex items-center gap-2">
+                           Réponse :
+                        </p>
+                        <p className="text-xl text-[#111111] dark:text-white font-medium leading-relaxed whitespace-pre-wrap">
+                          {current.answer}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div key="reveal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pt-12 pb-6">
-                  <Button onClick={() => setShowAnswer(true)} variant="outline" className="w-full h-14 rounded-full border-border/50 bg-background/50 hover:bg-muted text-foreground font-medium shadow-sm hover:shadow-md text-lg transition-all group">
-                    <RotateCcw className="h-5 w-5 mr-3 group-hover:-rotate-90 transition-transform duration-500" />Voir la réponse
-                  </Button>
-                </motion.div>
-              )}
-              </AnimatePresence>
-            </CardContent>
-          </Card>
-        </>
-      ) : null}
+
+                    {/* Boutons d'évaluation (fixes en bas) */}
+                    <div className="pt-6 border-t border-black/10 dark:border-white/10 flex-shrink-0">
+                      <p className="text-[10px] font-bold text-center text-[#888888] uppercase tracking-widest mb-4">
+                        Évaluez votre rappel
+                      </p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {[0, 1, 3, 5].map((q) => (
+                          <button 
+                            key={q} 
+                            disabled={updating} 
+                            onClick={() => handleRate(q)} 
+                            className={`flex items-center justify-center h-14 rounded-xl border transition-all duration-200 font-bold text-sm uppercase tracking-wider ${
+                              q >= 3 
+                                ? "bg-white dark:bg-[#161614] border-black/10 dark:border-white/10 text-[#111111] dark:text-white hover:bg-[#5B21B6] hover:text-white hover:border-[#5B21B6]" 
+                                : "bg-white dark:bg-[#161614] border-black/10 dark:border-white/10 text-[#111111] dark:text-white hover:bg-[#111111] hover:text-white"
+                            }`}
+                          >
+                            {q === 0 ? "Oubli" : q === 1 ? "Difficile" : q === 3 ? "Correct" : "Évident"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div 
+                    key="reveal" 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    exit={{ opacity: 0 }} 
+                    className="flex flex-col items-center justify-center flex-grow"
+                  >
+                    <button 
+                      onClick={() => setShowAnswer(true)} 
+                      className="px-10 py-5 rounded-full bg-[#111111] text-white font-bold uppercase tracking-widest text-xs hover:bg-[#5B21B6] transition-colors duration-200 shadow-md flex items-center gap-3 group"
+                    >
+                      Dévoiler la réponse
+                    </button>
+                  </motion.div>
+                )}
+                </AnimatePresence>
+              </CardContent>
+            </Card>
+
+          </div>
+        ) : null}
       </div>
     </div>
   );

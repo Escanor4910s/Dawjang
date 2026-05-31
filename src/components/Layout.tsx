@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { User } from "@supabase/supabase-js";
 import AppSidebar from "./AppSidebar";
-import MorChatWidget from "./MorChatWidget";
+import AgentMor from "./AgentMor";
 import TelegramWidget from "./TelegramWidget";
 import OfflineIndicator from "./OfflineIndicator";
 import GlobalSearch from "./GlobalSearch";
@@ -17,7 +17,24 @@ interface LayoutProps { children: React.ReactNode; }
 const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 1024;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setIsSidebarCollapsed(true);
+      } else {
+        setIsSidebarCollapsed(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null));
@@ -31,26 +48,25 @@ const Layout = ({ children }: LayoutProps) => {
   useRevisionReminder(!!user);
 
   return (
-    <div className="min-h-screen bg-dashboard bg-doodle-watermark overflow-x-hidden">
+    <div className="min-h-screen bg-dashboard bg-doodle-watermark flex flex-col lg:flex-row">
       <OfflineIndicator />
       <GamificationProvider>
         <OnboardingProvider>
           {showSidebar && (
-            <AppSidebar 
-              user={user} 
-              isCollapsed={isSidebarCollapsed} 
-              onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
-            />
+            <div className="lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:z-40">
+              <AppSidebar 
+                user={user} 
+                isCollapsed={isSidebarCollapsed} 
+                onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
+              />
+            </div>
           )}
-          <main className={cn(
-            "transition-all duration-300 min-w-0",
-            showSidebar ? (isSidebarCollapsed ? "md:ml-[72px]" : "md:ml-[282px]") : "min-w-0"
-          )}>
+          <main className="flex-1 min-w-0 flex flex-col relative z-0 w-full">
             {children}
           </main>
           
           {/* Mor widget: hidden on community page to avoid overlap with Telegram */}
-          {user && !isCommunityPage && <MorChatWidget />}
+          {user && !isCommunityPage && <AgentMor />}
           
           {/* Telegram widget: only on community page */}
           {user && isCommunityPage && <TelegramWidget />}

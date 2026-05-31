@@ -4,8 +4,9 @@ import { Download, Smartphone, Check, Share, Plus, ArrowRight, Wifi, WifiOff, Be
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import HippocampusLogo from "@/components/landing/HippocampusLogo";
 import { Link } from "react-router-dom";
+import LandingHeader from "@/components/landing/LandingHeader";
+import LandingFooter from "@/components/landing/LandingFooter";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -88,30 +89,9 @@ const Install = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            <HippocampusLogo size="sm" />
-            <span className="font-bold text-xl">Hippocampus</span>
-          </Link>
-          <div className="flex items-center gap-2">
-            {isOnline ? (
-              <Badge variant="outline" className="text-emerald-500 border-emerald-500/30">
-                <Wifi className="h-3 w-3 mr-1" />
-                En ligne
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="text-amber-500 border-amber-500/30">
-                <WifiOff className="h-3 w-3 mr-1" />
-                Hors-ligne
-              </Badge>
-            )}
-          </div>
-        </div>
-      </header>
+      <LandingHeader forceSolid />
 
-      <main className="container mx-auto px-4 py-12 max-w-4xl">
+      <main className="container mx-auto px-4 py-12 max-w-4xl pt-28">
         {/* Hero Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -277,6 +257,8 @@ const Install = () => {
           </Link>
         </motion.div>
       </main>
+
+      <LandingFooter />
     </div>
   );
 };

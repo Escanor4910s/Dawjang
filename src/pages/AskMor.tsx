@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { safeText } from "@/lib/textUtils";
 import { motion, AnimatePresence } from "framer-motion";
 import DOMPurify from "dompurify";
+import { askMorWithPuter } from "@/lib/puterAiService";
 
 interface Message {
   role: "user" | "assistant";
@@ -126,18 +127,19 @@ const AskMor = ({ embedded = false, initialMessage }: AskMorProps) => {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("ask-mor", {
-        body: {
-          question: userMessage.content,
-          courseId: selectedCourseId,
-        },
-      });
+      const course = courses.find(c => c.id === selectedCourseId);
+      if (!course) throw new Error("Cours non trouvé.");
 
-      if (error) throw error;
+      const chatHistory = [...messages, userMessage].map(msg => ({
+        role: msg.role === "assistant" ? "assistant" as const : "user" as const,
+        content: msg.content
+      }));
 
-      const answerContent = safeText(data.answer, "Réponse non disponible");
-      const safeSources = Array.isArray(data.sources) 
-        ? data.sources.map((s: any) => {
+      const { answer, sources } = await askMorWithPuter(chatHistory, course.content, course.title);
+
+      const answerContent = safeText(answer, "Réponse non disponible");
+      const safeSources = Array.isArray(sources) 
+        ? sources.map((s: any) => {
             if (typeof s === "string") return safeText(s, "");
             return safeText(s.text || s.name || s, "");
           })
@@ -340,7 +342,7 @@ const AskMor = ({ embedded = false, initialMessage }: AskMorProps) => {
           
           <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground/70 font-semibold px-2">
             <span className="flex items-center gap-1.5">
-              <Zap className="h-3 w-3 text-amber-500" /> Propulsé par Lovable AI Gateway
+              <Zap className="h-3 w-3 text-amber-500" /> Propulsé par Puter AI
             </span>
             <span>Mor est un assistant, vérifiez les informations.</span>
           </div>

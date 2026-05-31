@@ -10,7 +10,7 @@ max_rows = 1000
 [db]
 port = 54322
 shadow_port = 54320
-major_version = 15
+major_version = 17
 
 [studio]
 enabled = true
@@ -34,10 +34,22 @@ jwt_expiry = 3600
 enable_signup = true
 
 [functions.generate-quiz-openai]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ask-mor]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-summary]
+verify_jwt = true
+
+[functions.generate-flashcards-openai]
+verify_jwt = true
+
+[functions.cancel-subscription]
+verify_jwt = true
+
+[functions.create-paytech-payment]
+verify_jwt = true
+
+[functions.paytech-webhook]
 verify_jwt = false

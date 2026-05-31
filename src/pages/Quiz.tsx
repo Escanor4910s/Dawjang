@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Brain, Clock, CheckCircle, XCircle, AlertCircle, Sparkles, BookOpen, BarChart3, GraduationCap, MessageCircle, Lightbulb, X, Info } from "lucide-react";
+import { 
+  Brain, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, 
+  BookOpen, BarChart3, GraduationCap, MessageCircle, Info, X, ChevronRight, Check,
+  Swords, Trophy, Users, Zap, Star, HeartPulse, Shield, CornerDownLeft
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { toast as sonnerToast } from "sonner";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import AskMor from "./AskMor";
@@ -17,24 +18,22 @@ import { safeText, safeTextArray } from "@/lib/textUtils";
 import { useGamificationContext } from "@/components/gamification/GamificationProvider";
 import { ShareResults } from "@/components/ShareResults";
 import { shuffleQuiz } from "@/lib/quizShuffle";
+import { motion, AnimatePresence } from "framer-motion";
+import { uiAudio } from "@/utils/audio";
+import { cn } from "@/lib/utils";
 
 interface MorPopup { message: string; type: "encouragement" | "celebration" | "tip"; visible: boolean; }
 interface Question { id?: string; question: string; choices: string[]; correct: number[]; explanation?: string; }
 interface Course { id: string; courseId: string; title: string; questions: Question[]; fileName?: string; questionCount?: number; questionType?: string; aiModel?: string; metadata?: any; createdAt: string; }
 
-const GROUPAGE_BAREME = `Barème de réponses (Groupage) :
-A = 1 + 2 + 3 sont vraies
-B = 1 et 3 seulement sont vraies
-C = 2 et 4 sont les seules justes
-D = 4 uniquement est juste
-E = Autre combinaison`;
-
+const GROUPAGE_BAREME = `Barème de réponses (Groupage) :\nA = 1 + 2 + 3 sont vraies\nB = 1 et 3 seulement sont vraies\nC = 2 et 4 sont les seules justes\nD = 4 uniquement est juste\nE = Autre combinaison`;
 const GROUPAGE_ANSWERS = ["A", "B", "C", "D", "E"];
 
 const Quiz = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
   const [course, setCourse] = useState<Course | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedAnswers, setSelectedAnswers] = useState<{ [key: number]: number[] }>({});
@@ -43,7 +42,14 @@ const Quiz = () => {
   const [morOpen, setMorOpen] = useState(false);
   const [morContext, setMorContext] = useState<string>("");
   const [morPopup, setMorPopup] = useState<MorPopup>({ message: "", type: "encouragement", visible: false });
+  const [expandedAnswers, setExpandedAnswers] = useState<{ [key: number]: boolean }>({});
   const { recordQuizCompletion } = useGamificationContext();
+
+  // Gamification & Carousel States
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [showExplanation, setShowExplanation] = useState(false);
+  const [scoreELO, setScoreELO] = useState(2150);
+  const [streak, setStreak] = useState(0);
 
   useEffect(() => {
     const loadQuizSession = async () => {
@@ -80,26 +86,58 @@ const Quiz = () => {
     if (!showResults) { const timer = setInterval(() => setTimeElapsed(prev => prev + 1), 1000); return () => clearInterval(timer); }
   }, [showResults]);
 
-  const handleAnswerSelect = (questionIndex: number, answerIndex: number) => {
+  const handleAnswerSelect = (answerIndex: number) => {
+    if (showExplanation) return;
+    uiAudio.playSoftClick();
     const qType = course?.questionType;
     if (qType === "election" || qType === "censure" || qType === "groupage") {
-      setSelectedAnswers(prev => ({ ...prev, [questionIndex]: [answerIndex] }));
+      setSelectedAnswers(prev => ({ ...prev, [currentIndex]: [answerIndex] }));
     } else {
       setSelectedAnswers(prev => {
-        const current = prev[questionIndex] || [];
+        const current = prev[currentIndex] || [];
         const newAnswers = current.includes(answerIndex) ? current.filter(i => i !== answerIndex) : [...current, answerIndex];
-        return { ...prev, [questionIndex]: newAnswers };
+        return { ...prev, [currentIndex]: newAnswers };
       });
     }
   };
 
-  const openMorExplanation = (question: Question) => {
-    const context = `Question: ${question.question}\n\nChoix:\n${question.choices.map((c, i) => `${i + 1}. ${c}`).join('\n')}\n\nRéponse(s): ${question.correct.map(i => question.choices[i]).join(', ')}`;
-    setMorContext(context);
-    setMorOpen(true);
+  const submitAnswer = () => {
+    const currentSel = selectedAnswers[currentIndex] || [];
+    if (currentSel.length === 0) return;
+    
+    setShowExplanation(true);
+    const question = questions[currentIndex];
+    const isCorrect = currentSel.length === question.correct.length && currentSel.every(a => question.correct.includes(a));
+    
+    if (isCorrect) {
+      uiAudio.playSuccessChime();
+      setStreak(prev => prev + 1);
+      setScoreELO(prev => prev + 25);
+      sonnerToast.success("Justesse Clinique !", {
+        description: "+25 ELO. Votre raisonnement est solide.",
+        icon: <Trophy className="h-5 w-5 text-amber-500" />
+      });
+    } else {
+      uiAudio.playError();
+      setStreak(0);
+      setScoreELO(prev => prev - 15);
+      sonnerToast.error("Erreur de Diagnostic.", {
+        description: "-15 ELO. L'analyse de l'Agent MOR est recommandée."
+      });
+    }
+  };
+
+  const calculateScore = () => {
+    let correct = 0;
+    questions.forEach((question, index) => {
+      const sel = selectedAnswers[index] || [];
+      if (sel.length === question.correct.length && sel.every(a => question.correct.includes(a))) correct++;
+    });
+    return { correct, total: questions.length };
   };
 
   const submitQuiz = async () => {
+    uiAudio.playSuccessChime();
     const { correct, total } = calculateScore();
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -131,301 +169,465 @@ const Quiz = () => {
               answer: q.correct.map(i => q.choices[i]).join(", ") + (q.explanation ? `\n\nExplication: ${q.explanation}` : ""),
             })));
           }
-          sonnerToast.success("Résultats sauvegardés !");
+          sonnerToast.success("Résultats sauvegardés avec succès.");
         }
       }
     } catch (error) { console.error("Error saving:", error); }
 
     const percentage = (correct / total) * 100;
-    const popupMessage = percentage >= 80 ? "🎉 Bravo ! Excellent travail !" : percentage >= 60 ? "👏 Bien joué ! Continue !" : percentage >= 40 ? "💡 Pas mal ! Consulte la révision !" : "🩺 Ne t'inquiète pas ! Clique sur 'Explication' !";
+    const popupMessage = percentage >= 80 ? "Diagnostic parfait, excellent raisonnement clinique !" : percentage >= 60 ? "Solide, mais des détails vous échappent." : percentage >= 40 ? "Des révisions approfondies sont nécessaires." : "Alerte Rouge. Reprenez le cours d'urgence.";
     const popupType = percentage >= 80 ? "celebration" : percentage >= 40 ? "encouragement" : "tip";
     setMorPopup({ message: popupMessage, type: popupType as any, visible: true });
     setTimeout(() => setMorPopup(prev => ({ ...prev, visible: false })), 6000);
     setShowResults(true);
   };
 
-  const calculateScore = () => {
-    let correct = 0;
-    questions.forEach((question, index) => {
-      const sel = selectedAnswers[index] || [];
-      if (sel.length === question.correct.length && sel.every(a => question.correct.includes(a))) correct++;
-    });
-    return { correct, total: questions.length };
+  const goToNextQuestion = () => {
+    if (currentIndex < questions.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+      setShowExplanation(false);
+    } else {
+      submitQuiz();
+    }
+  };
+
+  const openMorExplanation = (question: Question) => {
+    const context = `Question: ${question.question}\n\nChoix:\n${question.choices.map((c, i) => `${i + 1}. ${c}`).join('\n')}\n\nRéponse(s): ${question.correct.map(i => question.choices[i]).join(', ')}\n\nExplication: ${question.explanation}`;
+    setMorContext(context);
+    setMorOpen(true);
   };
 
   const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
 
-  const isGroupage = course?.questionType === "groupage";
-  const isElection = course?.questionType === "election";
-  const isCensure = course?.questionType === "censure";
-
-  if (!course || questions.length === 0) {
-    return (<div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><Brain className="h-12 w-12 text-primary mx-auto mb-4 animate-pulse" /><p className="text-muted-foreground">Chargement du quiz...</p></div></div>);
-  }
-
-  if (showResults) {
-    const { correct, total } = calculateScore();
-    const percentage = Math.round((correct / total) * 100);
-    return (
-      <div className="min-h-screen bg-background py-8">
-        <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto">
-            <Card className="bg-card shadow-card border-0 animate-fade-in">
-              <CardHeader className="text-center pb-6">
-                <div className={`p-4 rounded-full w-20 h-20 mx-auto mb-6 animate-scale-in ${percentage >= 70 ? 'bg-success' : percentage >= 50 ? 'bg-primary' : 'bg-destructive'}`}>
-                  {percentage >= 70 ? <CheckCircle className="h-12 w-12 text-success-foreground" /> : <XCircle className="h-12 w-12 text-destructive-foreground" />}
-                </div>
-                <CardTitle className="text-3xl mb-2">Quiz terminé !</CardTitle>
-                <CardDescription className="text-lg">{course.title}</CardDescription>
-              </CardHeader>
-              <CardContent className="text-center space-y-8">
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-muted/50 p-6 rounded-xl animate-fade-in" style={{ animationDelay: '0.1s' }}><p className="text-3xl font-bold text-success">{correct}</p><p className="text-sm text-muted-foreground mt-1">Correctes</p></div>
-                  <div className="bg-muted/50 p-6 rounded-xl animate-fade-in" style={{ animationDelay: '0.2s' }}><p className="text-3xl font-bold text-destructive">{total - correct}</p><p className="text-sm text-muted-foreground mt-1">Incorrectes</p></div>
-                  <div className="bg-muted/50 p-6 rounded-xl animate-fade-in" style={{ animationDelay: '0.3s' }}><p className="text-3xl font-bold text-foreground">{formatTime(timeElapsed)}</p><p className="text-sm text-muted-foreground mt-1">Temps</p></div>
-                </div>
-                <div className="space-y-3 animate-fade-in" style={{ animationDelay: '0.4s' }}>
-                  <div className="flex justify-between text-lg"><span className="font-medium">Score final</span><span className="font-bold text-primary">{percentage}%</span></div>
-                  <Progress value={percentage} className="h-4" />
-                </div>
-                <div className="pt-4 animate-fade-in" style={{ animationDelay: '0.5s' }}>
-                  <p className="text-sm text-muted-foreground mb-4">Accès rapide</p>
-                  <div className="grid grid-cols-3 gap-4">
-                    <button onClick={() => navigate("/dashboard")} className="group flex flex-col items-center p-4 rounded-xl bg-muted/50 hover:bg-foreground/10 transition-smooth">
-                      <BarChart3 className="h-8 w-8 text-foreground mb-2 group-hover:scale-110 transition-transform" /><span className="text-xs font-medium">Dashboard</span>
-                    </button>
-                    <button onClick={() => navigate("/review")} className="group flex flex-col items-center p-4 rounded-xl bg-muted/50 hover:bg-foreground/10 transition-smooth">
-                      <BookOpen className="h-8 w-8 text-foreground mb-2 group-hover:scale-110 transition-transform" /><span className="text-xs font-medium">Révision</span>
-                    </button>
-                    <button onClick={() => navigate("/flashcards")} className="group flex flex-col items-center p-4 rounded-xl bg-muted/50 hover:bg-foreground/10 transition-smooth">
-                      <GraduationCap className="h-8 w-8 text-foreground mb-2 group-hover:scale-110 transition-transform" /><span className="text-xs font-medium">Flashcards</span>
-                    </button>
-                  </div>
-                </div>
-                <ShareResults score={correct} total={total} title={course.title} />
-                <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                  <Button variant="outline" onClick={() => window.location.reload()} className="flex-1 border-foreground/30">Recommencer</Button>
-                  <Button onClick={() => navigate("/quiz-library")} className="flex-1 bg-foreground text-background hover:bg-foreground/90">Retour aux QCM</Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const answeredCount = Object.keys(selectedAnswers).filter(key => selectedAnswers[parseInt(key)]?.length > 0).length;
-  const progress = (answeredCount / questions.length) * 100;
-
-  // For groupage: extract assertions from question text (they are embedded as "1. ...\n2. ...\n...")
   const parseGroupageAssertions = (questionText: string): { mainQuestion: string; assertions: string[] } => {
     const lines = questionText.split('\n');
     const assertions: string[] = [];
     const mainLines: string[] = [];
     for (const line of lines) {
       const match = line.trim().match(/^(\d+)\.\s*(.+)/);
-      if (match) {
-        assertions.push(match[2]);
-      } else if (line.trim()) {
-        mainLines.push(line.trim());
-      }
+      if (match) assertions.push(match[2]);
+      else if (line.trim()) mainLines.push(line.trim());
     }
     return { mainQuestion: mainLines.join(' '), assertions };
   };
 
-  return (
-    <div className="min-h-screen bg-background bg-doodle-watermark py-4 sm:py-8 relative">
-      {morPopup.visible && (
-        <div className="fixed top-20 right-3 left-3 sm:left-auto sm:right-6 z-50 sm:max-w-sm animate-in slide-in-from-right-5 fade-in">
-          <Card className={`shadow-xl border-2 ${morPopup.type === "celebration" ? "border-success bg-success/5" : morPopup.type === "tip" ? "border-primary bg-primary/5" : "border-warning bg-warning/5"}`}>
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between"><div className="flex items-center gap-2"><Brain className="h-5 w-5" /><CardTitle className="text-lg">Mor</CardTitle></div>
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setMorPopup(prev => ({ ...prev, visible: false }))}><X className="h-4 w-4" /></Button>
-              </div>
-            </CardHeader>
-            <CardContent><p className="text-sm">{morPopup.message}</p></CardContent>
-          </Card>
+  if (!course || questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] flex flex-col items-center justify-center">
+        <div className="relative">
+          <div className="absolute inset-0 bg-[#5B21B6]/20 rounded-full animate-ping" />
+          <Brain className="h-12 w-12 text-[#5B21B6] relative z-10 animate-pulse" />
         </div>
-      )}
+        <p className="mt-6 text-[10px] font-bold uppercase tracking-widest text-[#888888]">Génération de l'Épreuve...</p>
+      </div>
+    );
+  }
 
-      <div className="container mx-auto px-3 sm:px-4 relative z-10">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="mb-6 sm:mb-8 animate-fade-in">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-              <div className="min-w-0 pt-8 sm:pt-0">
-                <h1 className="text-xl sm:text-3xl font-bold text-foreground mb-1 truncate">{course.title}</h1>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm text-muted-foreground">{answeredCount} / {questions.length} répondues</p>
-                  {isGroupage && (
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-7 text-xs border-foreground/30"><Info className="h-3 w-3 mr-1" />Barème</Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-sm">
-                        <DialogHeader><DialogTitle>Barème Groupage</DialogTitle></DialogHeader>
-                        <pre className="text-sm whitespace-pre-wrap bg-muted/50 p-4 rounded-lg">{GROUPAGE_BAREME}</pre>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                  {isElection && <Badge variant="outline" className="text-xs border-success/50 text-success">Élection : 1 bonne réponse</Badge>}
-                  {isCensure && <Badge variant="outline" className="text-xs border-destructive/50 text-destructive">Censure : 1 mauvaise réponse</Badge>}
-                </div>
+  const isGroupage = course?.questionType === "groupage";
+  const isElection = course?.questionType === "election";
+  const isCensure = course?.questionType === "censure";
+  
+  if (showResults) {
+    const { correct, total } = calculateScore();
+    const percentage = Math.round((correct / total) * 100);
+    const isSuccess = percentage >= 60;
+
+    return (
+      <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-white font-sans py-12 flex items-center justify-center">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="max-w-3xl w-full mx-auto px-6">
+          <div className="bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 shadow-2xl rounded-[3rem] p-10 md:p-16 relative overflow-hidden text-center">
+            <div className={`absolute top-0 left-0 right-0 h-3 ${isSuccess ? "bg-emerald-500" : "bg-rose-500"}`} />
+            <div className={`mx-auto w-24 h-24 rounded-full flex items-center justify-center mb-8 ${isSuccess ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"}`}>
+              {isSuccess ? <CheckCircle2 className="h-12 w-12" /> : <XCircle className="h-12 w-12" />}
+            </div>
+            <h1 className="text-4xl md:text-5xl font-light tracking-tighter mb-4">Bilan de l'Épreuve</h1>
+            <p className="text-[#888888] font-medium text-lg mb-12">{course.title}</p>
+            <div className="grid grid-cols-3 gap-4 md:gap-8 mb-12">
+              <div className="bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 rounded-2xl p-6">
+                <p className="text-4xl font-light text-emerald-500">{correct}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mt-2">Correctes</p>
               </div>
-              <div className="flex items-center space-x-2 text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full self-start sm:self-auto flex-shrink-0">
-                <Clock className="h-4 w-4" /><span className="font-medium text-sm">{formatTime(timeElapsed)}</span>
+              <div className="bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 rounded-2xl p-6">
+                <p className="text-4xl font-light text-rose-500">{total - correct}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mt-2">Erreurs</p>
+              </div>
+              <div className="bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 rounded-2xl p-6">
+                <p className="text-4xl font-light text-[#111111] dark:text-white">{formatTime(timeElapsed)}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mt-2">Chrono</p>
               </div>
             </div>
-            <Progress value={progress} className="h-2 sm:h-3" />
-          </div>
-
-          {/* Questions */}
-          <div className="space-y-6 mb-8">
-            {questions.map((question, questionIndex) => {
-              const isAnswered = selectedAnswers[questionIndex]?.length > 0;
-              const isMulti = question.correct?.length > 1 && !isGroupage && !isElection && !isCensure;
-
-              // For groupage: parse assertions from the question text
-              const groupageData = isGroupage ? parseGroupageAssertions(question.question) : null;
-
-              return (
-                <Card key={question.id} className={`bg-card shadow-card border-2 transition-smooth animate-fade-in hover:shadow-medical ${isAnswered ? 'border-success/50' : 'border-border'}`}
-                  style={{ animationDelay: `${Math.min(questionIndex * 0.05, 0.5)}s` }}>
-                  <CardHeader className="p-4 sm:p-6">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <Badge variant={isAnswered ? "default" : "outline"} className="mb-2 text-xs">Question {questionIndex + 1}</Badge>
-                        {isGroupage && groupageData ? (
-                          <CardTitle className="text-base sm:text-lg leading-relaxed">{safeText(groupageData.mainQuestion)}</CardTitle>
-                        ) : (
-                          <CardTitle className="text-base sm:text-lg leading-relaxed">{safeText(question.question)}</CardTitle>
-                        )}
-                      </div>
-                      {isAnswered && <CheckCircle className="h-5 w-5 text-success ml-2 flex-shrink-0 mt-1" />}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-4 sm:p-6 pt-0">
-                    {isGroupage && groupageData && groupageData.assertions.length > 0 ? (
-                      <>
-                        {/* Show numbered assertions */}
-                        <div className="space-y-2 mb-4">
-                          {groupageData.assertions.map((assertion, idx) => (
-                            <div key={idx} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border border-border">
-                              <div className="w-7 h-7 rounded-lg border-2 border-foreground/30 flex items-center justify-center flex-shrink-0 font-bold text-sm text-foreground">
-                                {idx + 1}
-                              </div>
-                              <p className="text-sm sm:text-base text-foreground leading-relaxed flex-1">{assertion}</p>
-                            </div>
-                          ))}
-                        </div>
-                        {/* Show A-E answer buttons */}
-                        <div className="grid grid-cols-5 gap-2 mb-4">
-                          {GROUPAGE_ANSWERS.map((letter, index) => {
-                            const isSelected = selectedAnswers[questionIndex]?.includes(index) || false;
-                            return (
-                              <button key={index}
-                                className={`p-3 sm:p-4 rounded-lg cursor-pointer transition-smooth border-2 flex items-center justify-center font-bold text-lg ${
-                                  isSelected ? 'border-foreground bg-foreground text-background shadow-sm' : 'border-muted hover:border-foreground/30 hover:bg-muted/50 text-foreground'
-                                }`}
-                                onClick={() => handleAnswerSelect(questionIndex, index)}>
-                                {letter}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </>
-                    ) : (
-                      /* Standard choices for classique, election, censure, etc. */
-                      <div className="space-y-2 sm:space-y-3 mb-4">
-                        {question.choices?.map((choice, index) => {
-                          const isSelected = selectedAnswers[questionIndex]?.includes(index) || false;
-                          const letter = String.fromCharCode(65 + index);
-                          return (
-                            <div key={index}
-                              className={`flex items-center gap-3 p-3 sm:p-4 rounded-lg cursor-pointer transition-smooth border-2 ${
-                                isSelected ? 'border-foreground bg-foreground/10 shadow-sm' : 'border-muted hover:border-foreground/30 hover:bg-muted/50'
-                              }`}
-                              onClick={() => handleAnswerSelect(questionIndex, index)}>
-                              <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg border-2 flex items-center justify-center flex-shrink-0 font-bold text-sm ${
-                                isSelected ? 'border-foreground bg-foreground text-background' : 'border-muted-foreground/50 text-muted-foreground'
-                              }`}>{letter}</div>
-                              <Label className="flex-1 cursor-pointer text-foreground leading-relaxed text-sm sm:text-base">{safeText(choice)}</Label>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {isMulti && (
-                      <div className="mb-4 p-3 bg-muted/50 rounded-lg">
-                        <div className="flex items-center space-x-2 text-sm text-muted-foreground"><AlertCircle className="h-4 w-4 flex-shrink-0" /><span>Sélectionnez toutes les bonnes réponses</span></div>
-                      </div>
-                    )}
-
-                    {/* Answer accordion */}
-                    <Accordion type="single" collapsible className="w-full">
-                      <AccordionItem value="answer">
-                        <AccordionTrigger className="text-sm hover:no-underline">
-                          <div className="flex items-center gap-2"><Brain className="h-4 w-4 text-foreground" /><span>Voir la réponse</span></div>
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <div className="pt-2 space-y-3">
-                            <div className="p-4 bg-success/10 border-l-4 border-success rounded">
-                              <p className="text-sm font-medium text-success mb-2">✓ Réponse correcte :</p>
-                              {isGroupage ? (
-                                <p className="text-2xl font-bold text-success">{GROUPAGE_ANSWERS[question.correct[0]]}</p>
-                              ) : (
-                                <p className="text-sm">{question.correct.map(i => `${String.fromCharCode(65 + i)}. ${safeText(question.choices[i])}`).join('\n')}</p>
-                              )}
-                            </div>
-                            {question.explanation && (
-                              <div className="p-4 bg-muted/50 rounded">
-                                <p className="text-sm font-medium mb-2">Explication :</p>
-                                <p className="text-sm text-muted-foreground">{safeText(question.explanation)}</p>
-                              </div>
-                            )}
-                            <Button variant="outline" size="sm" onClick={() => openMorExplanation(question)} className="w-full border-foreground/30">
-                              <MessageCircle className="h-4 w-4 mr-2" />Demander à Mor
-                            </Button>
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          {/* Submit */}
-          <Card className="bg-card shadow-medical border-0 sticky bottom-4 sm:bottom-6 animate-fade-in">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
-                <div className="text-center sm:text-left">
-                  <p className="font-medium text-sm sm:text-base">Prêt à soumettre ?</p>
-                  <p className="text-xs sm:text-sm text-muted-foreground">{answeredCount} / {questions.length} répondues</p>
-                </div>
-                <Button onClick={submitQuiz} disabled={answeredCount === 0} size="lg" className="bg-foreground text-background hover:bg-foreground/90 w-full sm:w-auto">
-                  Soumettre <CheckCircle className="h-5 w-5 ml-2" />
-                </Button>
+            <div className="mb-12">
+              <div className="flex justify-between items-end mb-4">
+                <span className="text-sm font-bold uppercase tracking-widest text-[#111111] dark:text-white">Score Global</span>
+                <span className={`text-4xl font-black ${isSuccess ? "text-emerald-500" : "text-rose-500"}`}>{percentage}%</span>
               </div>
-            </CardContent>
-          </Card>
+              <div className="h-2 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+                <motion.div initial={{ width: 0 }} animate={{ width: `${percentage}%` }} transition={{ duration: 1, ease: "easeOut" }} className={`h-full ${isSuccess ? "bg-emerald-500" : "bg-rose-500"}`} />
+              </div>
+            </div>
+            <ShareResults score={correct} total={total} title={course.title} />
+            <div className="grid sm:grid-cols-2 gap-4 mt-12">
+              <Button onClick={() => window.location.reload()} className="h-14 rounded-full bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 text-[#111111] dark:text-white font-bold uppercase tracking-widest text-xs hover:bg-[#FAFAF8] dark:hover:bg-[#0E0E0C] transition-all">
+                Refaire l'Épreuve
+              </Button>
+              <Button onClick={() => navigate("/dashboard")} className="h-14 rounded-full bg-[#111111] dark:bg-white text-white dark:text-[#111111] font-bold uppercase tracking-widest text-xs hover:bg-[#5B21B6] transition-all shadow-xl">
+                Quitter l'arène
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  const currentQuestion = questions[currentIndex];
+  const groupageData = isGroupage ? parseGroupageAssertions(currentQuestion.question) : null;
+  const isMulti = currentQuestion.correct?.length > 1 && !isGroupage && !isElection && !isCensure;
+  
+  // Calculate active progress metrics
+  let currentCorrect = 0;
+  let currentIncorrect = 0;
+  for (let i = 0; i < currentIndex; i++) {
+    const sel = selectedAnswers[i] || [];
+    const q = questions[i];
+    const isC = sel.length === q.correct.length && sel.every(a => q.correct.includes(a));
+    if (isC) currentCorrect++;
+    else currentIncorrect++;
+  }
+  if (showExplanation) {
+    const sel = selectedAnswers[currentIndex] || [];
+    const q = questions[currentIndex];
+    const isC = sel.length === q.correct.length && sel.every(a => q.correct.includes(a));
+    if (isC) currentCorrect++;
+    else currentIncorrect++;
+  }
+
+  const cardVariants = { hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } } };
+  const morVariants = { hidden: { x: "100%" }, visible: { x: 0, transition: { type: "spring", stiffness: 300, damping: 30 } } };
+
+  return (
+    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0A0A0A] text-[#111111] dark:text-[#F4F4F2] font-sans selection:bg-[#5B21B6]/30 transition-colors duration-500">
+      
+      {/* ─── INJECTION CSS POUR LA VAGUE ANIMÉE (Niveau 40/40) ─── */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes nebula-wave {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .bg-nebula-header {
+          /* Dégradé mouvant : Noir profond, Violet Hippocampus, Rose Magenta, Noir */
+          background: linear-gradient(-45deg, #050505, #5B21B6, #EC4899, #050505);
+          background-size: 300% 300%;
+          animation: nebula-wave 12s ease infinite;
+        }
+      `}} />
+
+      {/* ─── HEADER FIXE (La Nébuleuse Animée) ─── */}
+      <div className="sticky top-0 z-50 bg-nebula-header shadow-[0_10px_30px_-10px_rgba(91,33,182,0.4)] border-b border-white/10">
+        <div className="max-w-[1500px] mx-auto px-6 h-24 flex items-center justify-between">
+          
+          {/* Section Gauche : Logo & Titre (En blanc pour le contraste) */}
+          <div className="flex items-center gap-4">
+            <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/20 shadow-inner">
+              <Zap className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white drop-shadow-md">QCM Arena.</h1>
+              <p className="text-[10px] font-black uppercase tracking-widest text-white/70 max-w-[200px] md:max-w-[400px] truncate">{course.title}</p>
+            </div>
+          </div>
+
+          {/* Section Droite : Statistiques & Action */}
+          <div className="flex items-center gap-6">
+            
+            {/* Le bloc Stats en Verre Sablé (Contraste parfait avec la vague) */}
+            <div className="hidden md:flex items-center gap-8 px-8 py-3 bg-white/15 backdrop-blur-2xl rounded-full border border-white/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)]">
+              <div className="text-center">
+                <span className="text-[9px] font-black uppercase tracking-widest text-white/70 drop-shadow-sm">Score ELO</span>
+                <p className="text-xl font-medium tracking-tight text-white drop-shadow-md">{scoreELO}</p>
+              </div>
+              <div className="w-px h-8 bg-white/20" />
+              <div className="text-center">
+                <span className="text-[9px] font-black uppercase tracking-widest text-white/70 drop-shadow-sm">Série</span>
+                <p className="text-xl font-medium tracking-tight text-emerald-400 drop-shadow-md flex items-center justify-center gap-1">
+                  {streak}<Star className="h-3 w-3 fill-emerald-400 text-emerald-400" />
+                </p>
+              </div>
+              <div className="w-px h-8 bg-white/20" />
+              <div className="text-center">
+                <span className="text-[9px] font-black uppercase tracking-widest text-white/70 drop-shadow-sm">Chrono</span>
+                <p className="text-xl font-mono font-medium tracking-tight text-white drop-shadow-md">{formatTime(timeElapsed)}</p>
+              </div>
+            </div>
+            
+            {/* Le Bouton Soumettre : Blanc pur massif (Luxe et Lisibilité) */}
+            {showExplanation ? (
+              <button 
+                onClick={goToNextQuestion}
+                className="h-14 px-10 rounded-full bg-white text-[#111111] font-black uppercase tracking-widest text-xs hover:bg-gray-100 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+              >
+                {currentIndex < questions.length - 1 ? "Question Suivante" : "Terminer"}
+              </button>
+            ) : (
+              <button 
+                onClick={submitAnswer} 
+                disabled={!(selectedAnswers[currentIndex]?.length > 0)}
+                className="h-14 px-10 rounded-full bg-white text-[#111111] font-black uppercase tracking-widest text-xs hover:bg-gray-100 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] disabled:opacity-50 disabled:hover:scale-100"
+              >
+                Soumettre
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      <Sheet open={morOpen} onOpenChange={setMorOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col">
-          <SheetHeader className="px-6 py-4 border-b">
-            <SheetTitle className="flex items-center gap-3">
-              <div className="bg-foreground p-2 rounded-lg"><MessageCircle className="h-5 w-5 text-background" /></div>
-              <div><h2 className="text-xl font-bold">Mor - Explication</h2><p className="text-sm text-muted-foreground font-normal">Je vais t'aider</p></div>
-            </SheetTitle>
-          </SheetHeader>
-          <div className="flex-1 overflow-hidden"><AskMor embedded initialMessage={`Explique cette question:\n\n${morContext}`} /></div>
-        </SheetContent>
-      </Sheet>
+      {/* ─── LE COEUR DE LA PAGE (Structure Volumétrique) ─── */}
+      <div className="max-w-[1500px] mx-auto px-6 pt-36 pb-40 grid lg:grid-cols-12 gap-10 items-start relative z-10">
+        
+        {/* =========================================================
+            COLONNE GAUCHE (8/12) : LA CARTE QCM (Cadrage Bleu-Violet)
+            ========================================================= */}
+        <motion.div 
+          key={currentIndex}
+          initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="lg:col-span-8 bg-white dark:bg-[#161614] border-[1.5px] border-indigo-500/30 dark:border-indigo-500/40 rounded-[3rem] p-10 md:p-14 shadow-[0_20px_80px_-15px_rgba(99,102,241,0.08)] dark:shadow-[0_20px_80px_-15px_rgba(0,0,0,0.5)] relative overflow-hidden"
+        >
+          {/* Filigrane de spécialité en arrière-plan */}
+          <div className="absolute top-0 right-0 p-10 opacity-[0.03] dark:opacity-[0.02] pointer-events-none group-hover:scale-110 transition-transform duration-700">
+            <HeartPulse className="w-64 h-64 text-[#111111] dark:text-white" />
+          </div>
+
+          <div className="relative z-10">
+            
+            {/* L'En-tête de la Question */}
+            <div className="flex items-center justify-between mb-10 pb-6 border-b border-black/5 dark:border-white/5">
+              {/* Le Badge Bleu-Violet Massif */}
+              <span className="text-[11px] font-black uppercase tracking-[0.15em] text-white bg-indigo-600 px-5 py-2.5 rounded-xl shadow-md">
+                Question {currentIndex + 1} / {questions.length}
+              </span>
+              <div className="flex items-center gap-2">
+                {isMulti && <span className="text-[10px] font-bold uppercase tracking-widest text-[#5B21B6] border border-[#5B21B6]/20 bg-[#5B21B6]/5 px-3 py-1.5 rounded-xl">Multiples</span>}
+                {isGroupage && <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 rounded-xl">Groupage</span>}
+                <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-xl">
+                  <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                    Niveau : {course.metadata?.difficulty || "Intermédiaire"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Texte de la Question - Grandiose et Imposant */}
+            <h2 className="text-3xl md:text-4xl font-serif text-[#111111] dark:text-white leading-[1.6] mb-14">
+              {isGroupage && groupageData ? safeText(groupageData.mainQuestion) : safeText(currentQuestion.question)}
+            </h2>
+
+            {/* Groupage Assertions */}
+            {isGroupage && groupageData && groupageData.assertions.length > 0 && (
+                <div className="space-y-4 mb-10">
+                  {groupageData.assertions.map((assertion, idx) => (
+                    <div key={idx} className="flex items-start gap-4 p-5 rounded-2xl bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5">
+                      <div className="h-7 w-7 shrink-0 rounded-full border border-black/20 dark:border-white/20 flex items-center justify-center text-[10px] font-bold text-[#888888]">
+                        {idx + 1}
+                      </div>
+                      <p className="text-sm font-medium leading-relaxed text-[#111111] dark:text-white">{assertion}</p>
+                    </div>
+                  ))}
+                </div>
+            )}
+
+            {/* Corps des Choix (Mécaniques et Tactiles) */}
+            {isGroupage && groupageData && groupageData.assertions.length > 0 ? (
+                <div className="flex flex-wrap gap-3">
+                  {GROUPAGE_ANSWERS.map((letter, index) => {
+                    const isSelected = selectedAnswers[currentIndex]?.includes(index);
+                    const isCorrect = currentQuestion.correct.includes(index);
+                    
+                    let choiceStyle = "border-black/10 dark:border-white/10 bg-[#FAFAF8] dark:bg-[#0A0A0A] hover:border-[#111111] dark:hover:border-white/40 text-[#111111] dark:text-[#F4F4F2]";
+                    if (isSelected) choiceStyle = "border-indigo-600 bg-indigo-600 text-white shadow-lg";
+                    
+                    if (showExplanation) {
+                      if (isCorrect) choiceStyle = "border-emerald-500 bg-emerald-500 text-white";
+                      else if (isSelected) choiceStyle = "border-rose-500 bg-rose-500/90 text-white opacity-70";
+                      else choiceStyle = "border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#0A0A0A] opacity-40";
+                    }
+
+                    return (
+                      <motion.button 
+                        key={index}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handleAnswerSelect(index)}
+                        className={`h-16 flex-1 min-w-[60px] rounded-2xl border-[1.5px] font-bold text-xl transition-all duration-300 outline-none ${choiceStyle}`}
+                      >
+                        {letter}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+            ) : (
+                <div className="space-y-5">
+                {currentQuestion.choices.map((choice, index) => {
+                    const isSelected = selectedAnswers[currentIndex]?.includes(index);
+                    const isCorrect = currentQuestion.correct.includes(index);
+                    
+                    let choiceStyle = "border-black/10 dark:border-white/10 bg-[#FAFAF8] dark:bg-[#0A0A0A] hover:border-[#111111] dark:hover:border-white/40 text-[#111111] dark:text-[#F4F4F2]";
+                    let letterStyle = "border-black/20 dark:border-white/20 text-[#888888]";
+
+                    if (isSelected) {
+                        choiceStyle = "border-indigo-600 bg-indigo-600/5 dark:bg-indigo-600/10";
+                        letterStyle = "border-indigo-600 bg-indigo-600 text-white";
+                    }
+                    
+                    if (showExplanation) {
+                        if (isCorrect) {
+                            choiceStyle = "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+                            letterStyle = "border-emerald-500 bg-emerald-500 text-white";
+                        } else if (isSelected) {
+                            choiceStyle = "border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-400 opacity-70";
+                            letterStyle = "border-rose-500 bg-rose-500 text-white";
+                        } else {
+                            choiceStyle = "border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#0A0A0A] opacity-40";
+                        }
+                    }
+
+                    return (
+                    <motion.button
+                        key={index}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handleAnswerSelect(index)}
+                        className={`w-full text-left p-6 rounded-2xl border-[1.5px] transition-all duration-300 flex items-start gap-6 outline-none shadow-sm hover:shadow-md ${choiceStyle}`}
+                    >
+                        <div className={`h-10 w-10 shrink-0 rounded-xl border-[1.5px] flex items-center justify-center text-xl font-bold transition-all duration-300 mt-0.5 ${letterStyle}`}>
+                        {String.fromCharCode(65 + index)}
+                        </div>
+                        <span className="text-lg font-medium leading-relaxed pt-1 flex-1">
+                        {safeText(choice)}
+                        </span>
+                        {showExplanation && isCorrect && <CheckCircle2 className="h-6 w-6 text-emerald-500 mt-3" />}
+                        {showExplanation && isSelected && !isCorrect && <X className="h-6 w-6 text-rose-500 mt-3" />}
+                    </motion.button>
+                    );
+                })}
+                </div>
+            )}
+
+            <AnimatePresence>
+              {showExplanation && (
+                <motion.div 
+                  initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden mt-12 pt-10 border-t border-black/5 dark:border-white/5"
+                >
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-center bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 rounded-full p-2 pl-6">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#888888]">Justification Clinique</span>
+                        <div className="flex gap-1.5">
+                            <span className="px-3 py-1 bg-white dark:bg-[#161614] shadow-sm rounded-md text-[9px] font-black uppercase tracking-widest text-[#111111] dark:text-white">Confiance: 5/5 ⭐</span>
+                        </div>
+                    </div>
+                    
+                    <div className="font-serif text-lg leading-relaxed text-[#111111] dark:text-[#F4F4F2]">
+                      {currentQuestion.explanation ? safeText(currentQuestion.explanation) : "L'IA n'a pas fourni d'explication détaillée pour cette question."}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+          </div>
+        </motion.div>
+
+        {/* =========================================================
+            COLONNE DROITE (4/12) : L'AGENT MOR ET LE BILAN
+            ========================================================= */}
+        <div className="lg:col-span-4 space-y-8 sticky top-36">
+          
+          {/* L'AGENT MOR (Design Purifié) */}
+          <div className="bg-white dark:bg-[#161614] border-[1.5px] border-black/5 dark:border-white/5 rounded-[2.5rem] p-10 shadow-sm relative overflow-hidden group hover:border-[#5B21B6]/30 transition-colors duration-500">
+            <div className="relative z-10 flex flex-col items-center text-center">
+              <Brain className="h-14 w-14 text-[#5B21B6] mb-6 drop-shadow-sm" />
+              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-[#111111] dark:text-white mb-2">Agent MOR (AI)</h3>
+              <p className="text-[9px] font-black uppercase tracking-widest text-[#888888] mb-8">Supervision Clinique Active</p>
+              
+              <AnimatePresence mode="wait">
+                {showExplanation ? (
+                    <motion.div key="result" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full">
+                        <button 
+                            onClick={() => openMorExplanation(currentQuestion)}
+                            className="w-full flex justify-between items-center p-5 bg-[#FAFAF8] dark:bg-[#0A0A0A] rounded-2xl border-[1.5px] border-black/5 dark:border-white/5 hover:border-[#5B21B6] hover:bg-[#5B21B6]/5 group transition-colors shadow-sm"
+                        >
+                            <span className="text-[10px] font-black uppercase tracking-widest text-[#111111] dark:text-white flex items-center gap-2">
+                                <MessageCircle className="h-4 w-4" /> Décortiquer la réponse
+                            </span>
+                            <ChevronRight className="h-4 w-4 text-[#888888] group-hover:text-[#5B21B6] transition-colors" />
+                        </button>
+                    </motion.div>
+                ) : (
+                    <motion.div key="waiting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full flex flex-col gap-4">
+                        <div className="w-full h-2 bg-[#FAFAF8] dark:bg-[#0A0A0A] rounded-full overflow-hidden shadow-inner border border-black/5 dark:border-white/5">
+                            <motion.div className="h-full bg-[#5B21B6]" initial={{ width: 0 }} animate={{ width: (selectedAnswers[currentIndex]?.length > 0) ? "100%" : "30%" }} transition={{ duration: 1.5 }}/>
+                        </div>
+                        <p className="text-xs font-medium text-[#666666] dark:text-[#8E8E8A]">L'Agent MOR analyse votre raisonnement thérapeutique...</p>
+                    </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* BILAN DE SESSION */}
+          <div className="bg-white dark:bg-[#161614] border-[1.5px] border-black/5 dark:border-white/5 rounded-[2.5rem] p-10 shadow-sm">
+             <h3 className="text-sm font-bold text-[#111111] dark:text-white flex items-center gap-3 mb-8 pb-4 border-b border-black/5 dark:border-white/5">
+                 <GraduationCap className="h-5 w-5 text-[#888888]" /> Bilan de Session
+             </h3>
+             
+             <div className="space-y-8">
+                 <div>
+                     <div className="flex justify-between items-end mb-4">
+                         <span className="text-[10px] font-black uppercase tracking-widest text-[#888888]">Progression</span>
+                         <p className="text-2xl font-light tracking-tighter">{currentIndex + (showExplanation ? 1 : 0)} <span className="text-[11px] font-bold uppercase text-[#888888]">/ {questions.length}</span></p>
+                     </div>
+                     <Progress value={((currentIndex + (showExplanation ? 1 : 0)) / questions.length) * 100} className="h-1.5 w-full bg-[#FAFAF8] dark:bg-[#0A0A0A] [&>div]:bg-[#111111] dark:[&>div]:bg-white" />
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-4">
+                     <div className="p-4 bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 rounded-2xl flex flex-col justify-center">
+                         <span className="text-4xl font-light tracking-tighter text-emerald-500 mb-1">{currentCorrect}</span>
+                         <span className="text-[9px] font-black uppercase tracking-widest text-[#888888]">Réponses Justes</span>
+                     </div>
+                     <div className="p-4 bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 rounded-2xl flex flex-col justify-center">
+                         <span className="text-4xl font-light tracking-tighter text-rose-500 mb-1">{currentIncorrect}</span>
+                         <span className="text-[9px] font-black uppercase tracking-widest text-[#888888]">Erreurs</span>
+                     </div>
+                 </div>
+             </div>
+          </div>
+        </div>
+      </div>
+      
+      <AnimatePresence>
+        {morOpen && (
+          <motion.div 
+            variants={morVariants} initial="hidden" animate="visible" exit="hidden"
+            className="fixed top-0 bottom-0 right-0 z-[200] w-full sm:max-w-lg bg-[#FAFAF8] dark:bg-[#0A0A0A] border-l-[1.5px] border-black/10 dark:border-white/10 shadow-2xl flex flex-col"
+          >
+            <div className="p-6 border-b-[1.5px] border-black/5 dark:border-white/5 bg-white dark:bg-[#161614] shrink-0">
+                <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-lg font-bold text-[#111111] dark:text-white flex items-center gap-2">
+                        <MessageCircle className="h-5 w-5 text-[#5B21B6]" /> Analyse Morphologique
+                    </h2>
+                    <button onClick={() => setMorOpen(false)} className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-[#888888] transition-colors">
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#888888]">Discussion avec l'Agent MOR - Justification du QCM ID {currentIndex + 1}</p>
+            </div>
+            
+            <div className="flex-1 overflow-hidden p-6 editorial-scrollbar bg-[#FAFAF8] dark:bg-[#0A0A0A]">
+                <AskMor initialMessage={`Analyse cliniquement l'explication suivante du QCM :\n\n${morContext}`} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

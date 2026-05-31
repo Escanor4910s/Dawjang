@@ -152,7 +152,7 @@ serve(async (req) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Internal server error";
     return new Response(JSON.stringify({ error: message }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
   }

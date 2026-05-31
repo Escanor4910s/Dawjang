@@ -51,7 +51,7 @@ const Terms = () => {
       
       {/* Hero Section */}
       <div className="pt-32 pb-16 px-6 relative overflow-hidden bg-primary text-[#FDFBF7]">
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none" />
+        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none" />
         <div className="max-w-5xl mx-auto relative z-10 text-center">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
             <div className="flex justify-center mb-6">

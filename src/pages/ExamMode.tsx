@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import {
   Brain, Clock, CheckCircle, XCircle, AlertCircle, Timer,
-  Maximize, ChevronLeft, ChevronRight, Ban, Eye, EyeOff
+  Maximize, ChevronLeft, ChevronRight, Ban, Eye, EyeOff,
+  ShieldAlert, CheckCircle2, HeartPulse, LayoutGrid
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -283,161 +284,249 @@ const ExamMode = () => {
     );
   }
 
+  const changeQuestion = (newIndex: number) => {
+    if (newIndex >= 0 && newIndex < questions.length) {
+      recordQuestionTime();
+      setCurrentIndex(newIndex);
+    }
+  };
+
   const question = questions[currentIndex];
-  const isMultiple = question.correct.length > 1;
-  const isLocked = locked[currentIndex];
-  const answeredCount = Object.keys(locked).length;
-  const timerPct = (timeLeft / totalTime) * 100;
+  if (!question) return null;
+  const isMultiple = question.correct && question.correct.length > 1;
+  const answeredCount = Object.keys(selectedAnswers).filter(k => selectedAnswers[parseInt(k, 10)]?.length > 0).length;
+  const progressPercent = questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
+  const timeElapsed = totalTime - Math.max(0, timeLeft);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Exam Header - Mobile optimized */}
-      <div className="sticky top-0 z-50 bg-card border-b border-border px-3 sm:px-4 py-2 sm:py-3">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Badge variant="secondary" className="text-[10px] sm:text-xs flex-shrink-0">
-              <Timer className="h-3 w-3 mr-1" /> EXAMEN
-            </Badge>
-            <span className="text-xs sm:text-sm text-muted-foreground hidden sm:inline truncate">{sessionTitle}</span>
+    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0A0A0A] text-[#111111] dark:text-[#F4F4F2] font-sans selection:bg-[#5B21B6]/30 transition-colors duration-500">
+      
+      {/* ─── INJECTION CSS : VAGUE NÉBULEUSE (Identique au mode Pratique) ─── */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes nebula-wave {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .bg-nebula-header {
+          background: linear-gradient(-45deg, #050505, #5B21B6, #EC4899, #050505);
+          background-size: 300% 300%;
+          animation: nebula-wave 12s ease infinite;
+        }
+      `}} />
+
+      {/* ─── HEADER FIXE (L'Arène d'Examen) ─── */}
+      <div className="sticky top-0 z-50 bg-nebula-header shadow-[0_10px_30px_-10px_rgba(91,33,182,0.4)] border-b border-white/10">
+        <div className="max-w-[1500px] mx-auto px-6 h-24 flex items-center justify-between">
+          
+          {/* Section Gauche : Logo & Titre */}
+          <div className="flex items-center gap-4">
+            <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/20 shadow-inner">
+              <ShieldAlert className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white drop-shadow-md">Mode Examen.</h1>
+              <p className="text-[10px] font-black uppercase tracking-widest text-white/70">
+                {sessionTitle || "Évaluation Clinique"}
+              </p> 
+            </div>
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-3">
-            <div className={`flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-mono font-bold ${
-              timeLeft < 60 ? 'bg-destructive/10 text-destructive animate-pulse' :
-              timeLeft < 300 ? 'bg-warning/10 text-warning' : 'bg-muted text-foreground'
-            }`}>
-              <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-              {formatTime(timeLeft)}
+          {/* Section Droite : Chrono, Quitter & Soumettre */}
+          <div className="flex items-center gap-4 md:gap-6">
+            
+            {/* Le Chronomètre Officiel */}
+            <div className="flex items-center gap-4 px-6 py-3 bg-white/15 backdrop-blur-2xl rounded-full border border-white/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] hidden sm:flex">
+              <Clock className="h-4 w-4 text-white/80" />
+              <div className="text-center flex items-center gap-3">
+                <span className="text-[9px] font-black uppercase tracking-widest text-white/70 drop-shadow-sm">Temps Écoulé</span>
+                <p className="text-xl font-mono font-bold tracking-tight text-white drop-shadow-md">
+                  {formatTime(timeElapsed)}
+                </p> 
+              </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setIsPaused(!isPaused)} className="h-8 w-8 p-0">
-              {isPaused ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={toggleFullscreen} className="h-8 w-8 p-0 hidden sm:flex">
-              <Maximize className="h-4 w-4" />
-            </Button>
+            
+            {/* BOUTON QUITTER LE MODE EXAMEN */}
+            <button 
+              onClick={() => navigate('/quiz-library')}
+              className="h-12 px-6 rounded-full bg-transparent text-white/80 font-bold uppercase tracking-widest text-[10px] border border-white/20 hover:bg-rose-500/20 hover:text-white hover:border-rose-500/50 transition-all duration-300"
+            >
+              Quitter
+            </button>
+
+            {/* Bouton Soumettre l'Examen Entier */}
+            <button 
+              onClick={handleSubmit}
+              className="h-14 px-10 rounded-full bg-white text-[#111111] font-black uppercase tracking-widest text-xs hover:bg-gray-100 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
+            >
+              <CheckCircle2 className="h-4 w-4" /> Terminer
+            </button>
           </div>
         </div>
-        <Progress value={timerPct} className="h-1 mt-2" />
+        
+        {/* Barre de progression globale de l'examen */}
+        <div className="h-1 w-full bg-white/10">
+          <motion.div 
+            className="h-full bg-emerald-400" 
+            initial={{ width: 0 }} 
+            animate={{ width: `${progressPercent}%` }}
+            transition={{ ease: "easeOut" }} 
+          />
+        </div>
       </div>
 
-      {/* Pause overlay */}
-      <AnimatePresence>
-        {isPaused && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-background/95 flex items-center justify-center"
-          >
-            <div className="text-center">
-              <p className="text-2xl font-bold mb-4">Examen en pause</p>
-              <Button onClick={() => setIsPaused(false)} size="lg">Reprendre</Button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ─── LE COEUR DE LA PAGE (Structure Volumétrique) ─── */}
+      <div className="max-w-[1500px] mx-auto px-6 pt-36 pb-40 grid lg:grid-cols-12 gap-10 items-start relative z-10">
+        
+        {/* =========================================================
+            COLONNE GAUCHE (8/12) : LA CARTE QCM (Cadrage Bleu-Violet)
+            ========================================================= */}
+        <motion.div 
+          key={currentIndex}
+          initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          className="lg:col-span-8 bg-white dark:bg-[#161614] border-[1.5px] border-indigo-500/30 dark:border-indigo-500/40 rounded-[3rem] p-10 md:p-14 shadow-[0_20px_80px_-15px_rgba(99,102,241,0.08)] dark:shadow-[0_20px_80px_-15px_rgba(0,0,0,0.5)] relative overflow-hidden"
+        >
+          {/* Filigrane de spécialité en arrière-plan */}
+          <div className="absolute top-0 right-0 p-10 opacity-[0.03] dark:opacity-[0.02] pointer-events-none">
+            <HeartPulse className="w-64 h-64 text-[#111111] dark:text-white" />
+          </div>
 
-      {/* Question */}
-      <div className="flex-1 container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-3xl">
-        {/* Question navigator - scrollable on mobile */}
-        <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-4 sm:mb-6 max-h-24 overflow-y-auto">
-          {questions.map((_, i) => (
-            <button
-              key={i}
-              disabled={i > currentIndex && !locked[currentIndex]}
-              className={`w-7 h-7 sm:w-8 sm:h-8 rounded text-[10px] sm:text-xs font-medium transition-colors ${
-                i === currentIndex ? 'bg-primary text-primary-foreground' :
-                locked[i] ? 'bg-success/20 text-success' :
-                'bg-muted text-muted-foreground'
-              }`}
-            >
-              {i + 1}
-            </button>
-          ))}
-        </div>
-
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentIndex}
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -30 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Card className="border-2">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <Badge variant="outline">Question {currentIndex + 1} / {questions.length}</Badge>
-                  {isMultiple && (
-                    <Badge variant="secondary">
-                      <AlertCircle className="h-3 w-3 mr-1" /> Choix multiples
-                    </Badge>
-                  )}
-                </div>
-                <CardTitle className="text-lg mt-3 leading-relaxed">{question.question}</CardTitle>
-              </CardHeader>
-               <CardContent className="space-y-2 sm:space-y-3">
-                {question.choices.map((choice, idx) => {
-                  const isSelected = selectedAnswers[currentIndex]?.includes(idx);
-                  return (
-                    <button
-                      key={idx}
-                      disabled={isLocked}
-                      onClick={() => handleAnswerSelect(idx)}
-                      className={`w-full text-left flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg border-2 transition-all text-sm sm:text-base ${
-                        isLocked
-                          ? question.correct.includes(idx)
-                            ? 'border-success bg-success/10'
-                            : isSelected
-                              ? 'border-destructive bg-destructive/10'
-                              : 'border-muted'
-                          : isSelected
-                            ? 'border-primary bg-primary/10'
-                            : 'border-muted hover:border-primary/50'
-                      }`}
-                    >
-                      <div className={`w-5 h-5 sm:w-6 sm:h-6 ${isMultiple ? 'rounded-sm' : 'rounded-full'} border-2 flex items-center justify-center flex-shrink-0 ${
-                        isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground'
-                      }`}>
-                        {isSelected && <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 ${isMultiple ? 'rounded-sm' : 'rounded-full'} bg-primary-foreground`} />}
-                      </div>
-                      <Label className="cursor-pointer flex-1 leading-relaxed">{choice}</Label>
-                      {isLocked && question.correct.includes(idx) && <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-success flex-shrink-0" />}
-                      {isLocked && isSelected && !question.correct.includes(idx) && <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-destructive flex-shrink-0" />}
-                    </button>
-                  );
-                })}
-
-                {isLocked && question.explanation && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="p-4 bg-muted/50 rounded-lg mt-4">
-                    <p className="text-sm font-medium mb-1">Explication :</p>
-                    <p className="text-sm text-muted-foreground">{question.explanation}</p>
-                  </motion.div>
+          <div className="relative z-10">
+            {/* L'En-tête de la Question */}
+            <div className="flex items-center justify-between mb-10 pb-6 border-b border-black/5 dark:border-white/5">
+              <span className="text-[11px] font-black uppercase tracking-[0.15em] text-white bg-indigo-600 px-5 py-2.5 rounded-xl shadow-md">
+                Question {currentIndex + 1} / {questions.length}
+              </span>
+              <div className="flex items-center gap-2">
+                {isMultiple && (
+                   <span className="text-[10px] font-bold uppercase tracking-widest text-[#5B21B6] bg-[#5B21B6]/10 px-3 py-1.5 rounded-lg border border-[#5B21B6]/20">
+                     Choix Multiples
+                   </span>
                 )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        </AnimatePresence>
+              </div>
+            </div>
 
-        {/* Navigation - Mobile optimized */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between mt-4 sm:mt-6 gap-3">
-          <div className="text-sm text-muted-foreground text-center sm:text-left">
-            {answeredCount} / {questions.length} verrouillées
+            {/* Texte de la Question - Grandiose et Imposant */}
+            <h2 className="text-3xl md:text-4xl font-serif text-[#111111] dark:text-white leading-[1.6] mb-14">
+              {question.question}
+            </h2>
+
+            {/* Corps des Choix (Mécaniques et Tactiles - Sans révéler la réponse) */}
+            <div className="space-y-5">
+              {question.choices.map((choice, index) => {
+                const isSelected = selectedAnswers[currentIndex]?.includes(index);
+                
+                return (
+                  <motion.button
+                    key={index}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleAnswerSelect(index)}
+                    className={`w-full text-left p-6 rounded-2xl border-[1.5px] transition-all duration-300 flex items-start gap-6 outline-none shadow-sm hover:shadow-md ${
+                      isSelected 
+                        ? "border-indigo-600 bg-indigo-600/5 dark:bg-indigo-600/10" 
+                        : "border-black/10 dark:border-white/10 bg-[#FAFAF8] dark:bg-[#0A0A0A] hover:border-[#111111] dark:hover:border-white/40"
+                    }`}
+                  >
+                    <div className={`h-10 w-10 shrink-0 rounded-xl border-[1.5px] flex items-center justify-center text-xl font-bold transition-all duration-300 mt-0.5 ${
+                      isSelected ? "border-indigo-600 bg-indigo-600 text-white" : "border-black/20 dark:border-white/20 text-[#888888]"
+                    }`}>
+                      {String.fromCharCode(65 + index)}
+                    </div>
+                    <span className={`text-lg font-medium leading-relaxed pt-1 flex-1 ${isSelected ? "text-indigo-900 dark:text-indigo-200" : "text-[#111111] dark:text-[#F4F4F2]"}`}>
+                      {choice}
+                    </span>
+                  </motion.button>
+                );
+              })}
+            </div>
+            
+            {/* Boutons de Navigation (Précédent / Suivant) spécifiques au mode Examen */}
+            <div className="flex justify-between items-center mt-12 pt-8 border-t border-black/5 dark:border-white/5">
+                <button 
+                  onClick={() => changeQuestion(currentIndex - 1)}
+                  disabled={currentIndex === 0}
+                  className="px-6 py-3 rounded-xl border border-black/10 dark:border-white/10 text-xs font-bold uppercase tracking-widest text-[#111111] dark:text-white disabled:opacity-30 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                >
+                  Précédent
+                </button>
+                <button 
+                  onClick={() => changeQuestion(currentIndex + 1)}
+                  disabled={currentIndex === questions.length - 1}
+                  className="px-6 py-3 rounded-xl border border-[#111111] dark:border-white bg-[#111111] dark:bg-white text-white dark:text-[#111111] text-xs font-bold uppercase tracking-widest disabled:opacity-30 hover:bg-transparent hover:text-[#111111] dark:hover:text-white transition-all"
+                >
+                  Suivant
+                </button>
+            </div>
+
           </div>
-          <div className="flex gap-2 w-full sm:w-auto">
-            {!isLocked && (selectedAnswers[currentIndex]?.length || 0) > 0 && (
-              <Button onClick={lockAnswer} variant="secondary" className="flex-1 sm:flex-none">
-                <Ban className="h-4 w-4 mr-2" /> Verrouiller
-              </Button>
-            )}
-            {currentIndex < questions.length - 1 ? (
-              <Button onClick={goNext} className="flex-1 sm:flex-none">
-                Suivante <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            ) : (
-              <Button onClick={handleSubmit} className="bg-success hover:bg-success/90 text-success-foreground flex-1 sm:flex-none">
-                Terminer l'examen
-              </Button>
-            )}
+        </motion.div>
+
+        {/* =========================================================
+            COLONNE DROITE (4/12) : LE NAVIGATEUR D'EXAMEN
+            ========================================================= */}
+        <div className="lg:col-span-4 space-y-8 sticky top-36">
+          
+          {/* GRILLE DE NAVIGATION */}
+          <div className="bg-white dark:bg-[#161614] border-[1.5px] border-black/5 dark:border-white/5 rounded-[2.5rem] p-8 shadow-sm">
+             <h3 className="text-sm font-bold text-[#111111] dark:text-white flex items-center gap-3 mb-6 pb-4 border-b border-black/5 dark:border-white/5">
+                 <LayoutGrid className="h-5 w-5 text-[#888888]" /> Navigateur d'Épreuve
+             </h3>
+             
+             <div className="grid grid-cols-5 gap-3">
+                 {questions.map((_, idx) => {
+                     const isCurrent = currentIndex === idx;
+                     const isAnswered = selectedAnswers[idx]?.length > 0;
+                     
+                     let btnClass = "border-black/10 dark:border-white/10 bg-[#FAFAF8] dark:bg-[#0A0A0A] text-[#888888] hover:border-[#111111] dark:hover:border-white";
+                     if (isAnswered) btnClass = "border-indigo-600 bg-indigo-600 text-white shadow-md";
+                     if (isCurrent && !isAnswered) btnClass = "border-[#111111] dark:border-white bg-transparent text-[#111111] dark:text-white";
+                     if (isCurrent && isAnswered) btnClass = "border-[#111111] dark:border-white bg-indigo-600 text-white shadow-md ring-4 ring-indigo-500/20";
+
+                     return (
+                         <button 
+                             key={idx}
+                             onClick={() => changeQuestion(idx)}
+                             className={`h-12 w-full rounded-xl border-[1.5px] text-sm font-bold transition-all duration-300 flex items-center justify-center ${btnClass}`}
+                         >
+                             {idx + 1}
+                         </button>
+                     );
+                 })}
+             </div>
+             
+             {/* Légende */}
+             <div className="mt-8 flex flex-col gap-3 pt-6 border-t border-black/5 dark:border-white/5">
+                 <div className="flex items-center gap-3">
+                     <div className="h-3 w-3 rounded-full bg-indigo-600" />
+                     <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Répondue</span>
+                 </div>
+                 <div className="flex items-center gap-3">
+                     <div className="h-3 w-3 rounded-full border-2 border-[#111111] dark:border-white" />
+                     <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">En cours</span>
+                 </div>
+                 <div className="flex items-center gap-3">
+                     <div className="h-3 w-3 rounded-full bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/10 dark:border-white/10" />
+                     <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">À faire</span>
+                 </div>
+             </div>
           </div>
+
+          {/* SURVEILLANCE CLINIQUE (Agent MOR en mode silencieux) */}
+          <div className="bg-white dark:bg-[#161614] border-[1.5px] border-black/5 dark:border-white/5 rounded-[2.5rem] p-8 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-rose-500/10 rounded-xl border border-rose-500/20">
+                <Brain className="h-6 w-6 text-rose-500" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#111111] dark:text-white">Agent MOR désactivé</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#888888] mt-1">Conditions réelles</p>
+              </div>
+            </div>
+            <p className="text-xs text-[#666666] dark:text-[#8E8E8A] leading-relaxed mt-4">
+              En mode Examen, l'assistance de l'intelligence artificielle et les justifications cliniques sont désactivées. Vos résultats seront disponibles à la soumission.
+            </p>
+          </div>
+
         </div>
       </div>
     </div>

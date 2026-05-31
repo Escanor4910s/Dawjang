@@ -66,9 +66,7 @@ export const PremiumCheckoutDrawer = ({
   }, [isOpen]);
 
   // Mobile Money states
-  const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card">("mobile_money");
-  const [mobileProvider, setMobileProvider] = useState<"wave" | "orange_money" | "mixx_yas">("wave");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [mobileProvider, setMobileProvider] = useState<"orange_money" | "mixx_yas">("orange_money");
 
   // PayPal Sandbox states
   const [paypalLoaded, setPaypalLoaded] = useState(false);
@@ -239,13 +237,17 @@ export const PremiumCheckoutDrawer = ({
 
     const existingScript = document.getElementById("paypal-sdk");
     if (existingScript) {
-      setPaypalLoaded(true);
+      if ((window as any).paypal) {
+        setPaypalLoaded(true);
+      } else {
+        existingScript.addEventListener("load", () => setPaypalLoaded(true));
+      }
       return;
     }
 
     const script = document.createElement("script");
     script.id = "paypal-sdk";
-    script.src = "https://www.paypal.com/sdk/js?client-id=AbTC7T9dQwnStg4x1DEvbuMikFiYZOx2YpOEAdhfEYGQg9tIDvEK8Z2zhhPYBjqm2l0OfMEmvntkFzx8&currency=EUR";
+    script.src = "https://www.sandbox.paypal.com/sdk/js?client-id=AbTC7T9dQwnStg4x1DEvbuMikFiYZOx2YpOEAdhfEYGQg9tIDvEK8Z2zhhPYBjqm2l0OfMEmvntkFzx8&currency=EUR";
     script.async = true;
     script.onload = () => {
       setPaypalLoaded(true);
@@ -533,11 +535,9 @@ export const PremiumCheckoutDrawer = ({
                       initial={{ scale: 0.95, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       className={`w-[300px] h-[175px] rounded-3xl p-5 relative overflow-hidden shadow-2xl border flex flex-col justify-between select-none transition-all duration-500 ${
-                        mobileProvider === "wave"
-                          ? "bg-gradient-to-br from-cyan-400 to-blue-500 border-cyan-300/30 text-white"
-                          : mobileProvider === "orange_money"
-                            ? "bg-gradient-to-br from-orange-500 to-amber-600 border-orange-400/30 text-white"
-                            : "bg-gradient-to-br from-amber-400 to-yellow-500 border-yellow-300/30 text-slate-950"
+                        mobileProvider === "orange_money"
+                          ? "bg-gradient-to-br from-orange-500 to-amber-600 border-orange-400/30 text-white"
+                          : "bg-gradient-to-br from-amber-400 to-yellow-500 border-yellow-300/30 text-slate-950"
                       }`}
                     >
                       <div className="flex justify-between items-center">
@@ -549,11 +549,9 @@ export const PremiumCheckoutDrawer = ({
                         <div className="h-7 w-7 rounded-lg overflow-hidden border border-white/20 shadow-lg bg-white flex items-center justify-center">
                           <img 
                             src={
-                              mobileProvider === "wave" 
-                                ? "/wave.jpg" 
-                                : mobileProvider === "orange_money" 
-                                  ? "/orange_money.jpg" 
-                                  : "/mixx_by_yas.jpg"
+                              mobileProvider === "orange_money" 
+                                ? "/orange_money.jpg" 
+                                : "/mixx_by_yas.jpg"
                             } 
                             alt="active provider" 
                             className="h-full w-full object-cover" 
@@ -608,28 +606,7 @@ export const PremiumCheckoutDrawer = ({
                 {paymentMethod === "mobile_money" && !isProcessing && (
                   <div className="space-y-1.5 animate-[fadeIn_0.3s_ease]">
                     <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Opérateur Télécom</Label>
-                    <div className="grid grid-cols-3 gap-3">
-                      <motion.button
-                        type="button"
-                        whileHover={{ y: -4, scale: 1.02 }}
-                        whileTap={{ scale: 0.97 }}
-                        onClick={() => {
-                          uiAudio.playSoftClick();
-                          setMobileProvider("wave");
-                        }}
-                        className={`relative flex flex-col items-center justify-center p-3 h-28 rounded-2xl border text-center transition-all ${
-                          mobileProvider === "wave"
-                            ? "bg-cyan-500/10 border-cyan-500 shadow-[0_8px_20px_rgba(6,182,212,0.25)] text-cyan-600 dark:text-cyan-400 font-extrabold"
-                            : "border-border/60 hover:border-muted-foreground/30 hover:bg-muted/40 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-white/0 pointer-events-none" />
-                        <div className="h-10 w-10 rounded-xl overflow-hidden border border-border/40 shadow-inner flex items-center justify-center bg-white">
-                          <img src="/wave.jpg" alt="Wave logo" className="h-full w-full object-cover select-none" />
-                        </div>
-                        <span className="text-[9px] font-black tracking-wider uppercase mt-2">Wave</span>
-                      </motion.button>
-
+                    <div className="grid grid-cols-2 gap-4">
                       <motion.button
                         type="button"
                         whileHover={{ y: -4, scale: 1.02 }}
@@ -648,7 +625,7 @@ export const PremiumCheckoutDrawer = ({
                         <div className="h-10 w-10 rounded-xl overflow-hidden border border-border/40 shadow-inner flex items-center justify-center bg-white">
                           <img src="/orange_money.jpg" alt="Orange Money logo" className="h-full w-full object-cover select-none" />
                         </div>
-                        <span className="text-[9px] font-black tracking-wider uppercase mt-2">Orange</span>
+                        <span className="text-[9px] font-black tracking-wider uppercase mt-2">Orange Money</span>
                       </motion.button>
 
                       <motion.button
@@ -686,11 +663,9 @@ export const PremiumCheckoutDrawer = ({
                         {paymentMethod === "mobile_money" ? (
                           <>
                             {processingStep === 1 && `Initiation du push USSD ${
-                              mobileProvider === "wave" 
-                                ? "WAVE" 
-                                : mobileProvider === "orange_money" 
-                                  ? "ORANGE MONEY" 
-                                  : "MIXX BY YAS"
+                              mobileProvider === "orange_money" 
+                                ? "ORANGE MONEY" 
+                                : "MIXX BY YAS"
                             }...`}
                             {processingStep === 2 && "Attente de confirmation (tapez votre code PIN sur votre mobile)..."}
                             {processingStep === 3 && "Validation Supabase et surclassement..."}
@@ -715,11 +690,9 @@ export const PremiumCheckoutDrawer = ({
                           className="w-full h-12 rounded-full font-bold bg-primary text-primary-foreground hover:bg-primary/95 text-xs shadow-lg shadow-primary/10 gap-1.5 mt-2 transition-all flex items-center justify-center"
                         >
                           Lancer le paiement {
-                            mobileProvider === "wave" 
-                              ? "Wave" 
-                              : mobileProvider === "orange_money" 
-                                ? "Orange Money" 
-                                : "Mixx By YAS"
+                            mobileProvider === "orange_money" 
+                              ? "Orange Money" 
+                              : "Mixx By YAS"
                           } <ArrowRight className="h-4 w-4" />
                         </Button>
                       </form>

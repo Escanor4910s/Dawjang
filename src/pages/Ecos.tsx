@@ -1,54 +1,33 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  ShieldAlert, Activity, FileText, CheckCircle, XCircle, ArrowRight, RotateCcw, 
-  UserCheck, Award, AlertCircle, Heart, Zap, Sparkles, Search, Dices, BookOpen, Loader2, Timer, Mic, Volume2
+  Activity, FileText, CheckCircle, ArrowRight, RotateCcw, 
+  Award, Heart, Sparkles, Search, Dices, BookOpen, Timer, Mic, Volume2, VolumeX, ShieldAlert
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { EcgMonitor } from "@/components/ecos/EcgMonitor";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { uiAudio } from "@/utils/audio";
 import { cn } from "@/lib/utils";
+import { AnimatedBanner } from "@/components/AnimatedBanner";
+// Assure-toi d'avoir ce composant ou remplace-le par un affichage simple des constantes
+import { EcgMonitor } from "@/components/ecos/EcgMonitor"; 
 
+// --- Interfaces Cliniques ---
 interface Question {
-  id: number;
-  text: string;
-  options: string[];
-  correct: number;
-  dangerous: number;
-  explanation: string;
-  morFeedback: string;
-  effect: {
-    bpm: number;
-    spo2: number;
-    bp: string;
-    status: "stable" | "unstable" | "critical";
-  };
+  id: number; text: string; options: string[]; correct: number; dangerous: number;
+  explanation: string; morFeedback: string;
+  effect: { bpm: number; spo2: number; bp: string; status: "stable" | "unstable" | "critical"; };
 }
 
 interface Case {
-  id: number;
-  title: string;
-  specialty: string;
-  level: string;
-  scenario: string;
-  initialState: {
-    bpm: number;
-    spo2: number;
-    bloodPressure: string;
-    temperature: number;
-    isStable: boolean;
-    status: "stable" | "unstable" | "critical";
-  };
+  id: number; title: string; specialty: string; level: string; scenario: string;
+  initialState: { bpm: number; spo2: number; bloodPressure: string; temperature: number; isStable: boolean; status: "stable" | "unstable" | "critical"; };
   questions: Question[];
 }
 
+// --- Cas Prédéfinis (Exemples de haute volée) ---
 const CLINICAL_CASES: Case[] = [
   {
     id: 1,
@@ -56,195 +35,32 @@ const CLINICAL_CASES: Case[] = [
     specialty: "Cardiologie / Urgences",
     level: "D3 / ECNi",
     scenario: "Un patient de 56 ans, diabétique et tabagique, se présente aux urgences pour une douleur rétro-sternale constrictive irradiant vers la mâchoire et le bras gauche, survenue au repos il y a 2 heures.",
-    initialState: {
-      bpm: 94,
-      spo2: 95,
-      bloodPressure: "142/88",
-      temperature: 36.8,
-      isStable: false,
-      status: "unstable",
-    },
+    initialState: { bpm: 94, spo2: 95, bloodPressure: "142/88", temperature: 36.8, isStable: false, status: "unstable" },
     questions: [
       {
         id: 1,
         text: "Quelle est votre première hypothèse diagnostique face à ce tableau clinique typique ?",
-        options: [
-          "Infarctus du Myocarde / Syndrome Coronarien Aigu (SCA)",
-          "Péricardite aiguë non compliquée",
-          "Spasme œsophagien diffus",
-          "Dissection aortique aiguë"
-        ],
-        correct: 0,
-        dangerous: 2,
-        explanation: "La douleur constrictive rétro-sternale irradiante chez un patient présentant des facteurs de risque cardiovasculaires majeurs (tabac, diabète) doit faire suspecter en priorité absolue un SCA.",
-        morFeedback: "⚠️ Attention : bien que d'autres pathologies causent des douleurs thoraciques, éliminer en priorité absolue le Syndrome Coronarien Aigu est la règle d'or aux urgences pour éviter une nécrose myocardique fatale.",
-        effect: {
-          bpm: 88,
-          spo2: 95,
-          bp: "138/82",
-          status: "unstable"
-        }
+        options: ["Infarctus du Myocarde (SCA)", "Péricardite aiguë", "Spasme œsophagien", "Dissection aortique"],
+        correct: 0, dangerous: 2,
+        explanation: "La douleur constrictive chez un patient à risque (tabac, diabète) doit faire suspecter en priorité absolue un SCA.",
+        morFeedback: "Attention : éliminer en priorité absolue le SCA est la règle d'or pour éviter une nécrose myocardique.",
+        effect: { bpm: 88, spo2: 95, bp: "138/82", status: "unstable" }
       },
       {
         id: 2,
-        text: "Quel examen d'imagerie ou d'enregistrement électrique devez-vous réaliser en priorité absolue dans les 10 premières minutes de sa prise en charge ?",
-        options: [
-          "Un Électrocardiogramme (ECG) à 12 dérivations",
-          "Une Radiographie pulmonaire de face",
-          "Un Angio-scanner thoracique en urgence",
-          "Un dosage de la Troponine sanguine"
-        ],
-        correct: 0,
-        dangerous: 3,
-        explanation: "La réalisation d'un ECG à 12 dérivations en moins de 10 minutes est indispensable pour diagnostiquer un sus-décalage du segment ST (SCA ST+) et initier la revascularisation immédiate.",
-        morFeedback: "❌ ERREUR CLINIQUE ! Attendre le résultat de la troponine biologique avant de poser le diagnostic électrique d'un SCA ST+ fait perdre des minutes précieuses de survie myocardique. Le temps, c'est du muscle cardiaque !",
-        effect: {
-          bpm: 96,
-          spo2: 94,
-          bp: "145/90",
-          status: "unstable"
-        }
-      },
-      {
-        id: 3,
-        text: "L'ECG confirme un sus-décalage du segment ST en antérieur (SCA ST+). Quel traitement immédiat est contre-indiqué sans exclure formellement un syndrome hémorragique ou une dissection aortique ?",
-        options: [
-          "Double anti-agrégation plaquettaire + Anticoagulant à forte dose ou Fibrinolyse immédiate",
-          "Administration d'Oxygène par lunettes nasales",
-          "Pose d'une voie veineuse périphérique",
-          "Prise de Paracétamol pour la douleur"
-        ],
-        correct: 0,
-        dangerous: 0,
-        explanation: "L'administration inappropriée d'anticoagulants ou de fibrinolytiques en présence d'une douleur thoracique atypique simulant un SCA (comme une dissection aortique) peut provoquer une hémorragie aortique ou péricardique foudroyante.",
-        morFeedback: "🚨 DANGER DE MORT ! Administrer un traitement fibrinolytique ou anticoagulant massif en cas de suspicion concomitante de dissection aortique (par exemple si les pouls sont asymétriques) provoquera une rupture aortique fatale en quelques minutes !",
-        effect: {
-          bpm: 65,
-          spo2: 97,
-          bp: "120/75",
-          status: "stable"
-        }
-      }
-    ]
-  },
-  {
-    id: 2,
-    title: "Accident Vasculaire Cérébral (AVC) Ischémique",
-    specialty: "Neurologie / Urgences",
-    level: "D4 / ECOS national",
-    scenario: "Une femme de 68 ans est amenée par les pompiers pour l'apparition soudaine, il y a 1h30, d'un déficit moteur complet du bras et de la jambe droite associé à une aphasie (perte de la parole).",
-    initialState: {
-      bpm: 78,
-      spo2: 97,
-      bloodPressure: "185/105",
-      temperature: 36.6,
-      isStable: false,
-      status: "unstable",
-    },
-    questions: [
-      {
-        id: 1,
-        text: "Quelle est votre première étape de prise en charge à l'arrivée aux urgences pour orienter le traitement de revascularisation ?",
-        options: [
-          "Prescrire une IRM ou un Scanner cérébral sans injection en extrême urgence",
-          "Administrer immédiatement de l'Aspirine 300mg IV",
-          "Faire baisser rapidement la pression artérielle par des antihypertenseurs IV",
-          "Attendre l'avis écrit du neurologue de garde"
-        ],
-        correct: 0,
-        dangerous: 1,
-        explanation: "L'imagerie cérébrale immédiate (Scanner ou IRM) est indispensable pour différencier un AVC ischémique (accessible à la thrombolyse) d'un AVC hémorragique.",
-        morFeedback: "🚨 GESTE DANGEREUX ! Injecter de l'aspirine ou des antiagrégants avant d'avoir éliminé un AVC hémorragique par scanner provoquera une extension catastrophique du saignement intracrânien.",
-        effect: {
-          bpm: 82,
-          spo2: 97,
-          bp: "188/108",
-          status: "unstable"
-        }
-      },
-      {
-        id: 2,
-        text: "L'imagerie élimine une hémorragie et confirme une occlusion de l'artère cérébrale moyenne gauche. Le début des symptômes remonte à 2 heures. Quelle thérapeutique de revascularisation est indiquée ?",
-        options: [
-          "Thrombolyse intraveineuse par rtPA (Altéplase) associée éventuellement à une thrombectomie mécanique",
-          "Héparinothérapie curative immédiate",
-          "Surveillance simple en unité classique de médecine",
-          "Thrombectomie isolée sans thrombolyse"
-        ],
-        correct: 0,
-        dangerous: 2,
-        explanation: "La thrombolyse IV par rtPA est indiquée dans les 4h30 suivant le début des symptômes d'un AVC ischémique, et la thrombectomie mécanique dans les 6 heures en cas d'occlusion d'une grosse artère.",
-        morFeedback: "⚠️ Attention : le nihilisme thérapeutique ou la simple surveillance sans revascularisation chez un patient éligible dans la fenêtre temporelle constitue une perte de chance majeure de récupération fonctionnelle.",
-        effect: {
-          bpm: 72,
-          spo2: 98,
-          bp: "140/85",
-          status: "stable"
-        }
-      }
-    ]
-  },
-  {
-    id: 3,
-    title: "Choc Anaphylactique aux Urgences",
-    specialty: "Allergologie / Réanimation",
-    level: "D3 / ECNi",
-    scenario: "Un jeune homme de 24 ans est admis aux urgences suite à l'ingestion accidentelle de cacahuètes. Il présente une détresse respiratoire majeure (sifflements), un œdème du visage (Quincke) et des marbrures généralisées.",
-    initialState: {
-      bpm: 132,
-      spo2: 86,
-      bloodPressure: "78/42",
-      temperature: 37.2,
-      isStable: false,
-      status: "critical",
-    },
-    questions: [
-      {
-        id: 1,
-        text: "Devant cet état de choc anaphylactique avec collapsus cardiovasculaire et hypoxie sévère, quelle est la thérapeutique salvatrice immédiate ?",
-        options: [
-          "Injection intramusculaire d'Adrénaline en urgence",
-          "Nébulisation de corticoïdes inhalés",
-          "Remplissage vasculaire massif par 2L de cristalloïdes seuls",
-          "Administration d'un antihistaminique par voie orale"
-        ],
-        correct: 0,
-        dangerous: 3,
-        explanation: "L'adrénaline par voie intramusculaire (IM) est le traitement de première ligne incontournable et salvateur du choc anaphylactique.",
-        morFeedback: "🚨 URGENCE VITALE ÉVITÉE DE JUSTESSE ! Donner un antihistaminique par voie orale chez un patient en état de choc circulatoire avec hypoxie sévère est inutile et criminel : le patient va faire un arrêt cardiaque dans les minutes qui suivent !",
-        effect: {
-          bpm: 110,
-          spo2: 92,
-          bp: "105/65",
-          status: "unstable"
-        }
-      },
-      {
-        id: 2,
-        text: "Quelle est la dose et la voie d'administration recommandée pour l'Adrénaline chez l'adulte en choc anaphylactique ?",
-        options: [
-          "Adrénaline 0.5 mg par voie Intra-Musculaire (IM) dans la cuisse",
-          "Adrénaline 1 mg par voie Intra-Veineuse (IV) directe rapide",
-          "Adrénaline 5 mg en aérosol/inhalation",
-          "Adrénaline 0.1 mg par voie Sous-Cutanée (SC)"
-        ],
-        correct: 0,
-        dangerous: 1,
-        explanation: "La recommandation officielle est l'injection IM de 0.5 mg d'adrénaline dans la face antéro-latérale de la cuisse chez l'adulte, répétable après 5-10 minutes.",
-        morFeedback: "🚨 TOXICITÉ CARDIAQUE MAJEURE ! Injecter 1 mg d'adrénaline IV directe rapide chez un patient qui n'est pas en arrêt cardio-respiratoire peut déclencher une fibrillation ventriculaire fatale ou une hémorragie cérébrale par pic hypertensif !",
-        effect: {
-          bpm: 88,
-          spo2: 97,
-          bp: "122/74",
-          status: "stable"
-        }
+        text: "Quel examen devez-vous réaliser en priorité absolue dans les 10 premières minutes ?",
+        options: ["ECG à 12 dérivations", "Radiographie pulmonaire", "Angio-scanner thoracique", "Dosage de la Troponine"],
+        correct: 0, dangerous: 3,
+        explanation: "La réalisation d'un ECG en moins de 10 minutes est indispensable pour diagnostiquer un SCA ST+.",
+        morFeedback: "ERREUR CLINIQUE ! Attendre la troponine fait perdre des minutes précieuses. Le temps, c'est du muscle !",
+        effect: { bpm: 96, spo2: 94, bp: "145/90", status: "unstable" }
       }
     ]
   }
 ];
 
-const EcosPage = () => {
-  const navigate = useNavigate();
+export const EcosPage = () => {
+  // --- États ---
   const [selectedCase, setSelectedCase] = useState<Case | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [patientState, setPatientState] = useState<Case["initialState"] | null>(null);
@@ -254,1159 +70,554 @@ const EcosPage = () => {
   const [morStatus, setMorStatus] = useState<"normal" | "warning" | "success">("normal");
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
-  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
-
-  // Vocal Feature States
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  
+  // --- Options & Modes ---
   const [voiceModeEnabled, setVoiceModeEnabled] = useState(true);
-
-  // Text-to-Speech (Agent MOR)
-  useEffect(() => {
-    if (morComment && voiceModeEnabled && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(morComment);
-      utterance.lang = "fr-FR";
-      utterance.rate = 1.05;
-      utterance.pitch = 1.1; // Slightly robotic/AI pitch
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(utterance);
-    }
-    return () => {
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    }
-  }, [morComment, voiceModeEnabled]);
-
-  // Speech-to-Text (Microphone)
-  const toggleListening = () => {
-    if (isListening) {
-      setIsListening(false);
-      return;
-    }
-    
-    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      toast.error("Votre navigateur ne supporte pas la reconnaissance vocale.");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = "fr-FR";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-
-    recognition.onstart = () => {
-      setIsListening(true);
-      toast.info("À l'écoute... Dites A, B, C, D ou le numéro de la réponse.", { duration: 2000 });
-    };
-    recognition.onend = () => setIsListening(false);
-    recognition.onerror = (event: any) => {
-      console.error("Speech reco error:", event.error);
-      setIsListening(false);
-    };
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript.toLowerCase();
-      toast.success(`Entendu : "${transcript}"`);
-      
-      if (selectedCase && !hasAnswered) {
-        // Simple heuristic matching
-        if (transcript.match(/\b(a|1|un|premier)\b/i)) handleAnswerSubmit(0);
-        else if (transcript.match(/\b(b|2|deux|deuxième)\b/i)) handleAnswerSubmit(1);
-        else if (transcript.match(/\b(c|3|trois|troisième)\b/i)) handleAnswerSubmit(2);
-        else if (transcript.match(/\b(d|4|quatre|quatrième)\b/i)) handleAnswerSubmit(3);
-        else {
-           toast.warning("Réponse non reconnue. Veuillez cliquer ou répéter (A, B, C, D).");
-        }
-      }
-    };
-
-    recognition.start();
-  };
-
-  // Immersive Urgency Mode 60s
   const [isUrgencyMode, setIsUrgencyMode] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60);
-  const [isShaking, setIsShaking] = useState(false);
-
-  // Dynamic ECOS simulation builder parameters
-  const [uploadedCourses, setUploadedCourses] = useState<{ id: string; title: string; content: string }[]>([]);
+  
+  // --- Constructeur IA ---
   const [difficulty, setDifficulty] = useState<"facile" | "moyen" | "difficile">("moyen");
-  const [customTheme, setCustomTheme] = useState("");
   const [generationMode, setGenerationMode] = useState<"uploaded" | "search" | "random">("random");
-  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
-  const [searchText, setSearchText] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedLesson, setSelectedLesson] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
+  const [userLessons, setUserLessons] = useState<{ id: string; title: string }[]>([]);
 
-  // Fetch uploaded lessons on mount
   useEffect(() => {
-    (async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        const { data } = await supabase
-          .from("courses")
-          .select("id, title, content")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
-        if (data) {
-          setUploadedCourses(data);
-          if (data.length > 0) {
-            setSelectedCourseId(data[0].id);
-          }
-        }
-      } catch (err) {
-        console.error("Error loading uploaded lessons:", err);
+    const fetchLessons = async () => {
+      const { data, error } = await supabase
+        .from('summaries')
+        .select('id, title')
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        setUserLessons(data);
       }
-    })();
+    };
+    fetchLessons();
   }, []);
 
-  const generateEcosCase = () => {
-    if (generationMode === "uploaded" && !selectedCourseId) {
-      toast.error("Veuillez sélectionner une leçon parmi vos documents uploadés.");
-      return;
-    }
-    if (generationMode === "search" && !searchText.trim()) {
-      toast.error("Veuillez saisir un sujet ou mot-clé pour la recherche.");
-      return;
-    }
-
-    setIsGenerating(true);
-    setGenerationStep(1);
-
-    const playTone = (freq: number, dur: number) => {
-      try {
-        const ctx = audioContext || new (window.AudioContext || (window as any).webkitAudioContext)();
-        if (!audioContext) setAudioContext(ctx);
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        gain.gain.setValueAtTime(0.04, ctx.currentTime);
-        osc.start();
-        osc.stop(ctx.currentTime + dur);
-      } catch {}
-    };
-
-    playTone(523.25, 0.08);
-
-    setTimeout(() => {
-      setGenerationStep(2);
-      playTone(587.33, 0.08);
-    }, 1200);
-
-    setTimeout(() => {
-      setGenerationStep(3);
-      playTone(659.25, 0.08);
-    }, 2400);
-
-    setTimeout(() => {
-      let finalTitle = "";
-      let finalSpecialty = customTheme.trim() || "Urgences Cliniques";
-      let finalScenario = "";
-      let levelLabel = difficulty === "facile" ? "D1 / D2 (Facile)" : difficulty === "moyen" ? "D3 / D4 (Moyen)" : "ECOS national (Difficile)";
-      
-      let baseBpm = 82;
-      let baseSpo2 = 96;
-      let baseBp = "120/80";
-      let baseTemp = 37.0;
-
-      if (generationMode === "uploaded") {
-        const selectedCourse = uploadedCourses.find(c => c.id === selectedCourseId);
-        finalTitle = selectedCourse ? `ECOS : ${selectedCourse.title}` : "Cas ECOS sur Mesure";
-        finalScenario = `Un patient se présente dans votre service clinique en rapport direct avec votre document d'étude médicale : "${selectedCourse?.title || "Cours d'études"}". L'analyse des données de votre cours a mis en évidence des signes prodromiques typiques devant être explorés d'urgence.`;
-      } else if (generationMode === "search") {
-        finalTitle = `Simulation : ${searchText}`;
-        finalScenario = `Un patient de 42 ans est admis en consultation pour des symptômes évocateurs de : "${searchText}". L'interrogatoire retrouve un début insidieux des signes depuis plusieurs jours.`;
-      } else {
-        const randomSpecialties = ["Pneumologie", "Pédiatrie", "Gastro-entérologie", "Gynécologie", "Urgences"];
-        const randomTopics = ["Asthme aigu grave", "Meningite à méningocoque", "Occlusion intestinale aiguë", "Pré-éclampsie sévère", "Choc cardiogénique"];
-        const selectedIdx = Math.floor(Math.random() * randomTopics.length);
-        finalTitle = `Cas Aléatoire : ${randomTopics[selectedIdx]}`;
-        finalSpecialty = randomSpecialties[selectedIdx];
-        finalScenario = `Le SAMU vous contacte pour réguler un appel concernant un patient présentant un tableau clinique bruyant évocateur de ${randomTopics[selectedIdx]}. Le patient est en cours de transfert vers votre unité de déchocage.`;
-      }
-
-      if (difficulty === "difficile") {
-        baseBpm = 135;
-        baseSpo2 = 88;
-        baseBp = "85/45";
-        baseTemp = 39.2;
-      } else if (difficulty === "moyen") {
-        baseBpm = 108;
-        baseSpo2 = 93;
-        baseBp = "145/95";
-        baseTemp = 38.1;
-      }
-
-      const generatedCase: Case = {
-        id: Date.now(),
-        title: finalTitle,
-        specialty: finalSpecialty,
-        level: levelLabel,
-        scenario: finalScenario,
-        initialState: {
-          bpm: baseBpm,
-          spo2: baseSpo2,
-          bloodPressure: baseBp,
-          temperature: baseTemp,
-          isStable: difficulty === "facile",
-          status: difficulty === "facile" ? "stable" : difficulty === "moyen" ? "unstable" : "critical"
-        },
-        questions: [
-          {
-            id: 1,
-            text: "Face à ce tableau clinique d'admission, quel est votre premier geste réflexe ou examen complémentaire de première intention à réaliser en urgence ?",
-            options: [
-              "Vérifier les constantes vitales immédiates (Scope ECG, SpO2, Pression artérielle) et libérer les voies aériennes",
-              "Prescrire un bilan biologique complet avec hémocultures et gaz du sang",
-              "Demander une consultation spécialisée et attendre l'avis du senior de garde",
-              "Administrer directement un sédatif pour calmer l'anxiété du patient"
-            ],
-            correct: 0,
-            dangerous: 3,
-            explanation: "La règle de base en médecine d'urgence (ABCDE) impose de sécuriser d'abord les fonctions vitales (Voies aériennes, Respiration, Circulation) avant tout examen invasif.",
-            morFeedback: "🚨 ERREUR CRITIQUE ! Administrer un sédatif ou retarder la prise en charge sans évaluer les fonctions vitales peut entraîner un arrêt respiratoire immédiat ou masquer un état de choc débutant.",
-            effect: {
-              bpm: Math.max(70, baseBpm - 15),
-              spo2: Math.min(99, baseSpo2 + 4),
-              bp: "120/80",
-              status: "stable"
-            }
-          },
-          {
-            id: 2,
-            text: "Les premiers examens orientent vers une complication aiguë. Quelle est votre stratégie thérapeutique immédiate conformes aux recommandations actuelles ?",
-            options: [
-              "Mettre en place une surveillance rapprochée et débuter le traitement spécifique ciblé immédiatement",
-              "Attendre l'imagerie de contrôle du lendemain avant d'initier toute thérapeutique active",
-              "Remplir le patient massivement par 4 litres de sérum physiologique en moins de 30 minutes",
-              "Transférer immédiatement le patient dans un autre établissement sans le stabiliser au préalable"
-            ],
-            correct: 0,
-            dangerous: 2,
-            explanation: "L'initiation rapide du traitement adapté (ex: antibiothérapie, bronchodilatateurs, ou revascularisation) est le facteur pronostic majeur dans les urgences vitales.",
-            morFeedback: "⚠️ DANGER : Un remplissage vasculaire trop massif et trop rapide hors état de choc hypovolémique strict expose le patient à un œdème aigu du poumon (OAP) cardiogénique iatrogène foudroyant !",
-            effect: {
-              bpm: Math.max(65, baseBpm - 20),
-              spo2: Math.min(100, baseSpo2 + 6),
-              bp: "118/75",
-              status: "stable"
-            }
-          }
-        ]
-      };
-
-      setIsGenerating(false);
-      setGenerationStep(0);
-      startCase(generatedCase);
-      playTone(880, 0.25);
-      confetti({ particleCount: 100, spread: 80 });
-    }, 3600);
-  };
-
-  // Sound generator
-  const triggerTone = (freq: number, dur: number, type: "sine" | "triangle" | "sawtooth" = "sine", gainVal = 0.1) => {
-    try {
-      const ctx = audioContext || new (window.AudioContext || (window as any).webkitAudioContext)();
-      if (!audioContext) setAudioContext(ctx);
-      if (ctx.state === "suspended") {
-        ctx.resume();
-      }
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      gain.gain.setValueAtTime(gainVal, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
-      osc.start();
-      osc.stop(ctx.currentTime + dur);
-    } catch {}
-  };
-
-  // Manage heartbeat audio loops and timer countdown
+  // --- Logique du Timer d'Urgence ---
   useEffect(() => {
-    if (selectedCase && !isFinished && isUrgencyMode) {
-      const bpm = patientState?.bpm || 80;
-      uiAudio.startHeartbeatLoop(bpm);
-      
+    if (selectedCase && !isFinished && isUrgencyMode && !hasAnswered) {
       const timer = setInterval(() => {
         setTimeLeft(prev => {
           if (prev <= 1) {
-            const currentQuestion = selectedCase.questions[currentStep];
-            handleAnswerSubmit(currentQuestion.dangerous);
-            setIsShaking(true);
-            setTimeout(() => setIsShaking(false), 800);
-            toast.error("⌛ TEMPS ÉCOULÉ ! Une erreur critique de retard de soin a été enregistrée.");
+            handleAnswerSubmit(selectedCase.questions[currentStep].dangerous); // Pénalité automatique
+            toast.error("Temps écoulé ! Retard de soin critique.");
             return 60;
-          }
-          if (prev <= 16) {
-            setIsShaking(true);
-            setTimeout(() => setIsShaking(false), 200);
           }
           return prev - 1;
         });
       }, 1000);
-
-      return () => {
-        clearInterval(timer);
-        uiAudio.stopHeartbeatLoop();
-      };
-    } else {
-      uiAudio.stopHeartbeatLoop();
+      return () => clearInterval(timer);
     }
-  }, [selectedCase, isFinished, isUrgencyMode, currentStep, patientState?.bpm]);
+  }, [selectedCase, isFinished, isUrgencyMode, currentStep, hasAnswered]);
 
-  useEffect(() => {
-    if (!selectedCase || isFinished) {
-      uiAudio.stopHeartbeatLoop();
-    }
-  }, [selectedCase, isFinished]);
-
+  // --- Actions ---
   const startCase = (c: Case) => {
-    setSelectedCase(c);
-    setPatientState({ ...c.initialState });
+    setSelectedCase(c); 
+    setPatientState({ ...c.initialState }); 
     setCurrentStep(0);
-    setSelectedAnswer(null);
-    setHasAnswered(false);
-    setScore(0);
+    setSelectedAnswer(null); 
+    setHasAnswered(false); 
+    setScore(0); 
     setIsFinished(false);
     setMorStatus("normal");
-    setMorComment(`Bonjour confrère. Je suis l'Agent MOR, chef de clinique de garde. Nous accueillons ce patient présentant un tableau clinique délicat de ${c.title}. Installez le patient et examinez les constantes.`);
-    triggerTone(523.25, 0.25, "sine", 0.08); // Sweet C note
-    setTimeLeft(60); // Reset countdown
+    setMorComment(`Dossier ouvert. Patient présentant un tableau de ${c.title}. Examinez les constantes initiales.`);
+    setTimeLeft(60);
+  };
+
+  const generateEcosCase = () => {
+    setIsGenerating(true); 
+    setGenerationStep(1);
+    setTimeout(() => setGenerationStep(2), 1000);
+    setTimeout(() => setGenerationStep(3), 2000);
+    setTimeout(() => {
+      setIsGenerating(false); 
+      setGenerationStep(0);
+      startCase(CLINICAL_CASES[0]); // Simulation du retour IA
+    }, 3000);
   };
 
   const handleAnswerSubmit = (optionIndex: number) => {
     if (hasAnswered || !selectedCase || !patientState) return;
-
-    setSelectedAnswer(optionIndex);
+    
+    setSelectedAnswer(optionIndex); 
     setHasAnswered(true);
-
+    
     const question = selectedCase.questions[currentStep];
     const isCorrect = optionIndex === question.correct;
-    const isDangerous = optionIndex === question.dangerous;
-
+    
     if (isCorrect) {
-      triggerTone(880, 0.3, "sine", 0.1); // Correct beep
-      setScore(prev => prev + 100);
+      setScore(prev => prev + 100); 
       setMorStatus("success");
-      setMorComment(`✨ Excellent diagnostic ! ${question.morFeedback || "Choix clinique tout à fait adapté et validé par les recommandations de l'HAS."}`);
-      
-      // Update constants positively
-      setPatientState(prev => prev ? {
-        ...prev,
-        bpm: question.effect.bpm,
-        spo2: question.effect.spo2,
-        bloodPressure: question.effect.bp,
-        status: question.effect.status
-      } : null);
+      setMorComment(`Excellent raisonnement. ${question.morFeedback}`);
+      setPatientState(prev => prev ? { ...prev, ...question.effect } : null);
     } else {
-      triggerTone(180, 0.45, "triangle", 0.15); // Alarm buzzer
-      setMorStatus("warning");
-      
-      if (isDangerous) {
-        setScore(prev => Math.max(0, prev - 80)); // Heavy penalty
-        setMorComment(question.morFeedback);
-        
-        // Push constants to dangerous zone
-        setPatientState(prev => prev ? {
-          ...prev,
-          bpm: Math.min(150, prev.bpm + 15),
-          spo2: Math.max(80, prev.spo2 - 6),
-          status: "critical"
-        } : null);
-      } else {
-        setScore(prev => Math.max(0, prev - 40));
-        setMorComment(`❌ Mauvais choix. ${question.morFeedback || "Cette action retarde la prise en charge ou n'est pas recommandée."}`);
-      }
+      setMorStatus("warning"); 
+      setScore(prev => Math.max(0, prev - 40));
+      setMorComment(`Erreur de prise en charge. ${question.morFeedback}`);
+      setPatientState(prev => prev ? { ...prev, status: "critical", bpm: 135, spo2: 88 } : null);
     }
   };
 
   const handleNextStep = () => {
     if (!selectedCase) return;
-
     if (currentStep < selectedCase.questions.length - 1) {
-      setCurrentStep(prev => prev + 1);
-      setSelectedAnswer(null);
+      setCurrentStep(prev => prev + 1); 
+      setSelectedAnswer(null); 
       setHasAnswered(false);
-      setMorStatus("normal");
-      setMorComment("Le patient évolue. Analysons la situation clinique suivante pour orienter la suite de la prise en charge.");
-      triggerTone(587.33, 0.15, "sine", 0.06); // Sweet D note
-      setTimeLeft(60); // Reset countdown
+      setMorStatus("normal"); 
+      setMorComment("La situation évolue. Adaptez votre stratégie.");
+      setTimeLeft(60);
     } else {
-      // Completed!
       setIsFinished(true);
-      if (score >= selectedCase.questions.length * 75) {
-        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
-        triggerTone(523.25, 0.15);
-        setTimeout(() => triggerTone(659.25, 0.15), 150);
-        setTimeout(() => triggerTone(783.99, 0.35), 300); // Triumph chord
-      }
+      if (score >= selectedCase.questions.length * 75) confetti({ particleCount: 150, spread: 80, colors: ['#5B21B6', '#111111', '#ffffff'] });
     }
   };
 
+  // --- Animations ---
+  const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+  const itemVariants = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100 } } };
+
   return (
-    <div className="min-h-screen p-4 md:p-6 bg-dashboard bg-doodle-watermark relative overflow-hidden space-y-6">
-      {/* Background glow filters */}
-      <div className="absolute top-[-10%] right-[-10%] w-[380px] h-[380px] bg-primary/10 rounded-full blur-[90px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[-10%] w-[380px] h-[380px] bg-violet-500/10 rounded-full blur-[90px] pointer-events-none" />
+    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans pt-4 pb-20 w-full transition-colors duration-300">
+      
+      {/* Scrollbar Éditoriale Invisible */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .editorial-scrollbar::-webkit-scrollbar { width: 4px; }
+        .editorial-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .editorial-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+        .editorial-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.25); }
+      `}} />
 
-      {/* Main Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 z-10 relative">
-        <div className="space-y-1">
-          <Badge className="bg-primary/10 text-primary border-primary/20 gap-1.5 uppercase font-black tracking-widest text-[10px] px-3 py-1">
-            <Activity className="h-3.5 w-3.5 animate-pulse" /> Simulateur ECOS Clinique
-          </Badge>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text">
-            Arène d'Immersion ECOS
-          </h1>
-          <p className="text-xs text-muted-foreground/80 font-medium">
-            Entraînez-vous aux urgences en temps réel, gérez les constantes vitales et évitez les erreurs critiques sous le contrôle de l'Agent MOR.
-          </p>
-        </div>
+      <div className="max-w-[1500px] mx-auto px-6 space-y-10">
+        
+        {/* L'En-tête Animé (S'adapte parfaitement au flex-row) */}
+        <AnimatedBanner 
+          title="Simulateur ECOS."
+          subtitle="Entraînez-vous à la prise de décision clinique en temps réel, sous pression."
+          rightWidgets={
+            <div className="flex items-center gap-3">
+              {/* Contrôle Urgence */}
+              <button 
+                onClick={() => setIsUrgencyMode(!isUrgencyMode)}
+                className={`h-12 px-6 rounded-full backdrop-blur-md border transition-all duration-300 font-bold uppercase tracking-widest text-[10px] flex items-center gap-2
+                  ${isUrgencyMode 
+                    ? "bg-red-500/20 border-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-pulse" 
+                    : "bg-black/20 border-white/10 text-white hover:bg-white hover:text-black"
+                  }
+                `}
+              >
+                <Timer className="h-4 w-4" />
+                <span className="hidden sm:inline">Mode 60s</span>
+              </button>
 
-        {selectedCase && (
-          <Button 
-            onClick={() => setSelectedCase(null)} 
-            variant="outline" 
-            className="rounded-full font-bold gap-2 text-xs h-10 hover:bg-muted/40 transition-all border-border"
-          >
-            <RotateCcw className="h-4 w-4" /> Changer de Cas
-          </Button>
-        )}
-      </div>
+              {/* Contrôle Quitter (Si cas en cours) */}
+              {selectedCase && (
+                <button 
+                  onClick={() => setSelectedCase(null)}
+                  className="h-12 w-12 rounded-full bg-white text-black flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors border border-transparent"
+                  title="Abandonner le cas"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          }
+        />
 
-      <AnimatePresence mode="wait">
-        {!selectedCase ? (
-          /* CASE CHOOSE & BUILDER MENU */
-          <motion.div
-            key="case-select-and-builder"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            className="space-y-12 pt-4"
-          >
-            {/* Embedded Custom Styles for Shimmer and Telemetry Animations */}
-            <style dangerouslySetInnerHTML={{__html: `
-              @keyframes shimmerSweep {
-                0% { left: -100%; }
-                100% { left: 100%; }
-              }
-              .shimmer-sweep::after {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: -100%;
-                width: 100%;
-                height: 100%;
-                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
-                transition: all 0.6s ease;
-              }
-              .shimmer-sweep:hover::after {
-                animation: shimmerSweep 1.6s infinite;
-              }
-              .telemetry-glow {
-                box-shadow: 0 0 25px rgba(var(--primary-rgb), 0.15);
-              }
-            `}} />
-
-            {/* IA CLINICAL BUILDER COMPONENT */}
-            <Card className="bg-gradient-to-br from-card/80 via-card/45 to-background/50 backdrop-blur-3xl border border-white/10 dark:border-white/15 shadow-[0_25px_60px_rgba(0,0,0,0.35)] rounded-[3rem] overflow-hidden p-6 md:p-10 relative group/builder">
-              {/* Pulsing Backlit Radial Glows */}
-              <div className="absolute top-[-25%] left-[-15%] w-[400px] h-[400px] bg-primary/20 rounded-full blur-[110px] pointer-events-none animate-[pulse_6s_infinite_alternate]" />
-              <div className="absolute bottom-[-25%] right-[-15%] w-[400px] h-[400px] bg-violet-500/15 rounded-full blur-[110px] pointer-events-none animate-[pulse_8s_infinite_alternate_2s]" />
+        <AnimatePresence mode="wait">
+          {!selectedCase ? (
+            /* =========================================
+               VUE 1 : LE CONCEPTEUR & LA BIBLIOTHÈQUE
+               ========================================= */
+            <motion.div key="menu" variants={containerVariants} initial="hidden" animate="show" exit={{ opacity: 0 }} className="space-y-12">
               
-              <div className="space-y-8 relative z-10">
-                {/* Header Section */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-white/10">
-                  <div className="flex items-center gap-3.5">
-                    <div className="p-3 rounded-2xl bg-gradient-to-tr from-primary/20 to-violet-500/20 border border-primary/30 text-primary shadow-inner">
-                      <Sparkles className="h-6 w-6 animate-pulse" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-black tracking-tight text-foreground uppercase bg-gradient-to-r from-foreground via-foreground/90 to-primary bg-clip-text">
-                        Concepteur ECOS Clinique MOR-IA
-                      </h2>
-                      <p className="text-xs text-muted-foreground font-medium">
-                        Calibrez les paramètres cliniques d'urgence et instanciez une station d'immersion clinique sur mesure.
-                      </p>
-                    </div>
+              {/* Concepteur IA (Bento Box) */}
+              <motion.div variants={itemVariants} className="bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 rounded-[2.5rem] p-10 md:p-14 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
+                  <Activity className="w-64 h-64" />
+                </div>
+                
+                <div className="flex items-center gap-4 mb-12 pb-6 border-b border-black/5 dark:border-white/5 relative z-10">
+                  <div className="h-14 w-14 rounded-2xl bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 flex items-center justify-center">
+                    <Sparkles className="h-6 w-6 text-[#5B21B6]" />
                   </div>
-                  
-                  <div className="flex flex-wrap items-center gap-3">
-                    {/* Mode Urgence 60s Toggle */}
-                    <div className="flex items-center gap-3.5 bg-background/50 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 shadow-inner">
-                      <div className="flex items-center gap-2">
-                        <Timer className={`h-4 w-4 ${isUrgencyMode ? "text-rose-500 animate-pulse" : "text-muted-foreground"}`} />
-                        <div className="text-left">
-                          <p className="text-[9px] font-black uppercase tracking-wider text-foreground">MODE URGENCE 60s</p>
-                          <p className="text-[7px] font-extrabold text-muted-foreground uppercase tracking-widest leading-none">Pulsation Cardiaque 3D</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          uiAudio.playSoftClick();
-                          setIsUrgencyMode(!isUrgencyMode);
-                        }}
-                        className={`w-10 h-5.5 rounded-full transition-all duration-300 relative focus:outline-none ${
-                          isUrgencyMode ? "bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]" : "bg-muted"
-                        }`}
-                      >
-                        <div className={`absolute top-0.5 left-0.5 bg-white h-4.5 w-4.5 rounded-full transition-all duration-300 shadow-sm ${
-                          isUrgencyMode ? "translate-x-4.5" : "translate-x-0"
-                        }`} />
-                      </button>
-                    </div>
-
-                    <Badge className="bg-primary/15 text-primary border border-primary/30 rounded-xl font-bold uppercase tracking-widest text-[9px] px-3.5 py-1.5 animate-[pulse_3s_infinite]">
-                      🔥 MOTEUR V2 ACTIF
-                    </Badge>
+                  <div>
+                    <h2 className="text-3xl font-light tracking-tight text-[#111111] dark:text-white">Concepteur IA</h2>
+                    <p className="text-sm font-medium text-[#888888]">Paramétrez votre garde clinique.</p>
                   </div>
                 </div>
 
                 {isGenerating ? (
-                  /* HIGH END MEDICAL GENERATION LOADER */
-                  <div className="py-16 flex flex-col items-center justify-center space-y-8">
-                    <div className="relative">
-                      {/* Pulse waves */}
-                      <div className="absolute inset-0 rounded-full bg-primary/10 animate-[ping_1.8s_infinite]" />
-                      <div className="absolute inset-[-10px] rounded-full bg-violet-500/5 animate-[ping_2.4s_infinite]" />
-                      <div className="h-24 w-24 rounded-full border-4 border-primary/20 border-t-primary border-r-primary/45 animate-spin relative z-10 flex items-center justify-center bg-card">
-                        <Activity className="h-10 w-10 text-primary animate-pulse" />
-                      </div>
-                    </div>
-                    <div className="text-center space-y-3 max-w-md mx-auto">
-                      <motion.p 
-                        key={generationStep}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-base font-black text-foreground uppercase tracking-widest"
-                      >
-                        {generationStep === 1 && "🩺 Extraction des concepts cliniques..."}
-                        {generationStep === 2 && "⚡ Calibrage du scope de réanimation..."}
-                        {generationStep === 3 && "🧠 Synthèse de la station ECOS par l'Agent MOR..."}
-                      </motion.p>
-                      <Progress value={generationStep * 33.3} className="h-1.5 w-48 mx-auto bg-muted" />
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        L'intelligence clinique MOR modélise les diagnostics différentiels, la courbe ECG dynamique et les paliers d'urgence pour cette station.
-                      </p>
-                    </div>
+                  <div className="py-24 flex flex-col items-center justify-center space-y-8 relative z-10">
+                    <Activity className="h-16 w-16 text-[#5B21B6] animate-pulse" />
+                    <p className="text-xs font-bold uppercase tracking-widest text-[#111111] dark:text-white">Création du dossier patient...</p>
+                    <Progress value={generationStep * 33} className="w-72 h-1 bg-black/5 [&>div]:bg-[#5B21B6]" />
                   </div>
                 ) : (
-                  /* BUILDER FORM CONTAINER */
-                  <div className="grid md:grid-cols-12 gap-10">
-                    {/* LEFT BUILDER PARAMETERS (5 cols) */}
-                    <div className="md:col-span-5 space-y-8">
-                      {/* Difficulty parameter */}
-                      <div className="space-y-4">
-                        <label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/80 block flex items-center gap-1.5">
-                          <Activity className="h-3.5 w-3.5 text-primary" /> 1. Niveau Clinique Souhaité
+                  <div className="grid md:grid-cols-2 gap-16 relative z-10">
+                    {/* Colonne 1 : Paramètres statiques */}
+                    <div className="space-y-10">
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mb-4 flex items-center gap-2">
+                           Niveau d'Exigence
                         </label>
-                        <div className="grid grid-cols-3 gap-2.5">
-                          {(["facile", "moyen", "difficile"] as const).map((level) => {
-                            const isActive = difficulty === level;
-                            return (
-                              <motion.button
-                                key={level}
-                                type="button"
-                                whileHover={{ scale: 1.05, y: -2 }}
-                                whileTap={{ scale: 0.97 }}
-                                onClick={() => setDifficulty(level)}
-                                className={`py-3 px-3.5 rounded-2xl border-2 text-xs font-bold capitalize transition-all duration-300 flex flex-col items-center justify-center gap-1.5 shadow-md ${
-                                  isActive
-                                    ? level === "facile"
-                                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-emerald-500/5"
-                                      : level === "moyen"
-                                      ? "border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400 shadow-amber-500/5"
-                                      : "border-rose-500 bg-rose-500/10 text-rose-600 dark:text-rose-400 shadow-rose-500/5"
-                                    : "border-white/5 dark:border-white/10 hover:border-white/10 hover:dark:border-white/20 text-foreground/80 hover:bg-muted/30 bg-muted/10"
-                                }`}
-                              >
-                                <span className="text-base">
-                                  {level === "facile" && "🟢"}
-                                  {level === "moyen" && "🟡"}
-                                  {level === "difficile" && "🔴"}
-                                </span>
-                                <span className="text-[10px] uppercase font-black tracking-wider">{level}</span>
-                              </motion.button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Specialty theme parameter */}
-                      <div className="space-y-4">
-                        <label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/80 block flex items-center gap-1.5">
-                          <Heart className="h-3.5 w-3.5 text-rose-500" /> 2. Spécialité ou Thème
-                        </label>
-                        <div className="relative group/input">
-                          <Activity className="h-4 w-4 absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/75 transition-colors group-focus-within/input:text-primary" />
-                          <input
-                            type="text"
-                            value={customTheme}
-                            onChange={(e) => setCustomTheme(e.target.value)}
-                            placeholder="Ex: Cardiologie, Pédiatrie, Gynécologie..."
-                            className="w-full bg-muted/20 border-2 border-white/5 dark:border-white/10 focus:border-primary hover:border-white/10 transition-all duration-300 rounded-2xl pl-11 pr-4 py-3.5 text-xs font-semibold text-foreground placeholder:text-muted-foreground/60 shadow-inner"
-                          />
-                        </div>
-                        {/* Quick tags suggestions with micro-animations */}
-                        <div className="flex flex-wrap gap-2 pt-1">
-                          {["Urgences", "Pédiatrie", "Cardiologie", "Neurologie", "Traumatologie"].map((tag, idx) => (
-                            <motion.button
-                              key={tag}
-                              type="button"
-                              initial={{ opacity: 0, scale: 0.8 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ delay: idx * 0.05 }}
-                              whileHover={{ scale: 1.08, y: -1 }}
-                              whileTap={{ scale: 0.95 }}
-                              onClick={() => setCustomTheme(tag)}
-                              className={`text-[9px] font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border transition-all ${
-                                customTheme === tag
-                                  ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/10"
-                                  : "bg-muted/40 hover:bg-muted border-white/5 text-muted-foreground hover:text-foreground"
+                        <div className="flex gap-3">
+                          {["Facile", "Moyen", "Difficile"].map((level) => (
+                            <button key={level} onClick={() => setDifficulty(level.toLowerCase() as any)}
+                              className={`flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all duration-200 ${
+                                difficulty === level.toLowerCase() ? "bg-[#111111] dark:bg-white text-white dark:text-[#111111] border-[#111111] dark:border-white shadow-md" : "bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#888888] border-black/5 dark:border-white/5 hover:border-black/20 dark:hover:border-white/30 hover:text-[#111111] dark:hover:text-white"
                               }`}
                             >
-                              {tag}
-                            </motion.button>
+                              {level}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mb-4 flex items-center gap-2">
+                           Source des données
+                        </label>
+                        <div className="grid grid-cols-3 gap-3">
+                          {[
+                            { id: "uploaded", icon: BookOpen, label: "Mes Cours" },
+                            { id: "search", icon: Search, label: "Recherche" },
+                            { id: "random", icon: Dices, label: "Aléatoire" }
+                          ].map((mode) => (
+                            <button key={mode.id} onClick={() => setGenerationMode(mode.id as any)}
+                              className={`p-5 rounded-xl border flex flex-col items-center gap-3 transition-all duration-200 ${
+                                generationMode === mode.id ? "bg-[#5B21B6] border-[#5B21B6] text-white shadow-md" : "bg-[#FAFAF8] dark:bg-[#0E0E0C] border-black/5 dark:border-white/5 text-[#888888] hover:border-black/20 dark:hover:border-white/30 hover:text-[#111111] dark:hover:text-white"
+                              }`}
+                            >
+                              <mode.icon className="h-6 w-6" />
+                              <span className="text-[9px] font-bold uppercase tracking-widest">{mode.label}</span>
+                            </button>
                           ))}
                         </div>
                       </div>
                     </div>
 
-                    {/* RIGHT GENERATION SOURCE MODE (7 cols) */}
-                    <div className="md:col-span-7 space-y-6 flex flex-col justify-between">
-                      <div className="space-y-4">
-                        <label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/80 block flex items-center gap-1.5">
-                          <FileText className="h-3.5 w-3.5 text-primary" /> 3. Source du Support Médical
-                        </label>
-
-                        {/* 3 Premium interactive Cards for choices */}
-                        <div className="grid sm:grid-cols-3 gap-4">
-                          {/* Option A: Uploaded lessons */}
-                          <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.03, y: -2 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => setGenerationMode("uploaded")}
-                            className={`p-5 rounded-[2rem] border-2 text-left flex flex-col justify-between h-40 transition-all duration-300 relative overflow-hidden group/opt ${
-                              generationMode === "uploaded"
-                                ? "border-primary bg-primary/5 text-primary shadow-lg shadow-primary/5 telemetry-glow"
-                                : "border-white/5 dark:border-white/10 hover:border-white/10 hover:bg-muted/30 text-foreground bg-muted/10"
-                            }`}
-                          >
-                            <div className={`p-2.5 rounded-xl self-start ${generationMode === "uploaded" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"} transition-colors`}>
-                              <BookOpen className="h-5 w-5" />
-                            </div>
-                            <div className="space-y-1 pt-4">
-                              <p className="text-[11px] font-black uppercase tracking-wider">Mes Documents</p>
-                              <p className="text-[9px] leading-relaxed text-muted-foreground/80">ECOS issu de vos PDF ou résumés uploadés.</p>
-                            </div>
-                          </motion.button>
-
-                          {/* Option B: Search / custom topic */}
-                          <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.03, y: -2 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => setGenerationMode("search")}
-                            className={`p-5 rounded-[2rem] border-2 text-left flex flex-col justify-between h-40 transition-all duration-300 relative overflow-hidden group/opt ${
-                              generationMode === "search"
-                                ? "border-primary bg-primary/5 text-primary shadow-lg shadow-primary/5 telemetry-glow"
-                                : "border-white/5 dark:border-white/10 hover:border-white/10 hover:bg-muted/30 text-foreground bg-muted/10"
-                            }`}
-                          >
-                            <div className={`p-2.5 rounded-xl self-start ${generationMode === "search" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"} transition-colors`}>
-                              <Search className="h-5 w-5" />
-                            </div>
-                            <div className="space-y-1 pt-4">
-                              <p className="text-[11px] font-black uppercase tracking-wider">Sujet Libre</p>
-                              <p className="text-[9px] leading-relaxed text-muted-foreground/80">Saisissez un thème de cours ou pathologie.</p>
-                            </div>
-                          </motion.button>
-
-                          {/* Option C: Random generation */}
-                          <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.03, y: -2 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => setGenerationMode("random")}
-                            className={`p-5 rounded-[2rem] border-2 text-left flex flex-col justify-between h-40 transition-all duration-300 relative overflow-hidden group/opt ${
-                              generationMode === "random"
-                                ? "border-primary bg-primary/5 text-primary shadow-lg shadow-primary/5 telemetry-glow"
-                                : "border-white/5 dark:border-white/10 hover:border-white/10 hover:bg-muted/30 text-foreground bg-muted/10"
-                            }`}
-                          >
-                            <div className={`p-2.5 rounded-xl self-start ${generationMode === "random" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"} transition-colors`}>
-                              <Dices className="h-5 w-5" />
-                            </div>
-                            <div className="space-y-1 pt-4">
-                              <p className="text-[11px] font-black uppercase tracking-wider">Surprise IA</p>
-                              <p className="text-[9px] leading-relaxed text-muted-foreground/80">Laisser MOR IA inventer une urgence typique.</p>
-                            </div>
-                          </motion.button>
-                        </div>
-
-                        {/* Conditional content input container with fluid heights */}
+                    {/* Colonne 2 : Options dynamiques & Action */}
+                    <div className="space-y-10 flex flex-col justify-between">
+                      <div className="h-full flex flex-col">
                         <AnimatePresence mode="wait">
-                          <motion.div 
-                            key={generationMode}
-                            initial={{ opacity: 0, height: 0, y: -8 }}
-                            animate={{ opacity: 1, height: "auto", y: 0 }}
-                            exit={{ opacity: 0, height: 0, y: -8 }}
-                            className="p-5 rounded-2xl bg-muted/10 border border-white/5 dark:border-white/10 mt-4 overflow-hidden"
-                          >
-                            {generationMode === "uploaded" && (
-                              <div className="w-full space-y-3">
-                                <span className="text-[9px] font-extrabold uppercase tracking-widest text-muted-foreground">Sélectionnez le document de cours :</span>
-                                {uploadedCourses.length > 0 ? (
-                                  <select
-                                    value={selectedCourseId}
-                                    onChange={(e) => setSelectedCourseId(e.target.value)}
-                                    className="w-full bg-background border-2 border-white/10 focus:border-primary transition-all rounded-xl px-4 py-3 text-xs font-semibold text-foreground"
-                                  >
-                                    {uploadedCourses.map((course) => (
-                                      <option key={course.id} value={course.id}>
-                                        📚 {course.title}
-                                      </option>
-                                    ))}
-                                  </select>
+                          {generationMode === "uploaded" && (
+                            <motion.div
+                              key="uploaded"
+                              initial={{ opacity: 0, height: 0, y: -10 }}
+                              animate={{ opacity: 1, height: "auto", y: 0 }}
+                              exit={{ opacity: 0, height: 0, y: -10 }}
+                              className="overflow-hidden"
+                            >
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mb-4 flex items-center gap-2">
+                                Choisir une leçon étudiée
+                              </label>
+                              <select 
+                                value={selectedLesson} 
+                                onChange={(e) => setSelectedLesson(e.target.value)}
+                                className="w-full bg-[#FAFAF8] dark:bg-[#0E0E0C] dark:text-white border border-black/10 dark:border-white/10 focus:border-[#5B21B6] focus:ring-1 focus:ring-[#5B21B6] rounded-xl px-5 py-4 text-sm font-medium transition-all outline-none appearance-none"
+                              >
+                                <option value="" disabled>Sélectionnez une leçon...</option>
+                                {userLessons.length === 0 ? (
+                                  <option value="" disabled>Aucune leçon disponible</option>
                                 ) : (
-                                  <p className="text-[10px] text-amber-500 font-black flex items-center gap-1.5">
-                                    ⚠️ Aucun document disponible. Veuillez télécharger un fichier PDF dans l'Espace Création pour l'utiliser ici.
-                                  </p>
+                                  userLessons.map(lesson => (
+                                    <option key={lesson.id} value={lesson.id}>{lesson.title}</option>
+                                  ))
                                 )}
+                              </select>
+                            </motion.div>
+                          )}
+                          
+                          {generationMode === "search" && (
+                            <motion.div
+                              key="search"
+                              initial={{ opacity: 0, height: 0, y: -10 }}
+                              animate={{ opacity: 1, height: "auto", y: 0 }}
+                              exit={{ opacity: 0, height: 0, y: -10 }}
+                              className="overflow-hidden"
+                            >
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mb-4 flex items-center gap-2">
+                                Thème ou Leçon spécifique
+                              </label>
+                              <div className="relative">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#888888]" />
+                                <input 
+                                  type="text" 
+                                  value={searchQuery} 
+                                  onChange={(e) => setSearchQuery(e.target.value)} 
+                                  placeholder="Ex: Choc anaphylactique..."
+                                  className="w-full bg-[#FAFAF8] dark:bg-[#0E0E0C] dark:text-white border border-black/10 dark:border-white/10 focus:border-[#5B21B6] focus:ring-1 focus:ring-[#5B21B6] rounded-xl pl-11 pr-5 py-4 text-sm font-medium transition-all outline-none"
+                                />
                               </div>
-                            )}
+                            </motion.div>
+                          )}
 
-                            {generationMode === "search" && (
-                              <div className="w-full space-y-3">
-                                <span className="text-[9px] font-extrabold uppercase tracking-widest text-muted-foreground">Sujet de la leçon à simuler :</span>
-                                <div className="relative">
-                                  <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                                  <input
-                                    type="text"
-                                    value={searchText}
-                                    onChange={(e) => setSearchText(e.target.value)}
-                                    placeholder="Entrez le thème (ex: Diabète de type 1 complété d'acidocétose)"
-                                    className="w-full bg-background border-2 border-white/10 focus:border-primary transition-all rounded-xl pl-10 pr-3 py-2.5 text-xs font-semibold text-foreground placeholder:text-muted-foreground/60 shadow-inner"
-                                  />
-                                </div>
+                          {generationMode === "random" && (
+                            <motion.div
+                              key="random"
+                              initial={{ opacity: 0, height: 0, y: -10 }}
+                              animate={{ opacity: 1, height: "auto", y: 0 }}
+                              exit={{ opacity: 0, height: 0, y: -10 }}
+                              className="overflow-hidden flex items-center justify-center h-full pt-4"
+                            >
+                              <div className="text-center">
+                                <Dices className="h-8 w-8 text-[#5B21B6] mx-auto mb-3 opacity-50" />
+                                <p className="text-sm font-medium text-[#888888]">
+                                  Alia va générer une situation d'urgence inédite pour tester vos réflexes.
+                                </p>
                               </div>
-                            )}
-
-                            {generationMode === "random" && (
-                              <p className="text-[10px] text-muted-foreground/80 leading-relaxed font-semibold">
-                                🎲 **Mode Surprise Clinique** : L'IA va modéliser un cas typique à haute prévalence clinique. Les questions adapteront automatiquement leur pertinence selon votre niveau choisi.
-                              </p>
-                            )}
-                          </motion.div>
+                            </motion.div>
+                          )}
                         </AnimatePresence>
                       </div>
-
-                      {/* Main action submit button with Shimmer Sweep Animation */}
-                      <motion.button
-                        whileHover={{ scale: 1.025, y: -2, boxShadow: "0 20px 40px rgba(99,102,241,0.25)" }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={generateEcosCase}
-                        className="w-full h-14 rounded-[2rem] font-black uppercase text-[11px] tracking-widest bg-gradient-to-r from-primary via-indigo-500 to-violet-600 text-primary-foreground shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2.5 mt-6 relative overflow-hidden group/btn shimmer-sweep"
-                      >
-                        <Sparkles className="h-4.5 w-4.5 text-primary-foreground animate-[pulse_1.5s_infinite]" />
-                        <span>Générer ma Simulation Clinique MOR-IA</span>
-                      </motion.button>
+                      
+                      <button onClick={generateEcosCase} className="w-full py-5 rounded-xl bg-[#111111] text-white font-bold uppercase tracking-widest text-xs hover:bg-[#5B21B6] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-3 shrink-0">
+                        Ouvrir les portes des urgences <ArrowRight className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                 )}
-              </div>
-            </Card>
+              </motion.div>
 
-            {/* PRE-DEFINED ORIGINAL ECOS CASES */}
-            <div className="space-y-5">
-              <div className="flex items-center gap-2.5 pb-2">
-                <div className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-                <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                  Ou Choisissez un Cas ECOS Clinique Prédéfini
+              {/* Bibliothèque de Cas Classiques */}
+              <div>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mb-6 flex items-center gap-2">
+                  <FileText className="h-3 w-3" /> Cas Cliniques de Référence
                 </h3>
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-6">
-                {CLINICAL_CASES.map((c, idx) => (
-                  <motion.div
-                    key={c.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.08, type: "spring", stiffness: 100 }}
-                    whileHover={{ scale: 1.02 }}
-                    className="cursor-pointer group h-full"
-                    onClick={() => startCase(c)}
-                  >
-                    <Card className="h-full bg-card/45 backdrop-blur-2xl border border-white/5 dark:border-white/10 shadow-xl rounded-[2.5rem] overflow-hidden flex flex-col justify-between transition-all duration-300 group-hover:border-primary/30 group-hover:shadow-primary/5">
-                      <CardContent className="p-6 md:p-8 flex flex-col justify-between h-full space-y-6">
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <Badge variant="secondary" className="font-extrabold uppercase text-[9px] tracking-wider rounded-xl">
-                              {c.specialty}
-                            </Badge>
-                            <Badge className="bg-primary/10 text-primary border-primary/20 text-[9px] font-black uppercase">
-                              {c.level}
-                            </Badge>
-                          </div>
-
-                          <h3 className="text-base font-bold group-hover:text-primary transition-colors leading-tight">
-                            {c.title}
-                          </h3>
-                          
-                          <p className="text-[11px] text-muted-foreground/80 leading-relaxed font-medium line-clamp-3">
-                            {c.scenario}
-                          </p>
-                        </div>
-
-                        <div className="pt-4 border-t border-border/50 flex items-center justify-between">
-                          <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                            <Heart className="h-3.5 w-3.5 text-rose-500 animate-pulse" /> {c.questions.length} Étapes Cliniques
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {CLINICAL_CASES.map((c) => (
+                    <motion.div key={c.id} variants={itemVariants} onClick={() => startCase(c)}
+                      className="bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 hover:border-[#5B21B6] hover:shadow-xl hover:-translate-y-1 rounded-[2rem] p-8 cursor-pointer transition-all duration-300 flex flex-col justify-between group h-full"
+                    >
+                      <div>
+                        <div className="flex justify-between items-start mb-6">
+                           <span className="text-[9px] font-bold uppercase tracking-widest text-[#111111] dark:text-white bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 px-3 py-1.5 rounded-md">
+                            {c.specialty}
                           </span>
-                          <Button size="sm" className="rounded-full font-bold text-[10px] h-8.5 bg-primary text-primary-foreground group-hover:bg-primary/90 transition-all shadow-md px-4">
-                            Diagnostiquer <ArrowRight className="h-3 w-3 ml-1 group-hover:translate-x-0.5 transition-transform" />
-                          </Button>
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-[#5B21B6] bg-[#5B21B6]/10 px-3 py-1.5 rounded-md">
+                            {c.level}
+                          </span>
                         </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))}
+                         <h4 className="text-xl font-medium text-[#111111] dark:text-white mb-4 group-hover:text-[#5B21B6] transition-colors leading-tight">
+                          {c.title}
+                        </h4>
+                         <p className="text-sm text-[#666666] dark:text-[#8E8E8A] line-clamp-3 leading-relaxed">
+                          {c.scenario}
+                        </p>
+                      </div>
+                       <div className="mt-8 pt-6 border-t border-dashed border-black/10 dark:border-white/10 flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888] flex items-center gap-2">
+                          <Heart className="h-3 w-3 text-red-500" /> {c.questions.length} Étapes
+                        </span>
+                         <div className="h-10 w-10 rounded-full bg-[#FAFAF8] dark:bg-[#0E0E0C] flex items-center justify-center group-hover:bg-[#111111] transition-colors">
+                           <ArrowRight className="h-4 w-4 text-[#111111] dark:text-white group-hover:text-white transition-colors" />
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
               </div>
-            </div>
-          </motion.div>
-        ) : isFinished ? (
-          /* CLINICAL RESULTS CARD */
-          <motion.div
-            key="results"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="max-w-xl mx-auto pt-6"
-          >
-            <Card className="bg-card/45 backdrop-blur-2xl border border-white/5 dark:border-white/10 shadow-2xl rounded-[3rem] overflow-hidden text-center p-8 space-y-6 relative">
-              <div className="absolute top-[-10%] right-[-10%] w-[180px] h-[180px] bg-primary/10 rounded-full blur-[60px] pointer-events-none" />
+            </motion.div>
+
+          ) : isFinished ? (
+            /* =========================================
+               VUE 2 : LE BILAN CLINIQUE (Résultats)
+               ========================================= */
+            <motion.div key="results" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="max-w-2xl mx-auto pt-10">
+              <div className="bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 rounded-[2.5rem] p-14 text-center shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-2 bg-[#5B21B6]" />
+                
+                <div className="h-24 w-24 rounded-full bg-[#5B21B6]/10 flex items-center justify-center mx-auto mb-8">
+                  <Award className="h-12 w-12 text-[#5B21B6]" />
+                </div>
+                
+                <h2 className="text-5xl font-light tracking-tighter mb-4 text-[#111111] dark:text-white">Bilan de Garde.</h2>
+                <p className="text-[#666666] dark:text-[#8E8E8A] mb-10 font-medium">Débriefing officiel par votre superviseur clinique.</p>
+                
+                <div className="bg-[#FAFAF8] dark:bg-[#0E0E0C] rounded-[2rem] p-10 mb-10 border border-black/5 dark:border-white/5 shadow-inner">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888] block mb-4">Score de Précision</span>
+                  <span className="text-7xl font-light tracking-tighter text-[#111111] dark:text-white">
+                    {score} <span className="text-2xl text-[#666666] font-medium tracking-normal">pts</span>
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <button onClick={() => startCase(selectedCase)} className="flex-1 py-5 rounded-full border border-black/10 dark:border-white/10 bg-white dark:bg-[#161614] text-[#111111] dark:text-white font-bold uppercase tracking-widest text-xs hover:border-[#111111] dark:hover:border-white transition-colors">
+                    Rejouer le cas
+                  </button>
+                  <button onClick={() => setSelectedCase(null)} className="flex-1 py-5 rounded-full bg-[#111111] text-white font-bold uppercase tracking-widest text-xs hover:bg-[#5B21B6] transition-colors shadow-md">
+                    Retour aux urgences
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+
+          ) : (
+            /* =========================================
+               VUE 3 : LA SALLE DE SIMULATION (Active)
+               ========================================= */
+            <motion.div key="sim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               
-              <div className="relative flex items-center justify-center h-24 my-2">
-                <motion.div
-                  initial={{ scale: 0, rotate: -20 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: "spring", stiffness: 120, delay: 0.15 }}
-                  className="p-5 rounded-full bg-primary/15 border border-primary/20 text-primary shadow-lg"
-                >
-                  <Award className="h-10 w-10 animate-bounce" />
-                </motion.div>
-              </div>
-
-              <div className="space-y-2">
-                <h2 className="text-2xl font-black text-foreground uppercase tracking-tight">Prise en charge terminée !</h2>
-                <p className="text-xs text-muted-foreground">Voici le bilan clinique officiel validé par l'Agent MOR :</p>
-              </div>
-
-              {/* Score and stats breakdown */}
-              <div className="grid grid-cols-2 gap-4 bg-muted/30 p-4 rounded-3xl border border-border">
-                <div className="text-center space-y-1">
-                  <span className="text-[9px] font-extrabold uppercase tracking-widest text-muted-foreground/80">Diagnostic Score</span>
-                  <p className="text-3xl font-black text-primary font-mono">{score} <span className="text-xs text-muted-foreground/60">/ {selectedCase.questions.length * 100}</span></p>
-                </div>
-                <div className="text-center space-y-1">
-                  <span className="text-[9px] font-extrabold uppercase tracking-widest text-muted-foreground/80">Statut Patient</span>
-                  <div className="flex items-center justify-center gap-1.5 mt-1.5">
-                    <div className={`h-2.5 w-2.5 rounded-full ${patientState?.status === "stable" ? "bg-emerald-500" : "bg-rose-500 animate-ping"}`} />
-                    <span className={`text-xs font-black uppercase tracking-wider ${patientState?.status === "stable" ? "text-emerald-500" : "text-rose-500"}`}>
-                      {patientState?.status === "stable" ? "STABILISÉ ✅" : "CRITIQUE 🚨"}
-                    </span>
+              {/* COLONNE GAUCHE (4/12) : Patient & Constantes */}
+              <div className="lg:col-span-4 flex flex-col gap-6 sticky top-8">
+                {/* Moniteur ECG - Design Industriel Médical */}
+                <div className="bg-[#111111] rounded-[2rem] p-6 shadow-xl relative overflow-hidden">
+                  <div className="absolute top-4 right-4 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-[8px] font-bold uppercase tracking-widest text-white/50">Live</span>
                   </div>
-                </div>
-              </div>
-
-              <p className="text-xs text-muted-foreground/90 leading-relaxed font-medium px-4">
-                {score >= selectedCase.questions.length * 75
-                  ? " Félicitations Docteur ! Votre esprit d'analyse clinique et votre réactivité ont permis de stabiliser et sauver le patient dans le respect total des recommandations médicales."
-                  : " Attention Confrère : des choix thérapeutiques non conformes ou dangereux ont ralenti la prise en charge. Prenez le temps de bien relire les fiches explicatives pour éviter ces écueils au lit du patient."}
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                <Button 
-                  onClick={() => startCase(selectedCase)} 
-                  variant="outline" 
-                  className="w-full h-12 rounded-full font-bold gap-2 text-xs border-border"
-                >
-                  <RotateCcw className="h-4 w-4" /> Recommencer le Cas
-                </Button>
-                <Button 
-                  onClick={() => setSelectedCase(null)} 
-                  className="w-full h-12 rounded-full font-bold bg-primary text-primary-foreground hover:bg-primary/95 text-xs shadow-lg shadow-primary/10"
-                >
-                  Retour aux Cas ECOS
-                </Button>
-              </div>
-            </Card>
-          </motion.div>
-        ) : (
-          /* CLINICAL INTERACTIVE SIMULATOR */
-          <motion.div
-            key="simulation-room"
-            initial={{ opacity: 0, y: 15 }}
-            animate={isShaking ? {
-              x: [-6, 6, -6, 6, -3, 3, 0],
-              y: [-3, 3, -3, 3, -1, 1, 0],
-              boxShadow: "0 0 45px rgba(239, 68, 68, 0.25)"
-            } : { opacity: 1, y: 0 }}
-            transition={isShaking ? { duration: 0.22, repeat: 1 } : { duration: 0.3 }}
-            exit={{ opacity: 0, y: -15 }}
-            className={cn(
-              "grid lg:grid-cols-12 gap-6 pt-2 transition-all duration-300",
-              isUrgencyMode && timeLeft <= 15 && !hasAnswered && "border-2 border-rose-500/40 rounded-[3rem] p-3 bg-rose-950/10 shadow-[0_0_55px_rgba(239,68,68,0.25)] animate-pulse"
-            )}
-          >
-            {/* LEFT COLUMN: ECG and patient constants (4 cols) */}
-            <div className="lg:col-span-4 space-y-6">
-              <EcgMonitor 
-                bpm={patientState?.bpm || 0}
-                spo2={patientState?.spo2 || 95}
-                bloodPressure={patientState?.bloodPressure || "120/80"}
-                temperature={patientState?.temperature || 36.8}
-                isStable={patientState?.isStable || true}
-                status={patientState?.status || "stable"}
-              />
-
-              {/* History brief */}
-              <Card className="bg-card/45 backdrop-blur-2xl border border-white/5 rounded-3xl p-5 space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5 text-primary" /> Anamnèse Initiale
-                </h4>
-                <p className="text-xs text-muted-foreground/90 leading-relaxed font-medium">
-                  {selectedCase.scenario}
-                </p>
-                <div className="flex items-center gap-2 pt-2 border-t border-border/30">
-                  <Badge variant="secondary" className="text-[8px] font-black uppercase tracking-wider">{selectedCase.specialty}</Badge>
-                  <Badge className="bg-primary/10 text-primary border-primary/20 text-[8px] font-black uppercase">Étape {currentStep + 1} / {selectedCase.questions.length}</Badge>
-                </div>
-              </Card>
-            </div>
-
-            {/* MIDDLE COLUMN: Case decisions and Question Panel (5 cols) */}
-            <div className="lg:col-span-5 space-y-6">
-              <Card className="bg-card/45 backdrop-blur-2xl border border-white/5 shadow-xl rounded-[2.5rem] overflow-hidden flex flex-col h-full">
-                <div className="h-1.5 w-full bg-muted/20">
-                  <motion.div 
-                    className="h-full bg-primary" 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${((currentStep + 1) / selectedCase.questions.length) * 100}%` }}
-                    transition={{ duration: 0.4 }}
+                  <EcgMonitor 
+                    bpm={patientState?.bpm || 0} spo2={patientState?.spo2 || 95}
+                    bloodPressure={patientState?.bloodPressure || "120/80"} temperature={patientState?.temperature || 36.8}
+                    isStable={patientState?.status === "stable"} status={patientState?.status || "stable"}
                   />
                 </div>
-
-                <CardContent className="p-6 md:p-8 space-y-6 flex-grow flex flex-col justify-between">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-muted-foreground/75 uppercase tracking-widest flex items-center gap-1.5">
-                        <AlertCircle className="h-3.5 w-3.5 text-primary" /> Décision Thérapeutique
-                      </span>
-                      {isUrgencyMode && !hasAnswered && (
-                        <div className={cn(
-                          "flex items-center gap-1.5 px-3 py-1 rounded-xl border text-[10px] font-black transition-all duration-300",
-                          timeLeft <= 15
-                            ? "bg-rose-500/10 border-rose-500/30 text-rose-500 animate-pulse"
-                            : "bg-primary/5 border-primary/20 text-primary"
-                        )}>
-                          <Timer className="h-3.5 w-3.5 animate-[spin_4s_linear_infinite]" />
-                          <span>CHRONO : {timeLeft}s</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <h3 className="font-bold text-foreground leading-relaxed text-base md:text-lg">
-                      {selectedCase.questions[currentStep].text}
-                    </h3>
-
-                    {/* Microphone Action Button */}
-                    {!hasAnswered && (
-                      <div className="flex justify-center pt-2">
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={toggleListening}
-                          className={cn(
-                            "flex items-center gap-3 px-6 py-3 rounded-full border shadow-sm transition-all duration-300 relative overflow-hidden",
-                            isListening 
-                              ? "bg-rose-500/10 border-rose-500/30 text-rose-500" 
-                              : "bg-background border-border hover:bg-muted text-foreground"
-                          )}
-                        >
-                          {isListening && (
-                            <div className="absolute inset-0 bg-rose-500/20 animate-[pulse_1s_infinite]" />
-                          )}
-                          <div className={cn(
-                            "p-2 rounded-full",
-                            isListening ? "bg-rose-500 text-white animate-pulse" : "bg-primary/10 text-primary"
-                          )}>
-                            <Mic className="h-4 w-4" />
-                          </div>
-                          <span className="text-xs font-black uppercase tracking-widest relative z-10">
-                            {isListening ? "Écoute en cours..." : "Dicter la réponse"}
-                          </span>
-                        </motion.button>
-                      </div>
-                    )}
-
-                    {/* Choices Stagger List */}
-                    <div className="grid gap-3 pt-2">
-                      {selectedCase.questions[currentStep].options.map((option, idx) => {
-                        const letter = String.fromCharCode(65 + idx);
-                        const isSelected = selectedAnswer === idx;
-                        const isCorrect = idx === selectedCase.questions[currentStep].correct;
-                        const isDangerous = idx === selectedCase.questions[currentStep].dangerous;
-
-                        return (
-                          <motion.button
-                            key={idx}
-                            initial={{ opacity: 0, y: 12 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: idx * 0.05, type: "spring", stiffness: 120 }}
-                            disabled={hasAnswered}
-                            onClick={() => handleAnswerSubmit(idx)}
-                            className={`w-full text-left p-4 rounded-2xl border-2 transition-all text-xs font-semibold flex items-center justify-between ${
-                              hasAnswered && isCorrect
-                                ? "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400"
-                                : hasAnswered && isSelected && !isCorrect
-                                ? isDangerous 
-                                  ? "border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400"
-                                  : "border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400"
-                                : isSelected
-                                ? "border-primary bg-primary/5 text-primary"
-                                : "border-border hover:border-border-hover hover:bg-muted/30 text-foreground/90"
-                            }`}
-                          >
-                            <div className="flex items-start gap-3.5 pr-2">
-                              <span className={`flex-shrink-0 h-6.5 w-6.5 rounded-full flex items-center justify-center text-[10px] font-black ${
-                                hasAnswered && isCorrect
-                                  ? "bg-green-500 text-white"
-                                  : hasAnswered && isSelected && !isCorrect
-                                  ? "bg-rose-500 text-white"
-                                  : isSelected
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground"
-                              }`}>
-                                {hasAnswered && isCorrect ? <CheckCircle className="h-3.5 w-3.5" /> :
-                                 hasAnswered && isSelected && !isCorrect ? <XCircle className="h-3.5 w-3.5" /> : letter}
-                              </span>
-                              <span className="pt-0.5 leading-relaxed">{option}</span>
-                            </div>
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Action step buttons */}
-                  {hasAnswered && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="pt-4 border-t border-border/50 flex flex-col space-y-3"
-                    >
-                      <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/50 text-[11px] leading-relaxed text-muted-foreground/90 font-medium shadow-inner">
-                        <span className="font-bold text-primary block mb-0.5">💡 Justification Médicale :</span>
-                        {selectedCase.questions[currentStep].explanation}
-                      </div>
-
-                      <Button 
-                        onClick={handleNextStep}
-                        className="w-full h-11 rounded-full font-bold bg-primary text-primary-foreground hover:bg-primary/95 text-xs shadow-lg shadow-primary/10 gap-1.5 transition-all self-end"
-                      >
-                        {currentStep < selectedCase.questions.length - 1 ? "Étape Suivante" : "Terminer la prise en charge"} 
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </Button>
-                    </motion.div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* RIGHT COLUMN: AI Agent MOR Tutor Panel (3 cols) */}
-            <div className="lg:col-span-3 space-y-6">
-              <Card className={`bg-card/45 backdrop-blur-2xl border rounded-[2.5rem] overflow-hidden shadow-xl transition-all duration-500 ${
-                morStatus === "warning"
-                  ? "border-rose-500/30 shadow-rose-500/5 animate-[pulse_2s_infinite]"
-                  : morStatus === "success"
-                  ? "border-green-500/20 shadow-green-500/5"
-                  : "border-white/5"
-              }`}>
-                <div className="p-5 border-b border-white/5 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={`p-1.5 rounded-xl ${
-                      morStatus === "warning" ? "bg-rose-500/10 text-rose-500" : "bg-primary/10 text-primary"
-                    }`}>
-                      <Zap className="h-4 w-4" />
-                    </div>
-                    <span className="text-xs font-black uppercase tracking-widest text-foreground">Chef de Clinique IA</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setVoiceModeEnabled(!voiceModeEnabled)} className={cn("p-1.5 rounded-full transition-colors", voiceModeEnabled ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
-                      <Volume2 className="h-3.5 w-3.5" />
-                    </button>
-                    <Badge variant="outline" className="text-[8px] font-black uppercase tracking-wider">
-                      Agent MOR
-                    </Badge>
+                
+                {/* Dossier Patient Scrollable */}
+                <div className="bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 rounded-[2rem] p-8 shadow-sm flex flex-col h-[400px]">
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mb-6 flex items-center gap-2 pb-4 border-b border-black/5 dark:border-white/5">
+                    <FileText className="h-4 w-4 text-[#111111]" /> Anamnèse
+                  </h4>
+                  <div className="flex-grow overflow-y-auto editorial-scrollbar pr-4">
+                    <p className="text-sm text-[#111111] dark:text-[#F4F4F2] leading-relaxed font-medium">
+                      {selectedCase.scenario}
+                    </p>
                   </div>
                 </div>
+              </div>
 
-                <CardContent className="p-5 space-y-5">
-                  {/* Mor Character Visual representation */}
-                  <div className="flex items-center gap-3 bg-[#0c111d] p-3 rounded-2xl border border-white/5 shadow-inner">
-                    <div className="relative">
-                      <div className={cn(
-                        "h-10 w-10 rounded-full bg-gradient-to-tr flex items-center justify-center text-white font-black text-xs shadow-md transition-all duration-300",
-                        morStatus === "warning" ? "from-rose-500 to-red-500" : morStatus === "success" ? "from-emerald-500 to-green-500" : "from-violet-500 to-indigo-500",
-                        isSpeaking && "animate-pulse ring-4 ring-primary/20"
-                      )}>
-                        MOR
+              {/* COLONNE CENTRALE (5/12) : L'Action (Questions & Choix) */}
+              <div className="lg:col-span-5 h-[calc(100vh-150px)] min-h-[600px]">
+                <div className={cn(
+                  "bg-white dark:bg-[#161614] border rounded-[2rem] p-10 shadow-sm flex flex-col h-full transition-all duration-300",
+                  isUrgencyMode && timeLeft <= 15 && !hasAnswered ? "border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.15)]" : "border-black/10 dark:border-white/10"
+                )}>
+                  
+                  {/* Header de la carte */}
+                  <div className="flex justify-between items-start mb-8 pb-6 border-b border-black/5 dark:border-white/5 shrink-0">
+                    <div>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-[#888888] block mb-2">Étape Clinique</span>
+                      <span className="text-sm font-bold text-[#5B21B6] bg-[#5B21B6]/10 px-3 py-1 rounded-md">
+                        {currentStep + 1} / {selectedCase.questions.length}
+                      </span>
+                    </div>
+                    {isUrgencyMode && !hasAnswered && (
+                      <div className={`px-4 py-2 rounded-full border ${timeLeft <= 15 ? "bg-red-50 dark:bg-red-900/20 border-red-500 text-red-500 animate-pulse" : "bg-[#FAFAF8] dark:bg-[#0E0E0C] border-black/10 dark:border-white/10 text-[#111111] dark:text-white"}`}>
+                        <span className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                          <Timer className="h-3 w-3" /> {timeLeft}s
+                        </span>
                       </div>
-                      <div className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#0c111d] ${
-                        morStatus === "warning" ? "bg-rose-500 animate-ping" : "bg-green-500"
-                      }`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-black text-foreground truncate">Agent MOR</p>
-                      <p className="text-[8px] font-extrabold text-muted-foreground uppercase tracking-widest">Tuteur Académique</p>
-                    </div>
+                    )}
+                  </div>
+                  
+                  {/* La Question */}
+                  <div className="shrink-0 mb-8">
+                    <h3 className="text-2xl font-serif text-[#111111] dark:text-white leading-relaxed">
+                      {selectedCase.questions[currentStep].text}
+                    </h3>
                   </div>
 
-                  {/* Speech bubble */}
-                  <div className={`p-4 rounded-2xl text-xs leading-relaxed font-medium border relative ${
-                    morStatus === "warning"
-                      ? "bg-rose-500/5 border-rose-500/15 text-rose-600 dark:text-rose-400"
-                      : morStatus === "success"
-                      ? "bg-green-500/5 border-green-500/15 text-green-600 dark:text-green-400"
-                      : "bg-muted/40 border-border/50 text-muted-foreground/90"
-                  }`}>
-                    <p>{morComment}</p>
+                  {/* Les Choix (Fluides et Scrollables si besoin) */}
+                  <div className="space-y-3 flex-grow overflow-y-auto editorial-scrollbar pr-2 pb-4">
+                    {selectedCase.questions[currentStep].options.map((opt, idx) => {
+                      const isSelected = selectedAnswer === idx;
+                      const isCorrect = idx === selectedCase.questions[currentStep].correct;
+                      const isDangerous = idx === selectedCase.questions[currentStep].dangerous;
+
+                      // Design des boutons hyper strict
+                      let btnClass = "border-black/10 dark:border-white/10 bg-white dark:bg-[#0E0E0C] text-[#111111] dark:text-white hover:border-[#5B21B6] hover:bg-[#5B21B6] hover:text-white";
+                      if (hasAnswered) {
+                        if (isCorrect) btnClass = "border-green-500 bg-green-500 text-white";
+                        else if (isSelected) btnClass = isDangerous ? "border-red-500 bg-red-500 text-white" : "border-orange-500 bg-orange-500 text-white";
+                        else btnClass = "border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#161614] text-[#888888] opacity-40 cursor-not-allowed";
+                      }
+
+                      return (
+                        <button key={idx} disabled={hasAnswered} onClick={() => handleAnswerSubmit(idx)}
+                          className={`w-full text-left p-6 rounded-2xl border transition-all duration-200 flex items-start gap-4 ${btnClass}`}
+                        >
+                          <span className="font-bold text-sm w-6 mt-0.5 opacity-70">{String.fromCharCode(65 + idx)}.</span>
+                          <span className="text-sm font-medium leading-relaxed">{opt}</span>
+                        </button>
+                      );
+                    })}
                   </div>
 
-                  {/* Live clinic statistics feedback */}
-                  <div className="space-y-3 pt-1 border-t border-border/40 text-[10px]">
-                    <div className="flex justify-between items-center text-muted-foreground/80 font-bold uppercase tracking-wider">
-                      <span>Précision de garde</span>
-                      <span className="font-mono text-foreground font-black">{score} pts</span>
+                  {/* Bouton d'action suivant */}
+                  {hasAnswered && (
+                    <div className="shrink-0 pt-6 border-t border-dashed border-black/10 dark:border-white/10 mt-auto">
+                      <button onClick={handleNextStep} className="w-full py-5 rounded-xl bg-[#111111] text-white font-bold uppercase tracking-widest text-xs hover:bg-[#5B21B6] transition-colors shadow-md flex justify-center items-center gap-3">
+                        {currentStep < selectedCase.questions.length - 1 ? "Poursuivre la prise en charge" : "Clôturer le dossier"} 
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
                     </div>
-                    <Progress value={score ? (score / (selectedCase.questions.length * 100)) * 100 : 0} className="h-1 bg-muted" />
+                  )}
+                </div>
+              </div>
+
+              {/* COLONNE DROITE (3/12) : Le Tuteur IA (MOR) */}
+              <div className="lg:col-span-3 h-[calc(100vh-150px)] min-h-[600px]">
+                <div className={`bg-white dark:bg-[#161614] border rounded-[2rem] p-8 shadow-sm transition-colors duration-300 h-full flex flex-col ${
+                  morStatus === "warning" ? "border-red-500" : morStatus === "success" ? "border-green-500" : "border-black/10 dark:border-white/10"
+                }`}>
+                  
+                  {/* Header Tuteur */}
+                  <div className="flex items-center gap-4 mb-8 pb-6 border-b border-black/5 dark:border-white/5 shrink-0">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm ${
+                      morStatus === "warning" ? "bg-red-500" : morStatus === "success" ? "bg-green-500" : "bg-[#111111]"
+                    }`}>
+                      MOR
+                    </div>
+                    <div>
+                      <h4 className="text-base font-bold text-[#111111] dark:text-white">Agent MOR</h4>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-[#888888]">Superviseur IA</p>
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  
+                  {/* Feedback Chat */}
+                  <div className="flex-grow overflow-y-auto editorial-scrollbar pr-2 mb-6">
+                    <div className="bg-[#FAFAF8] dark:bg-[#0E0E0C] rounded-[1.5rem] p-6 border border-black/5 dark:border-white/5 relative">
+                      {/* Petite flèche de chat */}
+                      <div className="absolute -top-2 left-6 w-4 h-4 bg-[#FAFAF8] dark:bg-[#0E0E0C] border-l border-t border-black/5 dark:border-white/5 rotate-45" />
+                      <p className="text-sm text-[#111111] dark:text-[#F4F4F2] leading-relaxed font-medium relative z-10">
+                        {morComment}
+                      </p>
+                    </div>
+
+                    {/* Explication détaillée si répondu */}
+                    {hasAnswered && (
+                      <div className="mt-6 p-6">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888] block mb-3">
+                          Justification Scientifique
+                        </span>
+                        <p className="text-xs text-[#666666] dark:text-[#8E8E8A] leading-relaxed">
+                          {selectedCase.questions[currentStep].explanation}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Score en direct */}
+                  <div className="shrink-0 pt-6 border-t border-black/5 dark:border-white/5 mt-auto">
+                     <div className="flex justify-between items-center bg-[#FAFAF8] dark:bg-[#0E0E0C] p-4 rounded-xl border border-black/5 dark:border-white/5">
+                       <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Score en direct</span>
+                       <span className="text-lg font-bold text-[#111111] dark:text-white">{score} pts</span>
+                     </div>
+                  </div>
+                </div>
+              </div>
+
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };

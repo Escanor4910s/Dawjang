@@ -1,58 +1,36 @@
-import { Moon, Sun, Monitor } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { motion } from "framer-motion";
+import { Sun, Moon } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
-import { UserPreferencesContext } from "@/hooks/useUserPreferences";
-import { useContext } from "react";
 
-export function ThemeToggle() {
-  const { setTheme } = useTheme();
-  // Use context directly (not the hook that throws) so it works on pages
-  // where UserPreferencesProvider may not be in scope (e.g. landing page)
-  const prefsContext = useContext(UserPreferencesContext);
+export const ThemeToggle = () => {
+  const { theme, setTheme } = useTheme();
 
-  const applyTheme = (newTheme: "light" | "dark" | "system") => {
-    // 1. Write to localStorage immediately — ThemeProvider reads this on mount.
-    //    This makes the switch instantaneous and persistent across page reloads.
-    setTheme(newTheme);
+  // Resolve the effective dark state, accounting for "system" mode
+  const isDark = theme === "dark" || 
+    (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
-    // 2. Also persist to Supabase DB in background (non-blocking) so the preference
-    //    survives on other devices / after clearing localStorage.
-    if (prefsContext) {
-      prefsContext.updatePreferences({ theme: newTheme }).catch(() => {
-        // Silent fail — localStorage already has the correct value
-      });
-    }
+  const toggleTheme = () => {
+    setTheme(isDark ? "light" : "dark");
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 w-8 px-0">
-          <Sun className="rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">Toggle theme</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-popover border-border">
-        <DropdownMenuItem onClick={() => applyTheme("light")}>
-          <Sun className="mr-2 h-4 w-4" />
-          <span>Clair</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => applyTheme("dark")}>
-          <Moon className="mr-2 h-4 w-4" />
-          <span>Sombre</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => applyTheme("system")}>
-          <Monitor className="mr-2 h-4 w-4" />
-          <span>Système</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <button 
+      onClick={toggleTheme}
+      className="relative w-14 h-8 rounded-full bg-black/50 border border-white/10 flex items-center px-1 transition-all outline-none"
+      aria-label="Changer de thème"
+    >
+      <div className="absolute inset-0 flex justify-between items-center px-2 pointer-events-none opacity-40">
+        <Sun className="h-3.5 w-3.5 text-white" />
+        <Moon className="h-3.5 w-3.5 text-white" />
+      </div>
+      <motion.div 
+        layout 
+        className="h-6 w-6 rounded-full bg-white shadow-md z-10 flex items-center justify-center"
+        animate={{ x: isDark ? 24 : 0 }}
+        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      >
+        {isDark ? <Moon className="h-3 w-3 text-[#111111]" /> : <Sun className="h-3 w-3 text-[#111111]" />}
+      </motion.div>
+    </button>
   );
-}
+};

@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 const About = () => {
   return (
     <div className="min-h-screen bg-background">
-      <LandingHeader />
+      <LandingHeader forceSolid />
       <main className="container mx-auto px-4 py-20 max-w-4xl">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4">À propos d'Hippocampus</h1>

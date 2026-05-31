@@ -96,7 +96,7 @@ const Community = () => {
   };
 
   return (
-    <div className="min-h-screen py-4 sm:py-8 relative overflow-hidden">
+    <div className="min-h-screen py-4 sm:py-8 relative overflow-hidden dark:bg-[#0E0E0C]">
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-accent/10 rounded-full blur-[80px] pointer-events-none" />
@@ -297,7 +297,7 @@ const Community = () => {
                             variant={quiz.user_liked ? "default" : "outline"}
                             size="sm"
                             onClick={() => handleLike(quiz.id, !!quiz.user_liked)}
-                            className={`rounded-full px-4 transition-all duration-300 ${quiz.user_liked ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)] border-transparent hover:scale-110' : 'bg-background hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200'}`}
+                            className={`rounded-full px-4 transition-all duration-300 ${quiz.user_liked ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)] border-transparent hover:scale-110' : 'bg-background hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-500 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-800'}`}
                           >
                             <Heart className={`h-4 w-4 mr-1.5 transition-transform ${quiz.user_liked ? "fill-current animate-[pulse-glow_2s_infinite]" : "group-hover:scale-110"}`} />
                             <span className="font-bold">{quiz.likes_count}</span>

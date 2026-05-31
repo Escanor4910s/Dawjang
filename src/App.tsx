@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import Layout from "./components/Layout";
 import Index from "./pages/Index";
@@ -56,15 +56,26 @@ const ReviewPlanner = lazy(() => import("./pages/ReviewPlanner"));
 const Ecos = lazy(() => import("./pages/Ecos"));
 
 const PageLoader = () => (
-  <div className="min-h-screen bg-background flex items-center justify-center">
-    <div className="animate-pulse text-primary text-lg">Chargement...</div>
+  <div className="min-h-screen bg-transparent flex items-center justify-center flex-1 w-full">
+    <div className="animate-pulse text-primary text-lg font-bold">Chargement...</div>
   </div>
 );
 
 const queryClient = new QueryClient();
 
-// Helper to wrap a page element inside the Layout (sidebar + main content)
-const withLayout = (element: React.ReactNode) => <Layout>{element}</Layout>;
+const LayoutWrapper = () => (
+  <Layout>
+    <Suspense fallback={<PageLoader />}>
+      <Outlet />
+    </Suspense>
+  </Layout>
+);
+
+const PublicWrapper = () => (
+  <Suspense fallback={<PageLoader />}>
+    <Outlet />
+  </Suspense>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -73,10 +84,10 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                {/* Public pages — no Layout (sidebar) */}
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <Routes>
+              {/* Public pages — no Layout (sidebar) */}
+              <Route element={<PublicWrapper />}>
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/install" element={<Install />} />
                 <Route path="/about" element={<About />} />
@@ -84,36 +95,38 @@ const App = () => (
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/pricing" element={<Pricing />} />
                 <Route path="/refund" element={<Refund />} />
+              </Route>
 
-                {/* App pages — wrapped in Layout */}
-                <Route path="/" element={withLayout(<Index />)} />
-                <Route path="/add-course" element={withLayout(<AddCourse />)} />
-                <Route path="/quiz-library" element={withLayout(<QuizLibrary />)} />
-                <Route path="/community" element={withLayout(<Community />)} />
-                <Route path="/dashboard" element={withLayout(<Dashboard />)} />
-                <Route path="/review" element={withLayout(<Review />)} />
-                <Route path="/flashcards" element={withLayout(<PlanGuard requiredPlan="premium" featureName="Flashcards"><Flashcards /></PlanGuard>)} />
-                <Route path="/statistics" element={withLayout(<Statistics />)} />
-                <Route path="/quiz/:courseId" element={withLayout(<Quiz />)} />
-                <Route path="/quiz-infini/:courseId" element={withLayout(<QuizInfini />)} />
-                <Route path="/exam/:courseId" element={withLayout(<PlanGuard requiredPlan="premium" featureName="Mode Examen"><ExamMode /></PlanGuard>)} />
-                <Route path="/generate-summary" element={withLayout(<PlanGuard requiredPlan="premium" featureName="Génération de résumés"><GenerateSummary /></PlanGuard>)} />
-                <Route path="/summaries" element={withLayout(<Summaries />)} />
-                <Route path="/summary/:id" element={withLayout(<SummaryView />)} />
-                <Route path="/settings" element={withLayout(<Settings />)} />
-                <Route path="/subscription" element={withLayout(<Subscription />)} />
-                <Route path="/my-plan" element={withLayout(<MyPlan />)} />
-                <Route path="/admin" element={withLayout(<Admin />)} />
-                <Route path="/diagnostics" element={withLayout(<Diagnostics />)} />
-                <Route path="/review-planner" element={withLayout(<PlanGuard requiredPlan="premium" featureName="Planificateur de révisions"><ReviewPlanner /></PlanGuard>)} />
-                <Route path="/duel" element={withLayout(<PlanGuard requiredPlan="premium" featureName="Mode Duel"><DuelPage /></PlanGuard>)} />
-                <Route path="/ecos" element={withLayout(<PlanGuard requiredPlan="premium" featureName="Simulateur ECOS"><Ecos /></PlanGuard>)} />
-                <Route path="/duel/:duelId" element={withLayout(<PlanGuard requiredPlan="premium" featureName="Mode Duel"><DuelGame /></PlanGuard>)} />
-
+              {/* App pages — wrapped in Layout */}
+              <Route element={<LayoutWrapper />}>
+                <Route path="/" element={<Index />} />
+                <Route path="/add-course" element={<AddCourse />} />
+                <Route path="/quiz-library" element={<QuizLibrary />} />
+                <Route path="/community" element={<Community />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/review" element={<Review />} />
+                <Route path="/flashcards" element={<PlanGuard requiredPlan="premium" featureName="Flashcards"><Flashcards /></PlanGuard>} />
+                <Route path="/statistics" element={<Statistics />} />
+                <Route path="/quiz/:courseId" element={<Quiz />} />
+                <Route path="/quiz-infini/:courseId" element={<QuizInfini />} />
+                <Route path="/exam/:courseId" element={<PlanGuard requiredPlan="premium" featureName="Mode Examen"><ExamMode /></PlanGuard>} />
+                <Route path="/generate-summary" element={<PlanGuard requiredPlan="premium" featureName="Génération de résumés"><GenerateSummary /></PlanGuard>} />
+                <Route path="/summaries" element={<Summaries />} />
+                <Route path="/summary/:id" element={<SummaryView />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/subscription" element={<Subscription />} />
+                <Route path="/my-plan" element={<MyPlan />} />
+                <Route path="/admin" element={<Admin />} />
+                <Route path="/diagnostics" element={<Diagnostics />} />
+                <Route path="/review-planner" element={<PlanGuard requiredPlan="premium" featureName="Planificateur de révisions"><ReviewPlanner /></PlanGuard>} />
+                <Route path="/duel" element={<PlanGuard requiredPlan="premium" featureName="Mode Duel"><DuelPage /></PlanGuard>} />
+                <Route path="/ecos" element={<PlanGuard requiredPlan="premium" featureName="Simulateur ECOS"><Ecos /></PlanGuard>} />
+                <Route path="/duel/:duelId" element={<PlanGuard requiredPlan="premium" featureName="Mode Duel"><DuelGame /></PlanGuard>} />
+                
                 {/* Fallback */}
                 <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
+              </Route>
+            </Routes>
           </BrowserRouter>
         </TooltipProvider>
       </UserPreferencesProvider>

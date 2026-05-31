@@ -1,22 +1,21 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Upload, FileText, Sparkles, BookOpen, FileSearch, Zap, AlertCircle, Lock, FolderOpen, Search, CheckCircle, Award } from "lucide-react";
+import { 
+  UploadCloud, FileText, Brain, Sparkles, BookOpen, 
+  Zap, Layers, ChevronDown, CheckCircle2, FileUp, Shield, Award
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useFileReader } from "@/hooks/useFileReader";
 import { useUserRole } from "@/hooks/useUserRole";
-import { PremiumBadge } from "@/components/PremiumBadge";
-import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { invokeWithRetry } from "@/lib/edgeRetry";
+import { AnimatedBanner } from "@/components/AnimatedBanner";
+import { motion, AnimatePresence } from "framer-motion";
+import { uiAudio } from "@/utils/audio";
+import { toast as sonnerToast } from "sonner";
+import { UpgradePrompt } from "@/components/UpgradePrompt";
 
-type SummaryType = "complete" | "structured" | "concise";
+type SummaryType = "concise" | "structured" | "complete";
 
 interface ExistingCourse { id: string; title: string; content: string; file_name: string | null; created_at: string; }
 
@@ -24,49 +23,28 @@ const SUMMARY_PLAN_REQUIREMENTS: Record<SummaryType, "gratuit" | "premium"> = {
   concise: "gratuit", structured: "premium", complete: "premium",
 };
 
-const summaryTypes = [
-  { id: "complete" as SummaryType, title: "Résumé COMPLET", subtitle: "Long & Détaillé", description: "Version détaillée — idéal pour revoir le cours en profondeur",
-    details: ["Définitions complètes", "Contexte et physiopathologie", "Clinique détaillée", "Traitements complets"],
-    size: "2 à 10 pages", icon: BookOpen, requiredPlan: "premium" as const },
-  { id: "structured" as SummaryType, title: "Résumé STRUCTURÉ", subtitle: "Intermédiaire", description: "Version équilibrée — clair, organisé, essentiel",
-    details: ["Titres et sous-titres", "Points essentiels", "Tableaux résumés", "Arbres diagnostiques"],
-    size: "1 à 3 pages", icon: FileText, requiredPlan: "premium" as const },
-  { id: "concise" as SummaryType, title: "Résumé COURT", subtitle: "Fiche Examen", description: "Fiche rapide — résumé ultra concis pour retenir l'essentiel",
-    details: ["Points clés uniquement", "Listes à puces", "Diagnostic rapide", "Traitement résumé"],
-    size: "5 à 15 lignes", icon: Zap, requiredPlan: "gratuit" as const },
-];
-
 const GenerateSummary = () => {
-  const [title, setTitle] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [summaryType, setSummaryType] = useState<SummaryType>("concise");
-  const [summaryTemplate, setSummaryTemplate] = useState<"standard" | "objectives">("standard");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [processingStep, setProcessingStep] = useState("");
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
-  const [sourceMode, setSourceMode] = useState<"upload" | "existing">("upload");
-  const [existingCourses, setExistingCourses] = useState<ExistingCourse[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-  const [courseSearchText, setCourseSearchText] = useState("");
-  const [coursePopoverOpen, setCoursePopoverOpen] = useState(false);
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { readFile, isReading } = useFileReader();
   const { isAdmin, hasAccess } = useUserRole();
 
-  const canAccessType = (type: SummaryType): boolean => {
-    if (isAdmin) return true;
-    if (SUMMARY_PLAN_REQUIREMENTS[type] === "gratuit") return true;
-    return hasAccess("premium");
-  };
+  // --- États du Formulaire ---
+  const [sourceType, setSourceType] = useState<"new" | "existing">("new");
+  const [courseTitle, setCourseTitle] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [summaryType, setSummaryType] = useState<SummaryType>("concise");
+  const [summaryTemplate, setSummaryTemplate] = useState<"standard" | "objectives">("standard");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  
+  const [user, setUser] = useState<any>(null);
+  const [existingCourses, setExistingCourses] = useState<ExistingCourse[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
-  const handleTypeChange = (value: string) => {
-    const type = value as SummaryType;
-    if (!canAccessType(type)) { setShowUpgradePrompt(true); return; }
-    setSummaryType(type);
-  };
-
+  // --- Logique d'initialisation ---
   useEffect(() => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -91,60 +69,103 @@ const GenerateSummary = () => {
         uniqueCourses.push({ ...course, title: baseTitle });
       }
     });
-    
     setExistingCourses(uniqueCourses);
   }, [user]);
 
   useEffect(() => { if (user) fetchExistingCourses(); }, [user, fetchExistingCourses]);
 
-  const filteredExistingCourses = useMemo(() => {
-    if (!courseSearchText.trim()) return existingCourses;
-    return existingCourses.filter(c => c.title.toLowerCase().includes(courseSearchText.toLowerCase()));
-  }, [existingCourses, courseSearchText]);
-
-  const selectedCourse = existingCourses.find(c => c.id === selectedCourseId);
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0];
-    if (selectedFile) setFile(selectedFile);
+  const canAccessType = (type: SummaryType): boolean => {
+    if (isAdmin) return true;
+    if (SUMMARY_PLAN_REQUIREMENTS[type] === "gratuit") return true;
+    return hasAccess("premium");
   };
 
-  const handleGenerateSummary = async () => {
-    if (sourceMode === "upload" && (!title.trim() || !file)) {
-      toast({ title: "Champs requis", description: "Remplissez le titre et sélectionnez un fichier", variant: "destructive" });
+  const handleTypeChange = (type: SummaryType) => {
+    if (!canAccessType(type)) { setShowUpgradePrompt(true); return; }
+    setSummaryType(type);
+    uiAudio.playSoftClick();
+  };
+
+  // --- Logique d'Upload ---
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = () => setIsDragging(false);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileSelection(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileSelection = (file: File) => {
+    const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'];
+    if (validTypes.includes(file.type)) {
+      setSelectedFile(file);
+      uiAudio.playSoftClick();
+      if (!courseTitle) setCourseTitle(file.name.replace(/\.[^/.]+$/, ""));
+    } else {
+      sonnerToast.error("Format de fichier non supporté. Veuillez uploader un PDF, DOCX, PPT ou TXT.");
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileSelection(e.target.files[0]);
+    }
+  };
+
+  const normalizeTitle = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ').replace(/\s*\(session\s*\d+\)\s*$/i, '');
+  const getUniqueSessionTitle = async (baseTitle: string, userId: string): Promise<string> => {
+    const normalizedBase = normalizeTitle(baseTitle);
+    const { data: existing } = await supabase.from("courses").select("title").eq("user_id", userId);
+    if (!existing || existing.length === 0) return baseTitle;
+    const matchingCourses = existing.filter(course => { const n = normalizeTitle(course.title); return n === normalizedBase || n.startsWith(normalizedBase); });
+    if (matchingCourses.length === 0) return baseTitle;
+    const sessionNumbers = matchingCourses.map(course => { const match = course.title.match(/\(Session\s*(\d+)\)\s*$/i); return match ? parseInt(match[1]) : 1; });
+    return `${baseTitle} (Session ${Math.max(...sessionNumbers) + 1})`;
+  };
+
+  const handleGenerate = async () => {
+    if (sourceType === "new" && (!courseTitle.trim() || !selectedFile)) {
+      sonnerToast.error("Veuillez remplir le titre et sélectionner un fichier.");
       return;
     }
-    if (sourceMode === "existing" && !selectedCourseId) {
-      toast({ title: "Champs requis", description: "Sélectionnez un cours existant", variant: "destructive" });
+    if (sourceType === "existing" && !selectedCourseId) {
+      sonnerToast.error("Veuillez sélectionner un cours existant.");
       return;
     }
     if (!user) return;
 
     setIsGenerating(true);
-    setProcessingStep("Préparation...");
+    uiAudio.playSuccessChime();
+    const toastId = sonnerToast.loading("L'Agent MOR prépare la génération...");
 
     try {
       let courseContent: string;
-      let courseTitle: string;
-      let courseId: string;
+      let finalCourseTitle: string;
+      let finalCourseId: string;
 
-      if (sourceMode === "existing" && selectedCourse) {
+      if (sourceType === "existing" && selectedCourseId) {
+        const selectedCourse = existingCourses.find(c => c.id === selectedCourseId);
+        if (!selectedCourse) throw new Error("Cours introuvable");
         courseContent = selectedCourse.content;
-        courseTitle = title.trim() || selectedCourse.title;
-        courseId = selectedCourse.id;
+        finalCourseTitle = selectedCourse.title;
+        finalCourseId = selectedCourse.id;
       } else {
-        setProcessingStep("Analyse du fichier...");
-        const fileResult = await readFile(file!);
+        sonnerToast.loading("Analyse du fichier...", { id: toastId });
+        const fileResult = await readFile(selectedFile!);
         if (!fileResult.success || !fileResult.content) throw new Error(fileResult.error || "Impossible de lire le fichier");
+
         courseContent = fileResult.content;
-        courseTitle = title;
-        setProcessingStep("Sauvegarde du cours...");
-        const { data: courseData, error: courseError } = await supabase.from("courses").insert({ user_id: user.id, title: courseTitle, content: courseContent, file_name: file!.name }).select().single();
+        sonnerToast.loading("Sauvegarde du cours...", { id: toastId });
+        finalCourseTitle = await getUniqueSessionTitle(courseTitle, user.id);
+
+        const { data: courseData, error: courseError } = await supabase.from("courses").insert({ user_id: user.id, title: finalCourseTitle, content: courseContent, file_name: selectedFile!.name }).select().single();
         if (courseError) throw courseError;
-        courseId = courseData.id;
+        finalCourseId = courseData.id;
       }
 
-      setProcessingStep("Génération du résumé avec l'IA...");
+      sonnerToast.loading("Génération du résumé avec l'IA...", { id: toastId });
       
       let contentToSend = courseContent;
       if (summaryTemplate === "objectives") {
@@ -167,254 +188,281 @@ ${courseContent}`;
       }
 
       const { data, error } = await invokeWithRetry<{ summary: string }>("generate-summary", {
-        body: { content: contentToSend, type: summaryType, title: courseTitle, template: summaryTemplate },
+        body: { content: contentToSend, type: summaryType, title: finalCourseTitle, template: summaryTemplate },
         retries: 2,
         onRetry: (attempt, status) => {
-          setProcessingStep(`Service IA temporairement indisponible (${status ?? "?"}) — nouvelle tentative ${attempt}/2...`);
+          sonnerToast.loading(`Service IA temporairement indisponible (${status ?? "?"}) — tentative ${attempt}/2...`, { id: toastId });
         },
       });
+      
       if (error) throw new Error(error.message);
       if (!data?.summary) throw new Error("Aucune réponse de l'IA. Réessayez.");
 
-      setProcessingStep("Sauvegarde du résumé...");
+      sonnerToast.loading("Sauvegarde du résumé...", { id: toastId });
       const { data: summaryData, error: summaryError } = await supabase
         .from("summaries" as any)
-        .insert({ user_id: user.id, course_id: courseId, title: courseTitle, content: data.summary, summary_type: summaryType,
+        .insert({ 
+          user_id: user.id, course_id: finalCourseId, title: finalCourseTitle, content: data.summary, summary_type: summaryType,
           metadata: { generatedAt: new Date().toISOString(), contentLength: courseContent.length, template: summaryTemplate },
         }).select().single();
+      
       if (summaryError) throw summaryError;
 
-      toast({ title: "✅ Résumé généré avec succès !", description: `"${courseTitle}" a été créé` });
+      sonnerToast.success(`Résumé généré avec succès !`, { id: toastId });
       navigate(`/summary/${(summaryData as any).id}`);
     } catch (error) {
       console.error("Error:", error);
-      toast({ title: "Erreur", description: error instanceof Error ? error.message : "Erreur inconnue", variant: "destructive" });
-    } finally { setIsGenerating(false); setProcessingStep(""); }
+      sonnerToast.error(error instanceof Error ? error.message : "Erreur inconnue", { id: toastId });
+    } finally { 
+      setIsGenerating(false); 
+    }
   };
 
-  const isReady = sourceMode === "upload" ? (title.trim() && file) : (selectedCourseId);
-  const selectedType = summaryTypes.find((t) => t.id === summaryType);
+  // --- Dictionnaires de l'UI ---
+  const summaryTypeConfig = [
+    { id: "concise", title: "Résumé Court", desc: "Fiche rapide — résumé ultra concis pour retenir l'essentiel.", color: "emerald", icon: Zap, details: ["Points clés", "Listes à puces"] },
+    { id: "structured", title: "Résumé Structuré", desc: "Version équilibrée — clair, organisé, essentiel.", color: "amber", icon: FileText, details: ["Titres", "Points essentiels"] },
+    { id: "complete", title: "Résumé Complet", desc: "Version détaillée — idéal pour revoir le cours en profondeur.", color: "rose", icon: BookOpen, details: ["Détaillé", "Physiopathologie"] }
+  ];
+
+  const infoMessage = summaryType === "concise" 
+    ? "Résumé Court : Idéal pour des révisions de dernière minute, va droit à l'essentiel."
+    : summaryType === "structured"
+    ? "Résumé Structuré : L'équilibre parfait entre profondeur et lisibilité. Recommandé."
+    : "Résumé Complet : Restitue la quasi-totalité du cours sous une forme plus digeste.";
 
   return (
-    <div className="min-h-screen bg-dashboard bg-doodle-watermark py-6 sm:py-8 relative">
-      <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0A0A0A] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans pt-8 pb-32 relative overflow-hidden transition-colors duration-500">
+      
       <UpgradePrompt isOpen={showUpgradePrompt} onClose={() => setShowUpgradePrompt(false)} requiredPlan="premium" featureName="Résumés complets et structurés" />
-      <div className="container mx-auto px-3 sm:px-4 relative z-10">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-6 sm:mb-8 pt-8 sm:pt-0">
-            <h1 className="text-2xl sm:text-4xl font-bold text-foreground mb-2 flex items-center justify-center gap-3">
-              <Sparkles className="h-6 w-6 sm:h-8 sm:w-8 text-primary" /><span>Générer un Résumé</span>
-            </h1>
-            <p className="text-muted-foreground text-sm sm:text-lg">Transformez vos cours en résumés intelligents</p>
-          </div>
+      
+      {/* Halo d'ambiance en arrière-plan */}
+      <div className="absolute top-0 right-1/4 w-[600px] h-[600px] bg-[#5B21B6]/10 dark:bg-[#5B21B6]/20 blur-[120px] rounded-full pointer-events-none z-0" />
 
-          <div className="grid gap-4 sm:gap-6">
-            {/* Source Card */}
-            <Card className="bg-white dark:bg-slate-900 shadow-card border-0">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base sm:text-lg"><Upload className="h-5 w-5 text-foreground" /><span>Source du cours</span></CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Tabs value={sourceMode} onValueChange={(v) => setSourceMode(v as "upload" | "existing")}>
-                  <TabsList className="grid w-full grid-cols-2 bg-muted/50">
-                    <TabsTrigger value="upload" className="text-xs sm:text-sm"><Upload className="h-4 w-4 mr-1 sm:mr-2" />Nouveau fichier</TabsTrigger>
-                    <TabsTrigger value="existing" className="text-xs sm:text-sm"><FolderOpen className="h-4 w-4 mr-1 sm:mr-2" />Cours existant</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+      <div className="max-w-[1400px] mx-auto px-6 space-y-10 relative z-10">
+        
+        <AnimatedBanner 
+          title="Génération de Résumé."
+          subtitle="Transformez vos cours en fiches intelligentes avec l'Agent MOR."
+        />
 
-                {sourceMode === "upload" ? (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="title">Titre du résumé</Label>
-                      <Input id="title" placeholder="Ex: Cardiologie - Insuffisance cardiaque" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <div className="grid lg:grid-cols-12 gap-8 items-start">
+          
+          {/* ==========================================
+              COLONNE 1 : SOURCE
+              ========================================== */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
+            className="lg:col-span-6 bg-white/80 dark:bg-[#111111]/80 backdrop-blur-2xl border border-black/10 dark:border-white/10 rounded-[2.5rem] p-8 md:p-12 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] flex flex-col h-full relative overflow-hidden group"
+          >
+            <div className="absolute -top-10 -right-10 opacity-[0.03] dark:opacity-[0.02] pointer-events-none group-hover:scale-110 transition-transform duration-700">
+              <FileText className="w-64 h-64 text-[#111111] dark:text-white" />
+            </div>
+
+            <div className="relative z-10 flex flex-col h-full space-y-10">
+              
+              <div className="flex bg-[#FAFAF8] dark:bg-[#1A1A18] p-1.5 rounded-[1.5rem] border border-black/5 dark:border-white/5 relative">
+                <button onClick={() => setSourceType("new")} className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest rounded-xl transition-colors relative z-10 flex items-center justify-center gap-2 ${sourceType === "new" ? "text-[#111111] dark:text-black" : "text-[#888888] hover:text-[#111111] dark:hover:text-white"}`}>
+                  <UploadCloud className="h-4 w-4" /> Nouveau Fichier
+                </button>
+                <button onClick={() => setSourceType("existing")} className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest rounded-xl transition-colors relative z-10 flex items-center justify-center gap-2 ${sourceType === "existing" ? "text-[#111111] dark:text-black" : "text-[#888888] hover:text-[#111111] dark:hover:text-white"}`}>
+                  <Layers className="h-4 w-4" /> Cours Existant
+                </button>
+                <motion.div layoutId="source-tab-summary" className="absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-white dark:bg-white rounded-xl shadow-sm border border-black/5 dark:border-transparent z-0" animate={{ left: sourceType === "new" ? "6px" : "calc(50% + 0px)" }} transition={{ type: "spring", stiffness: 400, damping: 30 }} />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase tracking-widest text-[#111111] dark:text-white ml-2">Titre du résumé</label>
+                <input type="text" value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)} placeholder="Ex: Cardiologie - Insuffisance cardiaque" className="w-full bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 focus:border-[#5B21B6]/40 rounded-[1.5rem] px-6 py-5 text-sm font-bold text-[#111111] dark:text-white placeholder:text-[#888888]/50 shadow-inner outline-none transition-all focus:ring-4 ring-[#5B21B6]/5" />
+              </div>
+
+              <AnimatePresence mode="wait">
+                {sourceType === "new" ? (
+                  <motion.div key="file" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex-grow flex flex-col space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#111111] dark:text-white ml-2 block">Document de cours</label>
+                    <div 
+                      onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onClick={() => fileInputRef.current?.click()}
+                      className={`flex-grow min-h-[220px] rounded-[2rem] border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative group overflow-hidden ${isDragging ? "border-[#5B21B6] bg-[#5B21B6]/5" : selectedFile ? "border-emerald-500/50 bg-emerald-500/5 shadow-inner" : "border-black/10 dark:border-white/10 hover:border-[#5B21B6]/40 bg-[#FAFAF8] dark:bg-[#1A1A18]/50"}`}
+                    >
+                      <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".pdf,.doc,.docx,.txt,.ppt,.pptx" />
+                      {selectedFile ? (
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center text-center px-6">
+                          <div className="h-16 w-16 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3 shadow-inner"><CheckCircle2 className="h-8 w-8" /></div>
+                          <p className="text-sm font-bold text-[#111111] dark:text-white max-w-[280px] truncate">{selectedFile.name}</p>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mt-2">Prêt pour l'analyse</p>
+                        </motion.div>
+                      ) : (
+                        <div className="flex flex-col items-center text-center px-6">
+                          <div className="h-14 w-14 rounded-full bg-white dark:bg-[#111111] shadow-sm border border-black/5 dark:border-white/5 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:shadow-md transition-all duration-300"><FileUp className="h-6 w-6 text-[#888888] group-hover:text-[#5B21B6] transition-colors" /></div>
+                          <p className="text-sm font-bold text-[#111111] dark:text-white">Appuyez pour sélectionner</p>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mt-2">PDF, DOCX, PPT ou TXT</p>
+                        </div>
+                      )}
                     </div>
-                    <div className="space-y-2">
-                      <Label>Document de cours</Label>
-                      <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 sm:p-6 text-center hover:border-primary/50 transition-all cursor-pointer bg-muted/10">
-                        <input id="file-upload-summary" type="file" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,*/*" onChange={handleFileChange} className="hidden" />
-                        <label htmlFor="file-upload-summary" className="cursor-pointer block w-full">
-                          <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                          {file ? (
-                            <div><p className="text-foreground font-medium break-all text-sm">{file.name}</p><p className="text-muted-foreground text-xs">Fichier sélectionné</p></div>
-                          ) : (
-                            <div><p className="text-foreground font-medium mb-1 text-sm">Appuyez pour sélectionner</p><p className="text-muted-foreground text-xs">PDF, DOC, DOCX, PPT, PPTX ou TXT</p></div>
-                          )}
-                        </label>
-                      </div>
-                    </div>
-                  </>
+                  </motion.div>
                 ) : (
-                  <div className="space-y-3">
-                    <Label>Sélectionner un cours uploadé</Label>
-                    <Popover open={coursePopoverOpen} onOpenChange={setCoursePopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-between h-11 border-foreground/30 text-foreground">
-                          <span className="truncate">{selectedCourse ? selectedCourse.title : "Choisir un cours..."}</span>
-                          <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                        <div className="p-2 border-b"><div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Rechercher..." value={courseSearchText} onChange={(e) => setCourseSearchText(e.target.value)} className="pl-8 h-9" /></div></div>
-                        <div className="max-h-60 overflow-y-auto p-1">
-                          {filteredExistingCourses.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">Aucun cours trouvé</p> : (
-                            filteredExistingCourses.map((course) => (
-                              <button key={course.id} onClick={() => { setSelectedCourseId(course.id); setCoursePopoverOpen(false); if (!title.trim()) setTitle(course.title); }}
-                                className={`w-full text-left px-3 py-2.5 text-sm rounded-md hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between gap-2 ${selectedCourseId === course.id ? "bg-primary/10 text-primary" : ""}`}>
-                                <div className="truncate">
-                                  <p className="font-medium truncate">{course.title}</p>
-                                  <p className="text-xs text-muted-foreground">{new Date(course.created_at).toLocaleDateString("fr-FR")}</p>
-                                </div>
-                                {selectedCourseId === course.id && <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />}
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                    <div className="space-y-2">
-                      <Label htmlFor="summary-title">Titre du résumé</Label>
-                      <Input id="summary-title" placeholder="Titre personnalisé (optionnel)" value={title} onChange={(e) => setTitle(e.target.value)} />
-                    </div>
-                  </div>
+                  <motion.div key="existing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex-grow flex flex-col space-y-3">
+                     <label className="text-[10px] font-black uppercase tracking-widest text-[#111111] dark:text-white ml-2 block">Sélectionner un cours</label>
+                     <div className="relative">
+                        <select 
+                          value={selectedCourseId || ""} 
+                          onChange={(e) => {
+                            setSelectedCourseId(e.target.value);
+                            const selectedCourse = existingCourses.find(c => c.id === e.target.value);
+                            if (selectedCourse && !courseTitle.trim()) setCourseTitle(selectedCourse.title);
+                          }} 
+                          className="w-full appearance-none bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 focus:border-[#5B21B6]/40 rounded-[1.5rem] px-6 py-5 text-sm font-bold text-[#111111] dark:text-white shadow-inner outline-none transition-all focus:ring-4 ring-[#5B21B6]/5 cursor-pointer"
+                        >
+                          <option value="">Choisissez dans votre bibliothèque...</option>
+                          {existingCourses.map(course => (
+                            <option key={course.id} value={course.id}>{course.title}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 h-5 w-5 text-[#888888] pointer-events-none" />
+                     </div>
+                  </motion.div>
                 )}
-              </CardContent>
-            </Card>
-
-            {/* Summary Template Selection */}
-            <Card className="bg-white dark:bg-slate-900 shadow-card border-0 overflow-hidden relative group">
-              <div className="absolute top-0 left-0 w-1.5 h-full bg-primary" />
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2.5 text-base sm:text-lg">
-                  <Award className="h-5 w-5 text-primary" />
-                  <span>Schéma et Modèle de Résumé</span>
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Choisissez la structure sur laquelle l'IA va façonner votre résumé clinique.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-2">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {/* Standard template */}
-                  <button
-                    type="button"
-                    onClick={() => setSummaryTemplate("standard")}
-                    className={`p-4 rounded-2xl border-2 text-left flex flex-col justify-between h-40 transition-all duration-300 relative ${
-                      summaryTemplate === "standard"
-                        ? "border-primary bg-primary/5 text-primary shadow-sm"
-                        : "border-border hover:border-muted-foreground/30 hover:bg-muted/10 text-foreground"
-                    }`}
-                  >
-                    <div className="flex justify-between items-start w-full">
-                      <span className={`p-2 rounded-xl ${summaryTemplate === "standard" ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
-                        <Sparkles className="h-5 w-5" />
-                      </span>
-                      {summaryTemplate === "standard" && (
-                        <span className="text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded bg-primary text-primary-foreground">Sélectionné</span>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-wider mb-1">📋 Schéma Clinique Standard</p>
-                      <p className="text-[11px] leading-relaxed text-muted-foreground">
-                        Structure classique : Définition, Physiopathologie, Tableau clinique, Examens complémentaires et Traitement.
-                      </p>
-                    </div>
-                  </button>
-
-                  {/* Course Objectives template */}
-                  <button
-                    type="button"
-                    onClick={() => setSummaryTemplate("objectives")}
-                    className={`p-4 rounded-2xl border-2 text-left flex flex-col justify-between h-40 transition-all duration-300 relative ${
-                      summaryTemplate === "objectives"
-                        ? "border-primary bg-primary/5 text-primary shadow-sm"
-                        : "border-border hover:border-muted-foreground/30 hover:bg-muted/10 text-foreground"
-                    }`}
-                  >
-                    <div className="flex justify-between items-start w-full">
-                      <span className={`p-2 rounded-xl ${summaryTemplate === "objectives" ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
-                        <Award className="h-5 w-5" />
-                      </span>
-                      {summaryTemplate === "objectives" && (
-                        <span className="text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded bg-primary text-primary-foreground">Sélectionné</span>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-wider mb-1">🎯 Objectifs du Cours</p>
-                      <p className="text-[11px] leading-relaxed text-muted-foreground">
-                        Structure ciblée : Rédige le résumé en répondant précisément aux objectifs pédagogiques formulés par le professeur.
-                      </p>
-                    </div>
-                  </button>
+              </AnimatePresence>
+            </div>
+          </motion.div>
+          
+          {/* ==========================================
+              COLONNE 2 : LE MOTEUR IA
+              ========================================== */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }}
+            className="lg:col-span-6 bg-white/80 dark:bg-[#111111]/80 backdrop-blur-2xl border border-black/10 dark:border-white/10 rounded-[2.5rem] p-8 md:p-12 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] flex flex-col h-full"
+          >
+            <div className="space-y-10 flex-grow">
+              
+              {/* Type de Résumé (Mapping sur les couleurs AddCourse) */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-end ml-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#111111] dark:text-white block">Type de résumé</label>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-[#5B21B6] bg-[#5B21B6]/10 px-3 py-1 rounded-full flex items-center gap-1.5"><Sparkles className="h-3 w-3" /> Recommandé : Structuré</span>
                 </div>
-              </CardContent>
-            </Card>
+                
+                <div className="grid grid-cols-1 gap-4">
+                  {summaryTypeConfig.map((lvl) => {
+                    const isActive = summaryType === lvl.id;
+                    const isLocked = !canAccessType(lvl.id as SummaryType);
+                    const borderColor = isActive ? lvl.color === "emerald" ? "border-emerald-500" : lvl.color === "amber" ? "border-amber-500" : "border-rose-500" : "border-black/5 dark:border-white/5";
+                    const bgColor = isActive ? lvl.color === "emerald" ? "bg-emerald-500/5" : lvl.color === "amber" ? "bg-amber-500/5" : "bg-rose-500/5" : "bg-[#FAFAF8] dark:bg-[#1A1A18]";
+                    const iconColor = isActive ? lvl.color === "emerald" ? "text-emerald-500" : lvl.color === "amber" ? "text-amber-500" : "text-rose-500" : "text-[#888888]";
+                    const Icon = lvl.icon;
 
-            {/* Summary Type Selection */}
-            <Card className="bg-white dark:bg-slate-900 shadow-card border-0">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base sm:text-lg"><FileSearch className="h-5 w-5 text-foreground" /><span>Type de Résumé</span></CardTitle>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup value={summaryType} onValueChange={handleTypeChange} className="grid gap-3">
-                  {summaryTypes.map((type) => {
-                    const Icon = type.icon;
-                    const isSelected = summaryType === type.id;
-                    const isLocked = !canAccessType(type.id);
                     return (
-                      <label key={type.id}
-                        className={`relative flex cursor-pointer rounded-xl border-2 p-3 sm:p-4 transition-all hover:shadow-md ${
-                          isSelected ? "border-foreground/30 bg-foreground/5 shadow-md" : "border-border hover:border-muted-foreground/50"
-                        } ${isLocked ? "opacity-80" : ""}`}
-                        onClick={(e) => { if (isLocked) { e.preventDefault(); setShowUpgradePrompt(true); } }}>
-                        <RadioGroupItem value={type.id} className="sr-only" disabled={isLocked} />
-                        <div className="flex gap-3 sm:gap-4 w-full">
-                          <div className="p-2 sm:p-3 rounded-lg bg-foreground/10 self-start">
-                            <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-foreground" />
+                      <motion.button 
+                        key={lvl.id} 
+                        whileHover={!isLocked ? { scale: 1.01 } : {}} 
+                        whileTap={!isLocked ? { scale: 0.98 } : {}} 
+                        onClick={() => handleTypeChange(lvl.id as SummaryType)} 
+                        className={`text-left p-5 rounded-2xl border-2 transition-all duration-300 outline-none flex items-start gap-4 ${borderColor} ${bgColor} ${isLocked ? "opacity-80" : ""}`}
+                      >
+                        <div className={`mt-0.5 p-2 rounded-xl bg-white dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 shadow-sm`}><Icon className={`h-4 w-4 ${iconColor}`} /></div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-sm font-bold text-[#111111] dark:text-white">{lvl.title}</h4>
+                            {isLocked && <Shield className="h-3 w-3 text-amber-500" />}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-semibold text-foreground text-sm sm:text-base">{type.title}</h3>
-                                  {type.requiredPlan === "premium" && !isAdmin && <PremiumBadge type="premium" size="sm" />}
-                                </div>
-                                <p className="text-xs sm:text-sm font-medium text-muted-foreground">{type.subtitle}</p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {isLocked && <Lock className="h-4 w-4 text-muted-foreground" />}
-                                <span className="text-[10px] sm:text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{type.size}</span>
-                              </div>
-                            </div>
-                            <p className="text-xs sm:text-sm text-muted-foreground mt-1">{type.description}</p>
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                              {type.details.map((detail, i) => (
-                                <span key={i} className="text-[10px] sm:text-xs px-2 py-0.5 bg-muted rounded-full text-muted-foreground">✓ {detail}</span>
-                              ))}
-                            </div>
+                          <p className="text-[11px] text-[#666666] dark:text-[#8E8E8A] leading-relaxed">{lvl.desc}</p>
+                          <div className="flex gap-2 mt-2">
+                            {lvl.details.map((detail, i) => (
+                              <span key={i} className="text-[9px] font-black uppercase tracking-widest text-[#888888] border border-black/5 dark:border-white/10 px-2 py-0.5 rounded-md">{detail}</span>
+                            ))}
                           </div>
                         </div>
-                      </label>
+                      </motion.button>
                     );
                   })}
-                </RadioGroup>
-              </CardContent>
-            </Card>
-
-            {/* Generate Button */}
-            <Button onClick={handleGenerateSummary} disabled={isGenerating || isReading || !isReady} size="lg" className="w-full bg-foreground text-background hover:bg-foreground/90 h-12 sm:h-14 text-base sm:text-lg">
-              {isGenerating || isReading ? (
-                <div className="flex items-center gap-2"><Sparkles className="h-5 w-5 animate-spin" /><span className="truncate">{processingStep || "Analyse..."}</span></div>
-              ) : (
-                <div className="flex items-center gap-2"><Sparkles className="h-5 w-5" /><span className="truncate">Générer le Résumé {selectedType?.subtitle}</span></div>
-              )}
-            </Button>
-
-            {(isGenerating || isReading) && (
-              <div className="bg-muted/50 p-3 rounded-lg">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground"><AlertCircle className="h-4 w-4" /><span>{processingStep || "Traitement..."}</span></div>
+                </div>
               </div>
-            )}
-          </div>
+
+              {/* SÉLECTEURS TECHNIQUES (Modèle) */}
+              <div className="space-y-4">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#111111] dark:text-white ml-2 block">Schéma de génération</label>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                      {/* Standard template */}
+                      <button
+                        type="button"
+                        onClick={() => { setSummaryTemplate("standard"); uiAudio.playSoftClick(); }}
+                        className={`p-4 rounded-2xl border-2 text-left flex flex-col justify-between h-32 transition-all duration-300 relative ${
+                          summaryTemplate === "standard"
+                            ? "border-[#5B21B6] bg-[#5B21B6]/5 text-[#5B21B6]"
+                            : "border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#1A1A18] text-[#111111] dark:text-[#F4F4F2]"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start w-full">
+                          <span className={`p-2 rounded-xl ${summaryTemplate === "standard" ? "bg-[#5B21B6]/15 text-[#5B21B6]" : "bg-white dark:bg-[#0A0A0A] text-[#888888] shadow-sm border border-black/5 dark:border-white/5"}`}>
+                            <Sparkles className="h-4 w-4" />
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wider mb-1">Standard</p>
+                          <p className="text-[10px] text-[#666666] dark:text-[#8E8E8A]">Structure clinique classique (Déf, Clinique, TTT...)</p>
+                        </div>
+                      </button>
+
+                      {/* Objectives template */}
+                      <button
+                        type="button"
+                        onClick={() => { setSummaryTemplate("objectives"); uiAudio.playSoftClick(); }}
+                        className={`p-4 rounded-2xl border-2 text-left flex flex-col justify-between h-32 transition-all duration-300 relative ${
+                          summaryTemplate === "objectives"
+                            ? "border-[#5B21B6] bg-[#5B21B6]/5 text-[#5B21B6]"
+                            : "border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#1A1A18] text-[#111111] dark:text-[#F4F4F2]"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start w-full">
+                          <span className={`p-2 rounded-xl ${summaryTemplate === "objectives" ? "bg-[#5B21B6]/15 text-[#5B21B6]" : "bg-white dark:bg-[#0A0A0A] text-[#888888] shadow-sm border border-black/5 dark:border-white/5"}`}>
+                            <Award className="h-4 w-4" />
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wider mb-1">Par Objectifs</p>
+                          <p className="text-[10px] text-[#666666] dark:text-[#8E8E8A]">Répond strictement aux objectifs pédagogiques</p>
+                        </div>
+                      </button>
+                  </div>
+              </div>
+
+              {/* Boîte d'info */}
+              <div className="p-4 bg-[#FAFAF8] dark:bg-[#1A1A18] border border-black/5 dark:border-white/5 rounded-2xl">
+                <p className="text-[11px] font-medium text-[#666666] dark:text-[#8E8E8A] leading-relaxed">
+                  <strong className="font-bold text-[#111111] dark:text-white">Info :</strong> {infoMessage}
+                </p>
+              </div>
+            </div>
+
+            {/* ACTION FINALE */}
+            <div className="pt-8 mt-4 border-t border-black/5 dark:border-white/5">
+              <AnimatePresence mode="wait">
+                {isGenerating ? (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full bg-[#111111] dark:bg-white p-6 rounded-[2rem] shadow-xl text-white dark:text-[#111111] relative overflow-hidden">
+                    <div className="absolute top-0 bottom-0 w-full bg-gradient-to-b from-transparent via-[#5B21B6]/50 to-transparent opacity-50 animate-[scan_2s_ease-in-out_infinite]" />
+                    <style dangerouslySetInnerHTML={{__html: `@keyframes scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(100%); } }`}} />
+                    <div className="relative z-10 flex flex-col items-center text-center space-y-4">
+                      <Brain className="h-8 w-8 text-[#5B21B6] animate-pulse" />
+                      <div className="space-y-1">
+                        <p className="text-xs font-black uppercase tracking-widest">Création du résumé...</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={handleGenerate}
+                    className="w-full h-16 rounded-[2rem] bg-[#111111] dark:bg-white text-white dark:text-[#111111] font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 shadow-[0_15px_30px_-10px_rgba(0,0,0,0.2)] transition-all relative overflow-hidden group"
+                  >
+                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 dark:via-black/10 to-transparent group-hover:animate-[shimmer_1.5s_infinite]" />
+                    <Sparkles className="h-4 w-4 text-[#5B21B6]" />
+                    <span className="relative z-10">Générer le Résumé</span>
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </div>
+
+          </motion.div>
         </div>
       </div>
     </div>

@@ -1,0 +1,111 @@
+[
+  {
+    "step": 5106,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Implementing Social Focus Room using Supabase Presence\"",
+      "Instruction": "\"Add Presence tracking to Pomodoro widget in Dashboard.tsx\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":14,\"ReplacementContent\":\"import { uiAudio } from \\\"@/utils/audio\\\";\\n\\ninterface ActiveFocusUser {\\n  user_id: string;\\n  first_name: string;\\n  avatar_url: string | null;\\n  is_focusing: boolean;\\n}\\n\\ninterface QuizResult {\",\"StartLine\":13,\"TargetContent\":\"import { uiAudio } from \\\"@/utils/audio\\\";\\n\\ninterface QuizResult {\"},{\"AllowMultiple\":false,\"EndLine\":39,\"ReplacementContent\":\"  const [focusTimeLeft, setFocusTimeLeft] = useState(25 * 60);\\n  const [isTimerRunning, setIsTimerRunning] = useState(false);\\n  const [isBinauralPlaying, setIsBinauralPlaying] = useState(false);\\n  const [activeFocusUsers, setActiveFocusUsers] = useState<ActiveFocusUser[]>([]);\",\"StartLine\":36,\"TargetContent\":\"  const [focusTimeLeft, setFocusTimeLeft] = useState(25 * 60);\\n  const [isTimerRunning, setIsTimerRunning] = useState(false);\\n  const [isBinauralPlaying, setIsBinauralPlaying] = useState(false);\"},{\"AllowMultiple\":false,\"EndLine\":103,\"ReplacementContent\":\"  // Cleanup Binaural Audio on component unmount\\n  useEffect(() => {\\n    return () => {\\n      uiAudio.stopBinauralBeats();\\n    };\\n  }, []);\\n\\n  // Supabase Presence for Social Focus\\n  useEffect(() => {\\n    if (!firstName) return;\\n\\n    const presenceChannel = supabase.channel('focus_room');\\n\\n    presenceChannel\\n      .on('presence', { event: 'sync' }, () => {\\n        const newState = presenceChannel.presenceState();\\n        const users = Object.values(newState).flatMap(p => p as unknown as ActiveFocusUser[]);\\n        // Deduplicate\\n        const uniqueUsers = Array.from(new Map(users.map(item => [item.user_id, item])).values());\\n        // Only show users who are focusing AND not the current user (if we want, or keep current user to test)\\n        setActiveFocusUsers(uniqueUsers.filter(u => u.is_focusing));\\n      })\\n      .subscribe(async (status) => {\\n        if (status === 'SUBSCRIBED') {\\n          const { data } = await supabase.auth.getUser();\\n          await presenceChannel.track({\\n            user_id: data.use\n<truncated 4188 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\7MAKSACOD PC\\\\Downloads\\\\HIPOCAMPUS\\\\hipocampus2026-main\\\\hipocampus2026-main\\\\src\\\\pages\\\\Dashboard.tsx\"",
+      "toolAction": "\"Adding Presence to Pomodoro\"",
+      "toolSummary": "\"Edit Dashboard.tsx\""
+    }
+  },
+  {
+    "step": 7792,
+    "name": "write_to_file",
+    "args": {
+      "CodeContent": "\"import { useEffect, useState, useCallback, useMemo } from \\\"react\\\";\\nimport { supabase } from \\\"@/integrations/supabase/client\\\";\\nimport { Card, CardContent } from \\\"@/components/ui/card\\\";\\nimport { BarChart, Bar, ResponsiveContainer, Cell } from \\\"recharts\\\";\\nimport { BookOpen, TrendingUp, Target, ChevronDown, ChevronUp, Monitor, CheckCircle2, Play, Pause, RotateCcw, Volume2, VolumeX, Timer, Brain } from \\\"lucide-react\\\";\\nimport { useNavigate } from \\\"react-router-dom\\\";\\nimport { toast } from \\\"sonner\\\";\\nimport { useRealtimeSubscription } from \\\"@/hooks/useRealtimeSubscription\\\";\\nimport { useOnboardingContext } from \\\"@/components/onboarding/OnboardingProvider\\\";\\nimport { motion, AnimatePresence } from \\\"framer-motion\\\";\\nimport { DashboardSkeleton } from \\\"@/components/DashboardSkeleton\\\";\\nimport { uiAudio } from \\\"@/utils/audio\\\";\\n\\ninterface ActiveFocusUser {\\n  user_id: string;\\n  first_name: string;\\n  avatar_url: string | null;\\n  is_focusing: boolean;\\n}\\n\\ninterface QuizResult {\\n  id: string;\\n  course_id: string;\\n  score: number;\\n  total_questions: number;\\n  created_at: string;\\n  courses: { title: string; };\\n}\\n\\nconst Dashboard = () => {\\n  const [results, setResults] = useState<QuizResult[]>([]);\\n  const [loading, setLoading] = useState(true);\\n  const [refreshing, setRefreshing] = useState(false);\\n  const [firstName, setFirstName] = useState<string>(\\\"\\\");\\n  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);\\n  const [openAccordions, setOpenAccordions] = useState<{ [key: string]: boolean }>({\\n    \\\"recent\\\": true,\\n    \\\"devices\\\": false,\\n    \\\"benefits\\\": false\\n  });\\n\\n  // Pomodoro Focus Timer & Binaural Beats State\\n  const [focusTimeLeft, setFocusTimeLeft] = useState(25 * 60);\\n  const [isTimerRunning, setIsTimerRunning] = useState(false);\\n  const [isBinauralPlaying, setIsBinauralPlaying] = useState(false);\\n  const [activeFocusUsers, setActiveFocusUsers] = useState<ActiveFocusUser[]>([]);\\n  \\n  const navigate = useNavigate();\\n  const { steps, completionP\n<truncated 26420 bytes>",
+      "Description": "\"Apply the user's Dark Luxury aesthetic and functional refactor to the Dashboard component.\"",
+      "IsArtifact": "false",
+      "Overwrite": "true",
+      "TargetFile": "\"c:\\\\Users\\\\7MAKSACOD PC\\\\Downloads\\\\HIPOCAMPUS\\\\hipocampus2026-main\\\\hipocampus2026-main\\\\src\\\\pages\\\\Dashboard.tsx\"",
+      "toolAction": "\"Update Dashboard.tsx\"",
+      "toolSummary": "\"Overwrite file\""
+    }
+  },
+  {
+    "step": 7925,
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Add watermark and bubbles to Dashboard.tsx\"",
+      "EndLine": "154",
+      "Instruction": "\"Add bg-doodle-watermark and background bubbles.\"",
+      "ReplacementContent": "\"  return (\\n    <div className=\\\"min-h-screen bg-[#FDFBF7] text-[#1A1A1A] bg-doodle-watermark font-sans overflow-x-hidden px-4 pt-8 pb-12 sm:px-8 relative\\\">\\n      <div className=\\\"absolute top-0 right-0 w-[500px] h-[500px] bg-[#0F3B2E]/5 rounded-full blur-[120px] pointer-events-none\\\" />\\n      <motion.div \\n        variants={containerVariants}\\n        initial=\\\"hidden\\\"\\n        animate=\\\"visible\\\"\\n        className=\\\"max-w-[1400px] mx-auto space-y-10 relative z-10\\\"\\n      >\"",
+      "StartLine": "147",
+      "TargetContent": "\"  return (\\n    <div className=\\\"min-h-screen bg-[#FDFBF7] text-[#1A1A1A] font-sans overflow-x-hidden px-4 pt-8 pb-12 sm:px-8\\\">\\n      <motion.div \\n        variants={containerVariants}\\n        initial=\\\"hidden\\\"\\n        animate=\\\"visible\\\"\\n        className=\\\"max-w-[1400px] mx-auto space-y-10 relative\\\"\\n      >\"",
+      "TargetFile": "\"c:\\\\Users\\\\7MAKSACOD PC\\\\Downloads\\\\HIPOCAMPUS\\\\hipocampus2026-main\\\\hipocampus2026-main\\\\src\\\\pages\\\\Dashboard.tsx\"",
+      "TargetLintErrorIds": "[]",
+      "toolAction": "\"Update Dashboard\"",
+      "toolSummary": "\"Edit Dashboard.tsx\""
+    }
+  },
+  {
+    "step": 7970,
+    "name": "multi_replace_file_content",
+    "args": {
+      "ArtifactMetadata": "{\"ArtifactType\":\"task\",\"RequestFeedback\":false,\"Summary\":\"Added heatmap component to Dashboard.tsx\"}",
+      "Description": "\"Added heatmap component to Dashboard.tsx\"",
+      "Instruction": "\"Add the generateHeatmapData utility function and insert the heatmap JSX block right below the header section in Dashboard.tsx.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":16,\"ReplacementContent\":\"interface QuizResult {\\n  id: string;\\n  course_id: string;\\n  score: number;\\n  total_questions: number;\\n  created_at: string;\\n  courses: { title: string; };\\n}\\n\\n// 1. Ajoute cette fonction utilitaire pour générer les données de la heatmap\\nconst generateHeatmapData = (history: any[]) => {\\n  const data: Record<string, number> = {};\\n  for (let i = 29; i >= 0; i--) {\\n    const d = new Date();\\n    d.setDate(d.getDate() - i);\\n    data[d.toISOString().split('T')[0]] = 0;\\n  }\\n  history.forEach(h => {\\n    const date = h.created_at.split('T')[0];\\n    if (data.hasOwnProperty(date)) data[date] += 1;\\n  });\\n  return data;\\n};\\n\\nconst Dashboard = () => {\",\"StartLine\":8,\"TargetContent\":\"interface QuizResult {\\n  id: string;\\n  course_id: string;\\n  score: number;\\n  total_questions: number;\\n  created_at: string;\\n  courses: { title: string; };\\n}\\n\\nconst Dashboard = () => {\"},{\"AllowMultiple\":false,\"EndLine\":194,\"ReplacementContent\":\"            <div className=\\\"flex flex-col\\\">\\n              <span className=\\\"text-xs font-bold text-[#1A1A1A]/40 uppercase tracking-widest mb-1 flex items-center gap-1.5\\\"><Monitor className=\\\"w-3.5 h-3.5\\\"/> Cours</span>\\n              <span className=\\\"text-4xl font-light text-[#1A1A1A] leading-none tracking-tighter\\\">{Object.keys(themeStats).length}</span>\\n            </div>\\n          </div>\\n        </motion.div>\\n\\n        {/* HEATMAP / CADENCE DE REVISION */}\\n        <div className=\\\"bg-white rounded-3xl p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-black/5 mt-6\\\">\\n          <h3 className=\\\"text-sm font-bold text-[#1A1A1A]/50 uppercase tracking-widest mb-6\\\">Cadence de révision (30 derniers jours)</h3>\\n          <div className=\\\"flex gap-1.5 justify-center\\\">\\n            {Object.entries(generateHeatmapData(results)).map(([date, count], i) => (\\n              <div \\n                key={date} \\n                title={`${date}: ${count} cartes`}\\n                className={`w-4 h-8 rounded-md tra\n<truncated 804 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\7MAKSACOD PC\\\\Downloads\\\\HIPOCAMPUS\\\\hipocampus2026-main\\\\hipocampus2026-main\\\\src\\\\pages\\\\Dashboard.tsx\"",
+      "TargetLintErrorIds": "[]",
+      "toolAction": "\"Add heatmap to Dashboard\"",
+      "toolSummary": "\"Edit Dashboard.tsx\""
+    }
+  },
+  {
+    "step": 8091,
+    "name": "write_to_file",
+    "args": {
+      "ArtifactMetadata": "{\"ArtifactType\":\"other\",\"RequestFeedback\":false,\"Summary\":\"Update Dashboard.tsx with the editorial design provided by the user.\"}",
+      "CodeContent": "\"import { useEffect, useState, useCallback } from \\\"react\\\";\\nimport { supabase } from \\\"@/integrations/supabase/client\\\";\\nimport { BookOpen, Target, Monitor, ArrowRight, Brain, TrendingUp } from \\\"lucide-react\\\";\\nimport { useNavigate } from \\\"react-router-dom\\\";\\nimport { toast } from \\\"sonner\\\";\\nimport { DashboardSkeleton } from \\\"@/components/DashboardSkeleton\\\";\\n\\ninterface QuizResult {\\n  id: string;\\n  course_id: string;\\n  score: number;\\n  total_questions: number;\\n  created_at: string;\\n  courses: { title: string; };\\n}\\n\\nconst Dashboard = () => {\\n  const [results, setResults] = useState<QuizResult[]>([]);\\n  const [loading, setLoading] = useState(true);\\n  const [firstName, setFirstName] = useState<string>(\\\"\\\");\\n  const navigate = useNavigate();\\n\\n  const fetchResults = useCallback(async () => {\\n    try {\\n      const { data: { user } } = await supabase.auth.getUser();\\n      if (!user) {\\n        navigate(\\\"/auth\\\");\\n        return;\\n      }\\n\\n      const { data: profile } = await supabase\\n        .from(\\\"profiles\\\")\\n        .select(\\\"first_name, name\\\")\\n        .eq(\\\"id\\\", user.id)\\n        .single();\\n        \\n      if (profile) {\\n        setFirstName(profile.first_name || profile.name || \\\"Docteur\\\");\\n      }\\n\\n      const { data, error } = await supabase\\n        .from(\\\"quiz_results\\\")\\n        .select(`id, course_id, score, total_questions, created_at, courses(title)`)\\n        .eq(\\\"user_id\\\", user.id)\\n        .order(\\\"created_at\\\", { ascending: false })\\n        .limit(5);\\n\\n      if (error) throw error;\\n      setResults(data || []);\\n    } catch (error) {\\n      toast.error(\\\"Erreur lors du chargement des données.\\\");\\n    } finally {\\n      setLoading(false);\\n    }\\n  }, [navigate]);\\n\\n  useEffect(() => { \\n    fetchResults(); \\n  }, [fetchResults]);\\n\\n  if (loading) return <DashboardSkeleton />;\\n\\n  const averageScore = results.length > 0 \\n    ? Math.round((results.reduce((acc, r) => acc + (r.score / r.total_questions) * 100, 0) / results.length)) \\n    : 0;\\n\\n  \n<truncated 4805 bytes>",
+      "Description": "\"Overwrote Dashboard.tsx with the editorial design provided by the user.\"",
+      "IsArtifact": "false",
+      "Overwrite": "true",
+      "TargetFile": "\"c:\\\\Users\\\\7MAKSACOD PC\\\\Downloads\\\\HIPOCAMPUS\\\\hipocampus2026-main\\\\hipocampus2026-main\\\\src\\\\pages\\\\Dashboard.tsx\"",
+      "toolAction": "\"Update Dashboard.tsx\"",
+      "toolSummary": "\"Overwrite Dashboard.tsx\""
+    }
+  },
+  {
+    "step": 8109,
+    "name": "write_to_file",
+    "args": {
+      "ArtifactMetadata": "{\"ArtifactType\":\"other\",\"RequestFeedback\":false,\"Summary\":\"Overwrote Dashboard.tsx with the new BENTO GRID layout provided by the user.\"}",
+      "CodeContent": "\"import { useEffect, useState, useCallback } from \\\"react\\\";\\nimport { supabase } from \\\"@/integrations/supabase/client\\\";\\nimport { BarChart, Bar, ResponsiveContainer, Cell } from \\\"recharts\\\";\\nimport { BookOpen, TrendingUp, Target, Sun, Moon, Sparkles, ChevronDown, ChevronUp, Monitor, CheckCircle2, Play, Pause, RotateCcw, Volume2, VolumeX, Timer, Brain, ArrowUpRight } from \\\"lucide-react\\\";\\nimport { useNavigate } from \\\"react-router-dom\\\";\\nimport { toast } from \\\"sonner\\\";\\nimport { useRealtimeSubscription } from \\\"@/hooks/useRealtimeSubscription\\\";\\nimport { useOnboardingContext } from \\\"@/components/onboarding/OnboardingProvider\\\";\\nimport { motion, AnimatePresence } from \\\"framer-motion\\\";\\nimport { DashboardSkeleton } from \\\"@/components/DashboardSkeleton\\\";\\nimport { uiAudio } from \\\"@/utils/audio\\\";\\n\\ninterface ActiveFocusUser {\\n  user_id: string;\\n  first_name: string;\\n  avatar_url: string | null;\\n  is_focusing: boolean;\\n}\\n\\ninterface QuizResult {\\n  id: string;\\n  course_id: string;\\n  score: number;\\n  total_questions: number;\\n  created_at: string;\\n  courses: { title: string; };\\n}\\n\\nconst Dashboard = () => {\\n  const [results, setResults] = useState<QuizResult[]>([]);\\n  const [loading, setLoading] = useState(true);\\n  const [firstName, setFirstName] = useState<string>(\\\"\\\");\\n  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);\\n  const [openAccordions, setOpenAccordions] = useState<{ [key: string]: boolean }>({\\n    \\\"recent\\\": true,\\n    \\\"devices\\\": false,\\n    \\\"benefits\\\": false\\n  });\\n\\n  // Pomodoro Focus Timer & Binaural Beats State\\n  const [focusTimeLeft, setFocusTimeLeft] = useState(25 * 60);\\n  const [isTimerRunning, setIsTimerRunning] = useState(false);\\n  const [isBinauralPlaying, setIsBinauralPlaying] = useState(false);\\n  const [activeFocusUsers, setActiveFocusUsers] = useState<ActiveFocusUser[]>([]);\\n  \\n  const navigate = useNavigate();\\n  const { steps, completionPercentage, refreshState } = useOnboardingContext();\\n\\n  const toggleAccordion = (key: stri\n<truncated 26055 bytes>",
+      "Description": "\"Overwrote Dashboard.tsx with the new Bento Grid layout and Pomodoro focus provided by the user.\"",
+      "IsArtifact": "false",
+      "Overwrite": "true",
+      "TargetFile": "\"c:\\\\Users\\\\7MAKSACOD PC\\\\Downloads\\\\HIPOCAMPUS\\\\hipocampus2026-main\\\\hipocampus2026-main\\\\src\\\\pages\\\\Dashboard.tsx\"",
+      "toolAction": "\"Update Dashboard.tsx\"",
+      "toolSummary": "\"Overwrite Dashboard.tsx\""
+    }
+  },
+  {
+    "step": 8676,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Update Dashboard.tsx to use AnimatedBanner.\"",
+      "Instruction": "\"Replace the old header with the AnimatedBanner component.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":12,\"ReplacementContent\":\"import { AnimatedBanner } from \\\"@/components/AnimatedBanner\\\";\\nimport { uiAudio } from \\\"@/utils/audio\\\";\",\"StartLine\":11,\"TargetContent\":\"import { uiAudio } from \\\"@/utils/audio\\\";\"},{\"AllowMultiple\":false,\"EndLine\":200,\"ReplacementContent\":\"        {/* LA NOUVELLE BANDEROLE ANIMÉE */}\\n        <AnimatedBanner \\n          title={<>{greetingText}, <span className=\\\"font-medium\\\">{firstName || \\\"Docteur\\\"}</span>.</>}\\n          subtitle=\\\"Voici un aperçu de vos performances cliniques d'aujourd'hui.\\\"\\n          rightWidgets={\\n            <>\\n              {/* Mini-Widget : QCM Réalisés */}\\n              <div className=\\\"bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-6 py-4 flex flex-col items-start min-w-[140px] hover:bg-white/20 transition-colors\\\">\\n                <span className=\\\"text-[10px] font-bold uppercase tracking-widest text-white/70 mb-1 flex items-center gap-2\\\">\\n                  <BookOpen className=\\\"w-3 h-3 text-orange-400\\\"/> QCM\\n                </span>\\n                <span className=\\\"text-3xl font-light text-white leading-none\\\">{results.length}</span>\\n              </div>\\n\\n              {/* Mini-Widget : Réussite Globale */}\\n              <div className=\\\"bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-6 py-4 flex flex-col items-start min-w-[140px] hover:bg-white/20 transition-colors\\\">\\n                <span className=\\\"text-[10px] font-bold uppercase tracking-widest text-white/70 mb-1 flex items-center gap-2\\\">\\n                  <Target className=\\\"w-3 h-3 text-yellow-400\\\"/> Réussite\\n                </span>\\n                <span className=\\\"text-3xl font-light text-white leading-none\\\">{successRate}%</span>\\n              </div>\\n\\n              {/* Mini-Widget : Cours Maîtrisés */}\\n              <div className=\\\"bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-6 py-4 flex flex-col items-start min-w-[140px] hover:bg-white/20 transition-colors\\\">\\n     \n<truncated 2312 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\7MAKSACOD PC\\\\Downloads\\\\HIPOCAMPUS\\\\hipocampus2026-main\\\\hipocampus2026-main\\\\src\\\\pages\\\\Dashboard.tsx\"",
+      "toolAction": "\"Update Dashboard.tsx\"",
+      "toolSummary": "\"Update Dashboard.tsx\""
+    }
+  },
+  {
+    "step": 11193,
+    "name": "write_to_file",
+    "args": {
+      "CodeContent": "\"import { useEffect, useState, useCallback } from \\\"react\\\";\\nimport { supabase } from \\\"@/integrations/supabase/client\\\";\\nimport { BarChart, Bar, ResponsiveContainer, Cell } from \\\"recharts\\\";\\nimport { BookOpen, TrendingUp, Target, Sun, Moon, Sparkles, ChevronDown, ChevronUp, Monitor, CheckCircle2, Play, Pause, RotateCcw, Volume2, VolumeX, Timer, Brain, ArrowUpRight } from \\\"lucide-react\\\";\\nimport { useNavigate } from \\\"react-router-dom\\\";\\nimport { toast } from \\\"sonner\\\";\\nimport { useRealtimeSubscription } from \\\"@/hooks/useRealtimeSubscription\\\";\\nimport { useOnboardingContext } from \\\"@/components/onboarding/OnboardingProvider\\\";\\nimport { motion, AnimatePresence } from \\\"framer-motion\\\";\\nimport { DashboardSkeleton } from \\\"@/components/DashboardSkeleton\\\";\\nimport { AnimatedBanner } from \\\"@/components/AnimatedBanner\\\";\\nimport { uiAudio } from \\\"@/utils/audio\\\";\\nimport DashboardShell from \\\"@/components/DashboardShell\\\";\\nimport GlowCard from \\\"@/components/GlowCard\\\";\\n\\ninterface ActiveFocusUser {\\n  user_id: string;\\n  first_name: string;\\n  avatar_url: string | null;\\n  is_focusing: boolean;\\n}\\n\\ninterface QuizResult {\\n  id: string;\\n  course_id: string;\\n  score: number;\\n  total_questions: number;\\n  created_at: string;\\n  courses: { title: string; };\\n}\\n\\nconst Dashboard = () => {\\n  const [results, setResults] = useState<QuizResult[]>([]);\\n  const [loading, setLoading] = useState(true);\\n  const [firstName, setFirstName] = useState<string>(\\\"\\\");\\n  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);\\n  const [openAccordions, setOpenAccordions] = useState<{ [key: string]: boolean }>({\\n    \\\"recent\\\": true,\\n    \\\"devices\\\": false,\\n    \\\"benefits\\\": false\\n  });\\n\\n  // Pomodoro Focus Timer & Binaural Beats State\\n  const [focusTimeLeft, setFocusTimeLeft] = useState(25 * 60);\\n  const [isTimerRunning, setIsTimerRunning] = useState(false);\\n  const [isBinauralPlaying, setIsBinauralPlaying] = useState(false);\\n  const [activeFocusUsers, setActiveFocusUsers] = useState<ActiveFo\n<truncated 26519 bytes>",
+      "Description": "\"Applied 70/70 design system (DashboardShell, GlowCard) to Dashboard.tsx.\"",
+      "IsArtifact": "false",
+      "Overwrite": "true",
+      "TargetFile": "\"c:\\\\Users\\\\7MAKSACOD PC\\\\Downloads\\\\HIPOCAMPUS\\\\hipocampus2026-main\\\\hipocampus2026-main\\\\src\\\\pages\\\\Dashboard.tsx\"",
+      "toolAction": "\"Migrating Dashboard.tsx to 70/70 design\"",
+      "toolSummary": "\"Migrate Dashboard.tsx\""
+    }
+  }
+]

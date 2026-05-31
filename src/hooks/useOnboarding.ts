@@ -24,6 +24,9 @@ const ONBOARDING_STEPS: Omit<OnboardingStep, "completed">[] = [
   { id: "complete_quiz", title: "Compléter un quiz", description: "Testez vos connaissances", action: "Quiz", route: "/quiz-library" },
   { id: "review_flashcards", title: "Réviser avec flashcards", description: "Répétition espacée", action: "Flashcards", route: "/flashcards" },
   { id: "check_stats", title: "Voir vos statistiques", description: "Suivez votre progression", action: "Stats", route: "/statistics" },
+  { id: "focus_session", title: "Lancer un Focus", description: "Concentrez-vous avec le Focus Pod", action: "Focus", route: "/" },
+  { id: "setup_profile", title: "Configurer le profil", description: "Personnalisez votre expérience", action: "Profil", route: "/settings" },
+  { id: "plan_review", title: "Planifier vos révisions", description: "Organisez votre emploi du temps", action: "Agenda", route: "/review-planner" },
 ];
 
 const STORAGE_KEY = "hippocampus_onboarding";

@@ -1,6 +1,23 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+function timingSafeEqual(a: string, b: string): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  let result = 0;
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const codeA = i < a.length ? a.charCodeAt(i) : 0;
+    const codeB = i < b.length ? b.charCodeAt(i) : 0;
+    result |= codeA ^ codeB;
+  }
+  return result === 0 && a.length === b.length;
+}
+
 const PAYTECH_API_KEY = Deno.env.get("PAYTECH_API_KEY");
 const PAYTECH_API_SECRET = Deno.env.get("PAYTECH_API_SECRET");
 
@@ -26,6 +43,10 @@ async function getExpectedHashes() {
 const VALID_PLAN_IDS = ["premium", "pro"];
 
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   try {
     // ── 1. Parse payload (PayTech IPN can send JSON or form data) ──
     let payload: Record<string, string> = {};
@@ -46,11 +67,11 @@ serve(async (req) => {
     if (
       !payload.api_key_sha256 ||
       !payload.api_secret_sha256 ||
-      payload.api_key_sha256 !== hashes.expectedKeyHash ||
-      payload.api_secret_sha256 !== hashes.expectedSecretHash
+      !timingSafeEqual(payload.api_key_sha256, hashes.expectedKeyHash || "") ||
+      !timingSafeEqual(payload.api_secret_sha256, hashes.expectedSecretHash || "")
     ) {
       console.error("IPN signature mismatch — rejecting request");
-      return new Response("Unauthorized", { status: 401 });
+      return new Response("Unauthorized", { status: 401, headers: corsHeaders });
     }
 
     // ── 3. Handle sale_complete event ─────────────────────────
@@ -60,15 +81,15 @@ serve(async (req) => {
         customField = JSON.parse(payload.custom_field ?? "{}");
       } catch {
         console.error("Failed to parse custom_field:", payload.custom_field);
-        return new Response("Bad custom_field", { status: 400 });
+        return new Response("Bad custom_field", { status: 400, headers: corsHeaders });
       }
 
       const { userId, planId, isYearly } = customField;
 
       // Validate extracted data
-      if (!userId || !planId || !VALID_PLAN_IDS.includes(planId)) {
+      if (!userId || typeof userId !== 'string' || !planId || !VALID_PLAN_IDS.includes(planId)) {
         console.error("Invalid custom_field data:", customField);
-        return new Response("Invalid custom_field values", { status: 400 });
+        return new Response("Invalid custom_field values", { status: 400, headers: corsHeaders });
       }
 
       // Use service role key (admin) to update user plan
@@ -107,16 +128,16 @@ serve(async (req) => {
 
       if (error) {
         console.error(`DB error upgrading user ${userId}:`, error);
-        return new Response("Database update failed", { status: 500 });
+        return new Response("Database update failed", { status: 500, headers: corsHeaders });
       }
 
       console.log(`✅ User ${userId} upgraded to ${planId} (expires ${expiresAt.toISOString()})`);
     }
 
-    return new Response("OK", { status: 200 });
+    return new Response("OK", { status: 200, headers: corsHeaders });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("IPN processing error:", message);
-    return new Response(message, { status: 400 });
+    return new Response(message, { status: 400, headers: corsHeaders });
   }
 });
