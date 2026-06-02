@@ -122,7 +122,7 @@ export const DuelMode = () => {
   const fadeVariants = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans pt-8 pb-24">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans pt-8 pb-24">
       <style dangerouslySetInnerHTML={{__html: `
         .editorial-scrollbar::-webkit-scrollbar { width: 4px; }
         .editorial-scrollbar::-webkit-scrollbar-track { background: transparent; }

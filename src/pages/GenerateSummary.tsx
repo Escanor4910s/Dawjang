@@ -232,7 +232,7 @@ ${courseContent}`;
     : "Résumé Complet : Restitue la quasi-totalité du cours sous une forme plus digeste.";
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0A0A0A] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans pt-8 pb-32 relative overflow-hidden transition-colors duration-500">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans pt-8 pb-32 relative overflow-hidden transition-colors duration-500">
       
       <UpgradePrompt isOpen={showUpgradePrompt} onClose={() => setShowUpgradePrompt(false)} requiredPlan="premium" featureName="Résumés complets et structurés" />
       
@@ -273,7 +273,7 @@ ${courseContent}`;
 
               <div className="space-y-3">
                 <label className="text-[10px] font-black uppercase tracking-widest text-[#111111] dark:text-white ml-2">Titre du résumé</label>
-                <input type="text" value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)} placeholder="Ex: Cardiologie - Insuffisance cardiaque" className="w-full bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 focus:border-[#5B21B6]/40 rounded-[1.5rem] px-6 py-5 text-sm font-bold text-[#111111] dark:text-white placeholder:text-[#888888]/50 shadow-inner outline-none transition-all focus:ring-4 ring-[#5B21B6]/5" />
+                <input type="text" value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)} placeholder="Ex: Cardiologie - Insuffisance cardiaque" className="w-full bg-transparent border border-black/5 dark:border-white/5 focus:border-[#5B21B6]/40 rounded-[1.5rem] px-6 py-5 text-sm font-bold text-[#111111] dark:text-white placeholder:text-[#888888]/50 shadow-inner outline-none transition-all focus:ring-4 ring-[#5B21B6]/5" />
               </div>
 
               <AnimatePresence mode="wait">
@@ -311,7 +311,7 @@ ${courseContent}`;
                             const selectedCourse = existingCourses.find(c => c.id === e.target.value);
                             if (selectedCourse && !courseTitle.trim()) setCourseTitle(selectedCourse.title);
                           }} 
-                          className="w-full appearance-none bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 focus:border-[#5B21B6]/40 rounded-[1.5rem] px-6 py-5 text-sm font-bold text-[#111111] dark:text-white shadow-inner outline-none transition-all focus:ring-4 ring-[#5B21B6]/5 cursor-pointer"
+                          className="w-full appearance-none bg-transparent border border-black/5 dark:border-white/5 focus:border-[#5B21B6]/40 rounded-[1.5rem] px-6 py-5 text-sm font-bold text-[#111111] dark:text-white shadow-inner outline-none transition-all focus:ring-4 ring-[#5B21B6]/5 cursor-pointer"
                         >
                           <option value="">Choisissez dans votre bibliothèque...</option>
                           {existingCourses.map(course => (

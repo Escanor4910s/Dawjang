@@ -126,17 +126,17 @@ const Community = () => {
                 </p>
                 
                 <div className="flex items-center justify-center md:justify-start gap-4 mt-8 flex-wrap">
-                  <Badge variant="secondary" className="px-4 py-2 text-sm bg-background border-border/50">
+                  <Badge variant="secondary" className="px-4 py-2 text-sm bg-transparent border-border/50">
                     <Users className="w-4 h-4 text-primary mr-2" /> {stats.members} Membres actifs
                   </Badge>
-                  <Badge variant="secondary" className="px-4 py-2 text-sm bg-background border-border/50">
+                  <Badge variant="secondary" className="px-4 py-2 text-sm bg-transparent border-border/50">
                     <Brain className="w-4 h-4 text-accent mr-2" /> {stats.quizzes} QCM Partagés
                   </Badge>
                 </div>
               </div>
               
               <div className="hidden lg:flex shrink-0 w-[350px] flex-col gap-4">
-                <Card className="bg-background/80 backdrop-blur border-border/50 shadow-lg transform rotate-2 hover:rotate-0 transition-transform cursor-default">
+                <Card className="bg-transparent/80 backdrop-blur border-border/50 shadow-lg transform rotate-2 hover:rotate-0 transition-transform cursor-default">
                   <CardContent className="p-5 flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                       <Trophy className="w-6 h-6 text-primary" />
@@ -147,7 +147,7 @@ const Community = () => {
                     </div>
                   </CardContent>
                 </Card>
-                <Card className="bg-background/80 backdrop-blur border-border/50 shadow-lg transform -rotate-2 hover:rotate-0 transition-transform cursor-default">
+                <Card className="bg-transparent/80 backdrop-blur border-border/50 shadow-lg transform -rotate-2 hover:rotate-0 transition-transform cursor-default">
                   <CardContent className="p-5 flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
                       <MessageCircle className="w-6 h-6 text-accent" />
@@ -283,11 +283,11 @@ const Community = () => {
                         </CardHeader>
                         <CardContent className="mt-auto pt-4 flex items-center justify-between border-t border-border/30 relative z-10 bg-muted/10">
                           <div className="flex gap-3">
-                            <Badge variant="outline" className="bg-background/80 shadow-sm border-white/10">
+                            <Badge variant="outline" className="bg-transparent/80 shadow-sm border-white/10">
                               <CheckCircle2 className="w-3 h-3 mr-1 text-primary" /> {quiz.question_count} Qs
                             </Badge>
                             {quiz.category && (
-                              <Badge variant="outline" className="bg-background/80 shadow-sm border-white/10">
+                              <Badge variant="outline" className="bg-transparent/80 shadow-sm border-white/10">
                                 {quiz.category}
                               </Badge>
                             )}
@@ -297,7 +297,7 @@ const Community = () => {
                             variant={quiz.user_liked ? "default" : "outline"}
                             size="sm"
                             onClick={() => handleLike(quiz.id, !!quiz.user_liked)}
-                            className={`rounded-full px-4 transition-all duration-300 ${quiz.user_liked ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)] border-transparent hover:scale-110' : 'bg-background hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-500 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-800'}`}
+                            className={`rounded-full px-4 transition-all duration-300 ${quiz.user_liked ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)] border-transparent hover:scale-110' : 'bg-transparent hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-500 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-800'}`}
                           >
                             <Heart className={`h-4 w-4 mr-1.5 transition-transform ${quiz.user_liked ? "fill-current animate-[pulse-glow_2s_infinite]" : "group-hover:scale-110"}`} />
                             <span className="font-bold">{quiz.likes_count}</span>

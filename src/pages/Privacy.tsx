@@ -45,7 +45,7 @@ const Privacy = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] text-[#1A1A1A] font-sans selection:bg-[#0F3B2E]/20">
+    <div className="min-h-screen bg-transparent text-[#1A1A1A] font-sans selection:bg-[#0F3B2E]/20">
       <LandingHeader forceSolid={true} />
       
       {/* Hero Section */}
@@ -54,7 +54,7 @@ const Privacy = () => {
         <div className="max-w-5xl mx-auto relative z-10 text-center">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
             <div className="flex justify-center mb-6">
-              <div className="w-16 h-16 bg-[#FDFBF7]/10 rounded-2xl flex items-center justify-center border border-[#FDFBF7]/20 backdrop-blur-sm">
+              <div className="w-16 h-16 bg-transparent/10 rounded-2xl flex items-center justify-center border border-[#FDFBF7]/20 backdrop-blur-sm">
                 <Shield className="w-8 h-8 text-[#D4C3A3]" />
               </div>
             </div>
@@ -64,7 +64,7 @@ const Privacy = () => {
             <p className="text-lg md:text-xl text-[#FDFBF7]/80 font-light max-w-2xl mx-auto">
               Votre confiance est notre priorité absolue. Découvrez comment nous protégeons et gérons vos données avec la plus haute rigueur.
             </p>
-            <div className="mt-8 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#FDFBF7]/10 border border-[#FDFBF7]/20 text-sm font-medium text-[#D4C3A3]">
+            <div className="mt-8 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-transparent/10 border border-[#FDFBF7]/20 text-sm font-medium text-[#D4C3A3]">
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               Dernière mise à jour : Février 2026
             </div>

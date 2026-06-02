@@ -113,7 +113,7 @@ export const ReviewPlanner = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] flex items-center justify-center relative z-10 transition-colors duration-300">
+      <div className="min-h-screen bg-transparent flex items-center justify-center relative z-10 transition-colors duration-300">
          <div className="flex flex-col items-center gap-4">
           <Activity className="h-6 w-6 animate-pulse text-[#111111] dark:text-white" />
           <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Calcul des intervalles SM-2...</span>
@@ -128,7 +128,7 @@ export const ReviewPlanner = () => {
     const progress = totalCardsAtStart > 0 ? (sessionCompleted / totalCardsAtStart) * 100 : 0;
 
     return (
-      <div className="fixed inset-0 z-[100] bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] flex flex-col transition-colors duration-300">
+      <div className="fixed inset-0 z-[100] bg-transparent text-[#111111] dark:text-[#F4F4F2] flex flex-col transition-colors duration-300">
         
         {/* Header Immersif */}
         <div className="flex items-center justify-between p-6 border-b border-black/5 dark:border-white/5 bg-white/50 dark:bg-[#161614]/50 backdrop-blur-md">
@@ -220,7 +220,7 @@ export const ReviewPlanner = () => {
 
   // --- VUE 2 : LE PLANIFICATEUR (Dashboard Temporel) ---
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans pt-8 pb-24 w-full transition-colors duration-300">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans pt-8 pb-24 w-full transition-colors duration-300">
       <div className="max-w-[1400px] mx-auto px-6 space-y-12">
         
         <AnimatedBanner 
@@ -330,7 +330,7 @@ export const ReviewPlanner = () => {
                   <div key={idx} className="flex items-center justify-between p-5 rounded-2xl border border-transparent hover:border-black/5 dark:hover:border-white/5 hover:bg-[#FAFAF8] dark:hover:bg-white/5 transition-colors">
                     <div className="flex items-center gap-4">
                       <div className={`h-10 w-10 rounded-full flex items-center justify-center border ${
-                        item.status === "done" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-[#FAFAF8] dark:bg-[#0E0E0C] border-black/10 dark:border-white/10 text-[#111111] dark:text-white"
+                        item.status === "done" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-transparent border-black/10 dark:border-white/10 text-[#111111] dark:text-white"
                       }`}>
                         {item.status === "done" ? <CheckCircle2 className="h-5 w-5" /> : <Target className="h-4 w-4 opacity-50" />}
                       </div>

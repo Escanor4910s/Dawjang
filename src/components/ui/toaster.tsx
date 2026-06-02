@@ -12,35 +12,26 @@ export function Toaster() {
           <Toast 
             key={id} 
             {...props} 
-            // Largeur 440px, Padding 24px (p-6), Arrondi 20px, Gap 20px (gap-5)
-            className="group relative w-[440px] p-6 rounded-[20px] flex items-start gap-5 bg-[rgba(255,255,255,0.85)] dark:bg-[rgba(18,18,18,0.85)] backdrop-blur-[24px] border border-black/5 dark:border-white/[0.08] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-top-full data-[state=open]:slide-in-from-top-full"
-            style={{
-              boxShadow: "0 1px 2px rgba(0,0,0,0.02), 0 8px 16px -4px rgba(0,0,0,0.04), 0 24px 32px -8px rgba(0,0,0,0.06)"
-            }}
+            className="group relative flex w-[356px] items-start gap-3.5 p-4 bg-white/85 dark:bg-[#111111]/85 backdrop-blur-xl border border-slate-200/50 dark:border-white/10 rounded-[16px] shadow-[0_12px_24px_-6px_rgba(0,0,0,0.08),0_4px_8px_-4px_rgba(0,0,0,0.04)] dark:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.4)] transition-all duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-top-full data-[state=open]:slide-in-from-top-full"
           >
-            {/* L'icône carrée élargie (w-11 h-11) */}
-            <div className="w-11 h-11 rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] border border-black/5 dark:border-white/5 flex items-center justify-center shrink-0">
-                <Info className="w-6 h-6 text-[#3B82F6] dark:text-[#60A5FA] stroke-[2.5px]" />
-            </div>
+            <Info className="w-5 h-5 mt-0.5 shrink-0 text-blue-500 stroke-[2px]" />
             
-            {/* Espacement du texte */}
-            <div className="grid gap-2 flex-1 pt-0.5">
-              {title && <ToastTitle className="text-[15px] font-semibold text-[#111111] dark:text-[#EEEEEE] tracking-tight leading-none">{title}</ToastTitle>}
+            <div className="grid gap-1 flex-1">
+              {title && <ToastTitle className="text-[14px] font-semibold text-slate-900 dark:text-slate-100 leading-none tracking-tight">{title}</ToastTitle>}
               {description && (
-                <ToastDescription className="text-[14px] font-medium text-[#666666] dark:text-[#A0A0A0] leading-snug">{description}</ToastDescription>
+                <ToastDescription className="text-[13px] text-slate-500 dark:text-slate-400 leading-snug">{description}</ToastDescription>
               )}
             </div>
             
             {action}
             
-            {/* Bouton de fermeture repositionné */}
-            <ToastClose className="absolute right-5 top-5 rounded-md p-1.5 text-[#111111]/30 dark:text-white/30 opacity-0 group-hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 transition-all focus:outline-none" />
+            <ToastClose className="absolute right-3 top-3 rounded-md p-1.5 text-slate-400 dark:text-slate-500 opacity-0 group-hover:opacity-100 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-all focus:outline-none" />
           </Toast>
         )
       })}
       
-      {/* Positionnement Viewport élargi */}
-      <ToastViewport className="fixed top-0 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-4 p-8 w-full max-w-[480px] m-0 list-none outline-none pointer-events-none [&>li]:pointer-events-auto" />
+      {/* Positionnement parfait : Descente depuis le Top-Center */}
+      <ToastViewport className="fixed top-0 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-3 p-8 w-full max-w-[400px] m-0 list-none outline-none pointer-events-none [&>li]:pointer-events-auto" />
     </ToastProvider>
   )
 }

@@ -89,7 +89,7 @@ const SpotlightCard = ({ children, className = "", onClick }: { children: React.
 
 // Skeleton Cinétique
 const DashboardBentoSkeleton = () => (
-  <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0A0A0A] p-4 sm:p-8 space-y-8 overflow-hidden">
+  <div className="min-h-screen bg-transparent p-4 sm:p-8 space-y-8 overflow-hidden">
     <div className="max-w-[1400px] mx-auto space-y-8">
       <div className="w-full h-40 bg-black/5 dark:bg-white/5 rounded-[3rem] animate-pulse relative overflow-hidden"><div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/40 dark:via-white/10 to-transparent" /></div>
       <div className="grid grid-cols-2 md:grid-cols-12 gap-6 lg:gap-8">
@@ -249,14 +249,7 @@ const Dashboard = () => {
   if (loading) return <DashboardBentoSkeleton />;
 
   return (
-    <div onMouseMove={handlePageMouseMove} className="min-h-screen bg-[#FAFAF8] dark:bg-[#050505] text-[#111111] dark:text-[#F4F4F2] font-sans overflow-x-hidden pb-32 relative transition-colors duration-700 perspective-[2000px]">
-      
-      {/* ─── LE CANVAS ÉTUDIANT (Fait Main & Ambiant) ─── */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] mix-blend-overlay" />
-        <div className="absolute top-[-10%] right-[-5%] w-[80vw] h-[80vw] bg-[#5B21B6]/10 rounded-full blur-[180px]" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-emerald-500/5 rounded-full blur-[150px]" />
-      </div>
+    <div onMouseMove={handlePageMouseMove} className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans overflow-x-hidden pb-32 relative transition-colors duration-700 perspective-[2000px]">
 
       <motion.div style={{ rotateX: pageRotateX, rotateY: pageRotateY, transformStyle: "preserve-3d" }} variants={containerVariants} initial="hidden" animate="visible" className="max-w-[1500px] mx-auto px-4 sm:px-8 pt-8 space-y-6 md:space-y-8 relative z-10">
         

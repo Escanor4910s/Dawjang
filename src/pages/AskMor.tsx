@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { safeText } from "@/lib/textUtils";
 import { motion, AnimatePresence } from "framer-motion";
 import DOMPurify from "dompurify";
-import { askMorWithPuter } from "@/lib/puterAiService";
+import { askMorWithLovable } from "@/lib/lovableAiService";
 
 interface Message {
   role: "user" | "assistant";
@@ -135,7 +135,7 @@ const AskMor = ({ embedded = false, initialMessage }: AskMorProps) => {
         content: msg.content
       }));
 
-      const { answer, sources } = await askMorWithPuter(chatHistory, course.content, course.title);
+      const { answer, sources } = await askMorWithLovable(chatHistory, course.id);
 
       const answerContent = safeText(answer, "Réponse non disponible");
       const safeSources = Array.isArray(sources) 
@@ -200,7 +200,7 @@ const AskMor = ({ embedded = false, initialMessage }: AskMorProps) => {
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-tr from-violet-600 via-indigo-600 to-primary rounded-3xl mb-6 shadow-2xl shadow-primary/30 relative">
             <div className="absolute inset-0 bg-white/20 rounded-3xl mix-blend-overlay" />
             <Brain className="h-10 w-10 text-white relative z-10 animate-[pulse_3s_infinite]" />
-            <div className="absolute -bottom-2 -right-2 bg-background rounded-full p-1.5 shadow-lg">
+            <div className="absolute -bottom-2 -right-2 bg-transparent rounded-full p-1.5 shadow-lg">
               <div className="bg-emerald-500 h-3 w-3 rounded-full animate-ping absolute opacity-50" />
               <div className="bg-emerald-500 h-3 w-3 rounded-full relative" />
             </div>
@@ -342,7 +342,7 @@ const AskMor = ({ embedded = false, initialMessage }: AskMorProps) => {
           
           <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground/70 font-semibold px-2">
             <span className="flex items-center gap-1.5">
-              <Zap className="h-3 w-3 text-amber-500" /> Propulsé par Puter AI
+              <Zap className="h-3 w-3 text-amber-500" /> Propulsé par Lovable AI
             </span>
             <span>Mor est un assistant, vérifiez les informations.</span>
           </div>

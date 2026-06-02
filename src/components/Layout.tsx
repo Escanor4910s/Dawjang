@@ -48,7 +48,7 @@ const Layout = ({ children }: LayoutProps) => {
   useRevisionReminder(!!user);
 
   return (
-    <div className="min-h-screen bg-dashboard bg-doodle-watermark flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-transparent bg-doodle-watermark flex flex-col lg:flex-row relative z-10">
       <OfflineIndicator />
       <GamificationProvider>
         <OnboardingProvider>

@@ -232,14 +232,14 @@ export const Settings = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] flex items-center justify-center">
+      <div className="min-h-screen bg-transparent flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#5B21B6]"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans pt-8 pb-32 w-full transition-colors duration-300">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans pt-8 pb-32 w-full transition-colors duration-300">
       
       <style dangerouslySetInnerHTML={{__html: `
         .editorial-scrollbar::-webkit-scrollbar { width: 4px; }
@@ -305,7 +305,7 @@ export const Settings = () => {
 
                     <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-8 text-center sm:text-left">
                       <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                        <div className="h-28 w-28 rounded-full bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/10 dark:border-white/10 flex items-center justify-center overflow-hidden">
+                        <div className="h-28 w-28 rounded-full bg-transparent border border-black/10 dark:border-white/10 flex items-center justify-center overflow-hidden">
                           {avatarPreview ? (
                             <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
                           ) : (
@@ -332,19 +332,19 @@ export const Settings = () => {
                     <div className="grid md:grid-cols-2 gap-8">
                       <div className="space-y-3">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Nom Complet</label>
-                        <input type="text" value={formData.firstName} onChange={(e) => handleChange("firstName", e.target.value)} className="w-full bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/10 dark:border-white/10 focus:border-[#5B21B6] rounded-xl px-5 py-4 text-sm font-medium outline-none transition-colors" />
+                        <input type="text" value={formData.firstName} onChange={(e) => handleChange("firstName", e.target.value)} className="w-full bg-transparent border border-black/10 dark:border-white/10 focus:border-[#5B21B6] rounded-xl px-5 py-4 text-sm font-medium outline-none transition-colors" />
                       </div>
                       <div className="space-y-3">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Email Institutionnel</label>
-                        <input type="email" value={formData.email} disabled className="w-full bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/10 dark:border-white/10 opacity-70 cursor-not-allowed rounded-xl px-5 py-4 text-sm font-medium outline-none transition-colors" />
+                        <input type="email" value={formData.email} disabled className="w-full bg-transparent border border-black/10 dark:border-white/10 opacity-70 cursor-not-allowed rounded-xl px-5 py-4 text-sm font-medium outline-none transition-colors" />
                       </div>
                       <div className="space-y-3">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Université / C.H.U</label>
-                        <input type="text" value={formData.university} onChange={(e) => handleChange("university", e.target.value)} className="w-full bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/10 dark:border-white/10 focus:border-[#5B21B6] rounded-xl px-5 py-4 text-sm font-medium outline-none transition-colors" />
+                        <input type="text" value={formData.university} onChange={(e) => handleChange("university", e.target.value)} className="w-full bg-transparent border border-black/10 dark:border-white/10 focus:border-[#5B21B6] rounded-xl px-5 py-4 text-sm font-medium outline-none transition-colors" />
                       </div>
                       <div className="space-y-3">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Objectif de Spécialité</label>
-                        <input type="text" value={formData.targetSpecialty} onChange={(e) => handleChange("targetSpecialty", e.target.value)} className="w-full bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/10 dark:border-white/10 focus:border-[#5B21B6] rounded-xl px-5 py-4 text-sm font-medium outline-none transition-colors" />
+                        <input type="text" value={formData.targetSpecialty} onChange={(e) => handleChange("targetSpecialty", e.target.value)} className="w-full bg-transparent border border-black/10 dark:border-white/10 focus:border-[#5B21B6] rounded-xl px-5 py-4 text-sm font-medium outline-none transition-colors" />
                       </div>
                     </div>
                   </div>
@@ -376,7 +376,7 @@ export const Settings = () => {
 
                     <div className="pt-8 border-t border-black/5 dark:border-white/5">
                       <h3 className="text-lg font-bold mb-6">Algorithme SM-2</h3>
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 bg-[#FAFAF8] dark:bg-[#0E0E0C] rounded-2xl border border-black/5 dark:border-white/5 gap-6">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 bg-transparent rounded-2xl border border-black/5 dark:border-white/5 gap-6">
                         <div>
                           <h4 className="text-sm font-bold">Limite journalière (Flashcards)</h4>
                           <p className="text-xs text-[#888888] dark:text-[#8E8E8A] mt-1">Nombre maximum de cartes à réviser par jour.</p>
@@ -409,9 +409,9 @@ export const Settings = () => {
                           const Icon = themeOption.icon;
                           const isActive = formData.theme === themeOption.id;
                           return (
-                            <button key={themeOption.id} onClick={() => handleChange("theme", themeOption.id)} className={`relative p-6 rounded-[2rem] border text-left transition-all duration-500 overflow-hidden group outline-none ${isActive ? "border-[#111111] dark:border-white bg-[#FAFAF8] dark:bg-[#0A0A0A] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.1)]" : "border-black/5 dark:border-white/5 hover:border-black/10 dark:hover:border-white/10 bg-white dark:bg-[#161614]"}`}>
+                            <button key={themeOption.id} onClick={() => handleChange("theme", themeOption.id)} className={`relative p-6 rounded-[2rem] border text-left transition-all duration-500 overflow-hidden group outline-none ${isActive ? "border-[#111111] dark:border-white bg-transparent shadow-[0_15px_40px_-15px_rgba(0,0,0,0.1)]" : "border-black/5 dark:border-white/5 hover:border-black/10 dark:hover:border-white/10 bg-white dark:bg-[#161614]"}`}>
                               {isActive && <motion.div layoutId="theme-active" className="absolute inset-0 bg-gradient-to-br from-black/[0.02] to-transparent dark:from-white/[0.02] pointer-events-none" />}
-                              <div className={`h-12 w-12 rounded-full flex items-center justify-center mb-4 transition-colors duration-500 ${isActive ? "bg-[#111111] text-white dark:bg-white dark:text-[#111111] shadow-inner" : "bg-[#FAFAF8] dark:bg-[#0A0A0A] text-[#888888] group-hover:text-[#111111] dark:group-hover:text-white"}`}>
+                              <div className={`h-12 w-12 rounded-full flex items-center justify-center mb-4 transition-colors duration-500 ${isActive ? "bg-[#111111] text-white dark:bg-white dark:text-[#111111] shadow-inner" : "bg-transparent text-[#888888] group-hover:text-[#111111] dark:group-hover:text-white"}`}>
                                 <Icon className="h-5 w-5" />
                               </div>
                               <h4 className="text-sm font-bold text-[#111111] dark:text-white">{themeOption.label}</h4>
@@ -453,7 +453,7 @@ export const Settings = () => {
                       
                       <div className="flex flex-col md:flex-row items-center justify-between p-6 md:p-8 bg-white dark:bg-[#161614] rounded-[2rem] border border-black/5 dark:border-white/5 hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.05)] hover:-translate-y-0.5 transition-all duration-500 group">
                         <div className="flex items-start gap-5 mb-6 md:mb-0">
-                          <div className="h-12 w-12 rounded-full bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 flex items-center justify-center flex-shrink-0 group-hover:bg-[#5B21B6] group-hover:border-[#5B21B6] group-hover:text-white transition-colors duration-500 shadow-inner">
+                          <div className="h-12 w-12 rounded-full bg-transparent border border-black/5 dark:border-white/5 flex items-center justify-center flex-shrink-0 group-hover:bg-[#5B21B6] group-hover:border-[#5B21B6] group-hover:text-white transition-colors duration-500 shadow-inner">
                             <Headphones className="h-5 w-5" />
                           </div>
                           <div>
@@ -463,7 +463,7 @@ export const Settings = () => {
                             </p>
                           </div>
                         </div>
-                        <div className="shrink-0 flex items-center gap-4 bg-[#FAFAF8] dark:bg-[#0A0A0A] p-3 pr-4 rounded-full border border-black/5 dark:border-white/5">
+                        <div className="shrink-0 flex items-center gap-4 bg-transparent p-3 pr-4 rounded-full border border-black/5 dark:border-white/5">
                           <CustomToggle checked={formData.binauralDefault} onChange={() => handleChange("binauralDefault", !formData.binauralDefault)} />
                           <span className={`text-[10px] font-black uppercase tracking-widest ${formData.binauralDefault ? "text-[#5B21B6]" : "text-[#888888]"}`}>
                             {formData.binauralDefault ? "Activé" : "Inactif"}
@@ -483,28 +483,28 @@ export const Settings = () => {
                       <p className="text-sm text-[#888888] dark:text-[#8E8E8A]">Gérez la façon dont Hippocampus communique avec vous.</p>
                     </div>
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between p-6 bg-[#FAFAF8] dark:bg-[#0E0E0C] rounded-2xl border border-black/5 dark:border-white/5 transition-colors hover:border-black/10 dark:hover:border-white/10">
+                      <div className="flex items-center justify-between p-6 bg-transparent rounded-2xl border border-black/5 dark:border-white/5 transition-colors hover:border-black/10 dark:hover:border-white/10">
                         <div>
                           <h4 className="text-sm font-bold">Rappels de Révision (SM-2)</h4>
                           <p className="text-xs text-[#888888] dark:text-[#8E8E8A] mt-1">Alerte quand l'algorithme détecte un risque d'oubli.</p>
                         </div>
                         <CustomToggle checked={formData.notifyReview} onChange={() => handleChange("notifyReview", !formData.notifyReview)} />
                       </div>
-                      <div className="flex items-center justify-between p-6 bg-[#FAFAF8] dark:bg-[#0E0E0C] rounded-2xl border border-black/5 dark:border-white/5 transition-colors hover:border-black/10 dark:hover:border-white/10">
+                      <div className="flex items-center justify-between p-6 bg-transparent rounded-2xl border border-black/5 dark:border-white/5 transition-colors hover:border-black/10 dark:hover:border-white/10">
                         <div>
                           <h4 className="text-sm font-bold">Mises à jour et Nouveautés</h4>
                           <p className="text-xs text-[#888888] dark:text-[#8E8E8A] mt-1">Nouvelles fonctionnalités et annonces importantes.</p>
                         </div>
                         <CustomToggle checked={formData.notifyUpdates} onChange={() => handleChange("notifyUpdates", !formData.notifyUpdates)} />
                       </div>
-                      <div className="flex items-center justify-between p-6 bg-[#FAFAF8] dark:bg-[#0E0E0C] rounded-2xl border border-black/5 dark:border-white/5 transition-colors hover:border-black/10 dark:hover:border-white/10">
+                      <div className="flex items-center justify-between p-6 bg-transparent rounded-2xl border border-black/5 dark:border-white/5 transition-colors hover:border-black/10 dark:hover:border-white/10">
                         <div>
                           <h4 className="text-sm font-bold">Défis et Duels Cliniques</h4>
                           <p className="text-xs text-[#888888] dark:text-[#8E8E8A] mt-1">Invitations à des duels et résultats de classement.</p>
                         </div>
                         <CustomToggle checked={formData.notifyDuels} onChange={() => handleChange("notifyDuels", !formData.notifyDuels)} />
                       </div>
-                      <div className="flex items-center justify-between p-6 bg-[#FAFAF8] dark:bg-[#0E0E0C] rounded-2xl border border-black/5 dark:border-white/5 transition-colors hover:border-black/10 dark:hover:border-white/10">
+                      <div className="flex items-center justify-between p-6 bg-transparent rounded-2xl border border-black/5 dark:border-white/5 transition-colors hover:border-black/10 dark:hover:border-white/10">
                         <div>
                           <h4 className="text-sm font-bold">Activité de la Communauté</h4>
                           <p className="text-xs text-[#888888] dark:text-[#8E8E8A] mt-1">Nouveaux QCM et résumés partagés dans vos groupes.</p>
@@ -526,7 +526,7 @@ export const Settings = () => {
                     <div className="space-y-6">
                       
                       {/* --- Modification Mot de Passe In-Place --- */}
-                      <div className="bg-[#FAFAF8] dark:bg-[#0E0E0C] rounded-2xl border border-black/5 dark:border-white/5 overflow-hidden transition-all duration-300">
+                      <div className="bg-transparent rounded-2xl border border-black/5 dark:border-white/5 overflow-hidden transition-all duration-300">
                         <div className="flex items-center justify-between p-6">
                           <div className="flex items-center gap-4">
                             <div className="p-3 bg-white dark:bg-[#161614] rounded-xl border border-black/10 dark:border-white/10 shadow-sm">
@@ -549,7 +549,7 @@ export const Settings = () => {
                                 <div className="space-y-3">
                                   <label className="text-[10px] font-bold uppercase tracking-widest text-[#888888] dark:text-[#8E8E8A]">Nouveau mot de passe</label>
                                   <div className="relative">
-                                    <input type={showPassword ? "text" : "password"} value={passwords.new} onChange={(e) => setPasswords({...passwords, new: e.target.value})} className="w-full bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/10 dark:border-white/10 focus:border-[#5B21B6] rounded-xl px-4 py-3 text-sm outline-none" required />
+                                    <input type={showPassword ? "text" : "password"} value={passwords.new} onChange={(e) => setPasswords({...passwords, new: e.target.value})} className="w-full bg-transparent border border-black/10 dark:border-white/10 focus:border-[#5B21B6] rounded-xl px-4 py-3 text-sm outline-none" required />
                                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#888888] hover:text-[#111111] dark:hover:text-white transition-colors">
                                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                     </button>
@@ -557,7 +557,7 @@ export const Settings = () => {
                                 </div>
                                 <div className="space-y-3">
                                   <label className="text-[10px] font-bold uppercase tracking-widest text-[#888888] dark:text-[#8E8E8A]">Confirmer le mot de passe</label>
-                                  <input type={showPassword ? "text" : "password"} value={passwords.confirm} onChange={(e) => setPasswords({...passwords, confirm: e.target.value})} className="w-full bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/10 dark:border-white/10 focus:border-[#5B21B6] rounded-xl px-4 py-3 text-sm outline-none" required />
+                                  <input type={showPassword ? "text" : "password"} value={passwords.confirm} onChange={(e) => setPasswords({...passwords, confirm: e.target.value})} className="w-full bg-transparent border border-black/10 dark:border-white/10 focus:border-[#5B21B6] rounded-xl px-4 py-3 text-sm outline-none" required />
                                 </div>
                                 <div className="pt-2 flex justify-end">
                                   <button type="submit" disabled={isSaving} className="px-6 py-3 rounded-full bg-[#111111] dark:bg-white text-white dark:text-[#111111] text-xs font-bold uppercase tracking-widest hover:bg-[#5B21B6] dark:hover:bg-[#5B21B6] dark:hover:text-white transition-colors disabled:opacity-50">
@@ -570,7 +570,7 @@ export const Settings = () => {
                         </AnimatePresence>
                       </div>
 
-                      <button onClick={handleLogout} className="w-full flex items-center p-6 bg-[#FAFAF8] dark:bg-[#0E0E0C] rounded-2xl border border-black/5 dark:border-white/5 hover:border-red-500/50 transition-colors group">
+                      <button onClick={handleLogout} className="w-full flex items-center p-6 bg-transparent rounded-2xl border border-black/5 dark:border-white/5 hover:border-red-500/50 transition-colors group">
                         <div className="p-3 bg-white dark:bg-[#161614] rounded-xl border border-black/10 dark:border-white/10 shadow-sm mr-4">
                           <LogOut className="h-5 w-5 text-[#111111] dark:text-white group-hover:text-red-500 transition-colors" />
                         </div>
@@ -587,7 +587,7 @@ export const Settings = () => {
                         <AlertTriangle className="h-5 w-5" /> Zone de Danger
                       </h3>
                       
-                      <div className={`border rounded-2xl overflow-hidden transition-all duration-300 ${isDeletingAccount ? "border-red-500 bg-red-500/5" : "border-red-500/30 bg-[#FAFAF8] dark:bg-[#0E0E0C]"}`}>
+                      <div className={`border rounded-2xl overflow-hidden transition-all duration-300 ${isDeletingAccount ? "border-red-500 bg-red-500/5" : "border-red-500/30 bg-transparent"}`}>
                         <div className="flex flex-col md:flex-row items-center justify-between p-6">
                           <div className="mb-4 md:mb-0">
                             <h4 className="text-sm font-bold text-[#111111] dark:text-white">Supprimer le compte</h4>
@@ -612,7 +612,7 @@ export const Settings = () => {
                                   placeholder="SUPPRIMER" 
                                   value={deleteConfirmation}
                                   onChange={(e) => setDeleteConfirmation(e.target.value)}
-                                  className="w-full bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/10 dark:border-white/10 focus:border-red-500 rounded-lg px-4 py-3 text-sm font-mono outline-none mb-4 transition-colors"
+                                  className="w-full bg-transparent border border-black/10 dark:border-white/10 focus:border-red-500 rounded-lg px-4 py-3 text-sm font-mono outline-none mb-4 transition-colors"
                                 />
                                 <div className="flex justify-end gap-3">
                                   <button onClick={() => { setIsDeletingAccount(false); setDeleteConfirmation(""); }} className="px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest text-[#888888] hover:text-[#111111] dark:hover:text-white transition-colors">

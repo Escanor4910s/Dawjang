@@ -6,7 +6,7 @@ import LandingFooter from "@/components/landing/LandingFooter";
 
 const Refund = () => {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-transparent">
       <LandingHeader forceSolid />
       <main className="pt-28 pb-16 px-4">
         <div className="max-w-3xl mx-auto">

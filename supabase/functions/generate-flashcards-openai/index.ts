@@ -1,107 +1,46 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getUserPlanInfo } from "../_shared/plan-utils.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-function getSystemPrompt(difficulty: string): string {
-  const baseFormat = `Tu es un expert en ingénierie pédagogique médicale et en mémorisation par répétition espacée.
-Ta mission est d'extraire les concepts clés, définitions, symptômes, critères diagnostiques, et traitements d'un cours médical pour générer des Flashcards (cartes mémoire) de très haute qualité, concises et stimulantes.
-
-RÈGLES STRICTES POUR LES FLASHCARDS:
-1. Ne pose JAMAIS de questions de type "QCM" (ex: "Laquelle de ces propositions est vraie ?").
-2. Le "recto" (question) doit demander un concept précis ou une association (ex: "Triade classique de la thrombophlébite", "Définition de l'infarctus", "Antidote du paracétamol").
-3. Le "verso" (answer) doit être EXTRÊMEMENT CONCIS, souvent sous forme de tirets ou de mots-clés percutants. Pas de longues phrases.
-4. Couvre l'ensemble du texte fourni de manière stratégique (privilégie les points essentiels à retenir pour un examen médical).
-5. Réponds UNIQUEMENT avec un array JSON valide. Pas de texte avant ou après.
-
-Format EXACT requis:
-[
-  {
-    "question": "Concept à retenir (ex: Signe de Homans)",
-    "answer": "Douleur provoquée à la dorsiflexion du pied (signe de TVP)"
-  }
-]`;
-
-  if (difficulty === "facile") {
-    return `${baseFormat}
-
-NIVEAU FACILE:
-- Focalise-toi sur les définitions de base, les mots-clés simples et les concepts fondamentaux.
-- Les questions doivent être très directes (ex: "Définition de...", "Quel est l'organe touché dans...").
-- Évite les cas particuliers ou les détails rares.`;
+function getSystemPrompt(type: string, count: number): string {
+  let typeInstruction = "";
+  if (type === "socratic") {
+    typeInstruction = `Lis le cours fourni. Génère exactement ${count} questions ouvertes spécifiques nécessitant une liste ou explication en réponse. Format JSON attendu : [{"question": "...", "answer": "..."}].
+RÈGLES: 
+- Le "recto" (question) doit poser une question directe.
+- Le "verso" (answer) doit lister les points ou détailler la réponse de façon concise.`;
+  } else if (type === "binary") {
+    typeInstruction = `Lis le cours fourni. Formule exactement ${count} affirmations cliniques (certaines vraies, certaines fausses). Format JSON attendu : [{"question": "Assertion : [Ton texte]", "answer": "VRAI / FAUX, car [Justification médicale détaillée]"}].`;
+  } else if (type === "concept") {
+    typeInstruction = `Lis le cours fourni. Extrais exactement ${count} concepts clés. Format JSON attendu : [{"question": "Mot-clé", "answer": "Définition & implication express"}].`;
+  } else {
+    typeInstruction = `Génère exactement ${count} flashcards percutantes format question/réponse. Format JSON: [{"question": "...", "answer": "..."}].`;
   }
 
-  if (difficulty === "difficile") {
-    return `${baseFormat}
+  return `Tu es un expert en ingénierie pédagogique médicale.
+Ta mission est de forger un deck de Flashcards (cartes mémoire) de très haute qualité selon la demande.
 
-NIVEAU DIFFICILE:
-- Focalise-toi sur les diagnostics différentiels, les traitements de seconde intention, les effets secondaires spécifiques, ou les scores cliniques complexes.
-- Les questions doivent pousser à la réflexion (ex: "Quels sont les 3 diagnostics différentiels de...", "Quel est le mécanisme physiopathologique exact de...").`;
-  }
+DIRECTIVES :
+${typeInstruction}
 
-  return `${baseFormat}
-
-NIVEAU INTERMÉDIAIRE:
-- Focalise-toi sur les signes cliniques majeurs, les critères diagnostiques et les traitements de première ligne.
-- Niveau classique de révision d'un étudiant en médecine.`;
+- Ne pose JAMAIS de questions à choix multiples (QCM).
+- Couvre l'ensemble du texte fourni de manière stratégique.
+- Réponds UNIQUEMENT avec un array JSON valide (sans markdown de code de préférence, ou alors json propre). AUCUN texte avant ou après.`;
 }
 
-async function generateFlashcardsForChunk(content: string, nbCards: number, difficulty: string) {
-  console.log(`Generating approx ${nbCards} ${difficulty} flashcards for chunk of ${content.length} characters`);
-  
-  const systemPrompt = getSystemPrompt(difficulty);
-  const userPrompt = `Génère exactement ${nbCards} flashcards à partir du cours médical suivant.
-Rappel: Extraits courts, percutants, format question-réponse pour la mémorisation active. Évite absolument le format QCM.
-
-Cours médical:
-${content}`;
-
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${Deno.env.get('LOVABLE_API_KEY')}`
-    },
-    body: JSON.stringify({
-      model: "openai/gpt-5.2",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.7
-    })
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error('API error:', response.status, errText);
-    if (response.status === 429) throw new Error('RATE_LIMIT');
-    if (response.status === 402) throw new Error('PAYMENT_REQUIRED');
-    throw new Error('API request failed');
-  }
-
-  const data = await response.json();
-  let rawOutput = data.choices?.[0]?.message?.content || "";
-
-  try {
-    let cleaned = rawOutput.trim();
-    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
-    cleaned = cleaned.replace(/^```\s*/i, '').replace(/\s*```$/i, '');
-    cleaned = cleaned.trim();
-    
-    const flashcards = JSON.parse(cleaned);
-    if (!Array.isArray(flashcards)) throw new Error('Not an array');
-    
-    const validatedCards = flashcards.filter((f: any) => f.question && f.answer);
-    return validatedCards;
-  } catch (parseError) {
-    console.error('JSON parsing failed:', parseError);
-    return [];
-  }
+// shuffle function
+function shuffleArray(array: any[]) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
 }
 
 export default async function handler(req: Request) {
@@ -109,68 +48,112 @@ export default async function handler(req: Request) {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Authenticate user
   const userInfo = await getUserPlanInfo(req);
   if (!userInfo) {
     return new Response(JSON.stringify({ error: "Authentification requise" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   try {
-    const { content, nbFlashcards = 10, difficulty = "intermediaire" } = await req.json();
+    const { courseId, count = 10, type = "socratic", scope = "global" } = await req.json();
 
-    if (!content || typeof content !== 'string') {
-      return new Response(JSON.stringify({ error: "Le contenu est requis" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    if (!Deno.env.get('LOVABLE_API_KEY')) {
-      return new Response(JSON.stringify({ error: "Service indisponible" }), { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!courseId) {
+      return new Response(JSON.stringify({ error: "courseId requis" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const maxChunkSize = 5000;
-    let allCards: any[] = [];
-    
-    if (content.length > maxChunkSize) {
-      const chunks: string[] = [];
-      const paragraphs = content.split(/\n\n+/);
-      let currentChunk = '';
-      for (const para of paragraphs) {
-        if ((currentChunk + para).length > maxChunkSize && currentChunk.length > 0) {
-          chunks.push(currentChunk);
-          currentChunk = para;
-        } else {
-          currentChunk += (currentChunk ? '\n\n' : '') + para;
-        }
-      }
-      if (currentChunk) chunks.push(currentChunk);
-      
-      const cardsPerChunk = Math.ceil(nbFlashcards / chunks.length);
-      for (let i = 0; i < chunks.length; i++) {
-        try {
-          const chunkCards = await generateFlashcardsForChunk(chunks[i], cardsPerChunk, difficulty);
-          allCards = allCards.concat(chunkCards);
-        } catch (chunkError: any) {
-          if (chunkError.message === 'RATE_LIMIT' || chunkError.message === 'PAYMENT_REQUIRED') throw chunkError;
-        }
-      }
-      allCards = allCards.slice(0, nbFlashcards);
-    } else {
-      allCards = await generateFlashcardsForChunk(content, nbFlashcards, difficulty);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Fetch the course content
+    const { data: courseData, error: courseError } = await supabase
+      .from("courses")
+      .select("content")
+      .eq("id", courseId)
+      .single();
+
+    if (courseError || !courseData?.content) {
+      return new Response(JSON.stringify({ error: "Cours introuvable" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    let courseContent = courseData.content;
+
+    // Apply Scope
+    if (scope === "random") {
+       const paragraphs = courseContent.split(/\n\n+/).filter((p: string) => p.trim().length > 20);
+       courseContent = shuffleArray(paragraphs).join('\n\n');
     }
     
-    if (allCards.length === 0) {
-      return new Response(JSON.stringify({ error: "Impossible de générer des flashcards." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // truncate if too large to fit in context (approx 20000 chars is safe for gpt-4o)
+    if (courseContent.length > 20000) {
+       courseContent = courseContent.substring(0, 20000);
     }
+
+    const systemPrompt = getSystemPrompt(type, count);
+    const userPrompt = `Texte du cours :\n${courseContent}`;
+
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${Deno.env.get('LOVABLE_API_KEY')}`
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-5.2",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      const errTxt = await response.text();
+      console.error('API error:', response.status, errTxt);
+      if (response.status === 429) return new Response(JSON.stringify({ error: "Limite d'utilisation IA atteinte" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      throw new Error(`API AI erreur ${response.status}: ${errTxt}`);
+    }
+
+    const data = await response.json();
+    let rawOutput = data.choices?.[0]?.message?.content || "";
+
+    let cleaned = rawOutput.trim();
+    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
+    cleaned = cleaned.replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+    cleaned = cleaned.trim();
     
-    return new Response(JSON.stringify({ flashcards: allCards }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    let flashcards = [];
+    try {
+      flashcards = JSON.parse(cleaned);
+    } catch (e) {
+      throw new Error(`Erreur parsing JSON IA. Réponse brute: ${cleaned.substring(0, 50)}...`);
+    }
+
+    if (!Array.isArray(flashcards)) throw new Error("Le résultat de l'IA n'est pas une liste JSON");
     
+    const validatedCards = flashcards.filter((f: any) => f.question && f.answer);
+
+    // Insert directly to DB
+    const cardsToInsert = validatedCards.map((c: any) => ({
+       user_id: userInfo.userId,
+       course_id: courseId,
+       question: c.question,
+       answer: c.answer
+    }));
+
+    if (cardsToInsert.length > 0) {
+      const { error: insertError } = await supabase.from('flashcards').insert(cardsToInsert);
+      if (insertError) {
+         console.error("Erreur d'insertion DB:", insertError);
+         return new Response(JSON.stringify({ error: "Erreur sauvegarde des cartes en BD: " + insertError.message }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, count: cardsToInsert.length }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
   } catch (err: any) {
     console.error('Error:', err);
-    if (err.message === 'RATE_LIMIT') {
-      return new Response(JSON.stringify({ error: "Limite atteinte. Réessayez." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    if (err.message === 'PAYMENT_REQUIRED') {
-      return new Response(JSON.stringify({ error: "Quota atteint." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    return new Response(JSON.stringify({ error: "Erreur serveur." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: err.message || "Erreur serveur." }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 }
 

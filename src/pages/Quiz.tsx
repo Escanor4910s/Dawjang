@@ -213,7 +213,7 @@ const Quiz = () => {
 
   if (!course || questions.length === 0) {
     return (
-      <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center">
         <div className="relative">
           <div className="absolute inset-0 bg-[#5B21B6]/20 rounded-full animate-ping" />
           <Brain className="h-12 w-12 text-[#5B21B6] relative z-10 animate-pulse" />
@@ -233,7 +233,7 @@ const Quiz = () => {
     const isSuccess = percentage >= 60;
 
     return (
-      <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-white font-sans py-12 flex items-center justify-center">
+      <div className="min-h-screen bg-transparent text-[#111111] dark:text-white font-sans py-12 flex items-center justify-center">
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="max-w-3xl w-full mx-auto px-6">
           <div className="bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 shadow-2xl rounded-[3rem] p-10 md:p-16 relative overflow-hidden text-center">
             <div className={`absolute top-0 left-0 right-0 h-3 ${isSuccess ? "bg-emerald-500" : "bg-rose-500"}`} />
@@ -243,15 +243,15 @@ const Quiz = () => {
             <h1 className="text-4xl md:text-5xl font-light tracking-tighter mb-4">Bilan de l'Épreuve</h1>
             <p className="text-[#888888] font-medium text-lg mb-12">{course.title}</p>
             <div className="grid grid-cols-3 gap-4 md:gap-8 mb-12">
-              <div className="bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 rounded-2xl p-6">
+              <div className="bg-transparent border border-black/5 dark:border-white/5 rounded-2xl p-6">
                 <p className="text-4xl font-light text-emerald-500">{correct}</p>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mt-2">Correctes</p>
               </div>
-              <div className="bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 rounded-2xl p-6">
+              <div className="bg-transparent border border-black/5 dark:border-white/5 rounded-2xl p-6">
                 <p className="text-4xl font-light text-rose-500">{total - correct}</p>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mt-2">Erreurs</p>
               </div>
-              <div className="bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 rounded-2xl p-6">
+              <div className="bg-transparent border border-black/5 dark:border-white/5 rounded-2xl p-6">
                 <p className="text-4xl font-light text-[#111111] dark:text-white">{formatTime(timeElapsed)}</p>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-[#888888] mt-2">Chrono</p>
               </div>
@@ -306,7 +306,7 @@ const Quiz = () => {
   const morVariants = { hidden: { x: "100%" }, visible: { x: 0, transition: { type: "spring", stiffness: 300, damping: 30 } } };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0A0A0A] text-[#111111] dark:text-[#F4F4F2] font-sans selection:bg-[#5B21B6]/30 transition-colors duration-500">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans selection:bg-[#5B21B6]/30 transition-colors duration-500">
       
       {/* ─── INJECTION CSS POUR LA VAGUE ANIMÉE (Niveau 40/40) ─── */}
       <style dangerouslySetInnerHTML={{__html: `
@@ -427,7 +427,7 @@ const Quiz = () => {
             {isGroupage && groupageData && groupageData.assertions.length > 0 && (
                 <div className="space-y-4 mb-10">
                   {groupageData.assertions.map((assertion, idx) => (
-                    <div key={idx} className="flex items-start gap-4 p-5 rounded-2xl bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5">
+                    <div key={idx} className="flex items-start gap-4 p-5 rounded-2xl bg-transparent border border-black/5 dark:border-white/5">
                       <div className="h-7 w-7 shrink-0 rounded-full border border-black/20 dark:border-white/20 flex items-center justify-center text-[10px] font-bold text-[#888888]">
                         {idx + 1}
                       </div>
@@ -444,13 +444,13 @@ const Quiz = () => {
                     const isSelected = selectedAnswers[currentIndex]?.includes(index);
                     const isCorrect = currentQuestion.correct.includes(index);
                     
-                    let choiceStyle = "border-black/10 dark:border-white/10 bg-[#FAFAF8] dark:bg-[#0A0A0A] hover:border-[#111111] dark:hover:border-white/40 text-[#111111] dark:text-[#F4F4F2]";
+                    let choiceStyle = "border-black/10 dark:border-white/10 bg-transparent hover:border-[#111111] dark:hover:border-white/40 text-[#111111] dark:text-[#F4F4F2]";
                     if (isSelected) choiceStyle = "border-indigo-600 bg-indigo-600 text-white shadow-lg";
                     
                     if (showExplanation) {
                       if (isCorrect) choiceStyle = "border-emerald-500 bg-emerald-500 text-white";
                       else if (isSelected) choiceStyle = "border-rose-500 bg-rose-500/90 text-white opacity-70";
-                      else choiceStyle = "border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#0A0A0A] opacity-40";
+                      else choiceStyle = "border-black/5 dark:border-white/5 bg-transparent opacity-40";
                     }
 
                     return (
@@ -471,7 +471,7 @@ const Quiz = () => {
                     const isSelected = selectedAnswers[currentIndex]?.includes(index);
                     const isCorrect = currentQuestion.correct.includes(index);
                     
-                    let choiceStyle = "border-black/10 dark:border-white/10 bg-[#FAFAF8] dark:bg-[#0A0A0A] hover:border-[#111111] dark:hover:border-white/40 text-[#111111] dark:text-[#F4F4F2]";
+                    let choiceStyle = "border-black/10 dark:border-white/10 bg-transparent hover:border-[#111111] dark:hover:border-white/40 text-[#111111] dark:text-[#F4F4F2]";
                     let letterStyle = "border-black/20 dark:border-white/20 text-[#888888]";
 
                     if (isSelected) {
@@ -487,7 +487,7 @@ const Quiz = () => {
                             choiceStyle = "border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-400 opacity-70";
                             letterStyle = "border-rose-500 bg-rose-500 text-white";
                         } else {
-                            choiceStyle = "border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#0A0A0A] opacity-40";
+                            choiceStyle = "border-black/5 dark:border-white/5 bg-transparent opacity-40";
                         }
                     }
 
@@ -519,7 +519,7 @@ const Quiz = () => {
                   className="overflow-hidden mt-12 pt-10 border-t border-black/5 dark:border-white/5"
                 >
                   <div className="space-y-6">
-                    <div className="flex justify-between items-center bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 rounded-full p-2 pl-6">
+                    <div className="flex justify-between items-center bg-transparent border border-black/5 dark:border-white/5 rounded-full p-2 pl-6">
                         <span className="text-[10px] font-black uppercase tracking-widest text-[#888888]">Justification Clinique</span>
                         <div className="flex gap-1.5">
                             <span className="px-3 py-1 bg-white dark:bg-[#161614] shadow-sm rounded-md text-[9px] font-black uppercase tracking-widest text-[#111111] dark:text-white">Confiance: 5/5 ⭐</span>
@@ -554,7 +554,7 @@ const Quiz = () => {
                     <motion.div key="result" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full">
                         <button 
                             onClick={() => openMorExplanation(currentQuestion)}
-                            className="w-full flex justify-between items-center p-5 bg-[#FAFAF8] dark:bg-[#0A0A0A] rounded-2xl border-[1.5px] border-black/5 dark:border-white/5 hover:border-[#5B21B6] hover:bg-[#5B21B6]/5 group transition-colors shadow-sm"
+                            className="w-full flex justify-between items-center p-5 bg-transparent rounded-2xl border-[1.5px] border-black/5 dark:border-white/5 hover:border-[#5B21B6] hover:bg-[#5B21B6]/5 group transition-colors shadow-sm"
                         >
                             <span className="text-[10px] font-black uppercase tracking-widest text-[#111111] dark:text-white flex items-center gap-2">
                                 <MessageCircle className="h-4 w-4" /> Décortiquer la réponse
@@ -564,7 +564,7 @@ const Quiz = () => {
                     </motion.div>
                 ) : (
                     <motion.div key="waiting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full flex flex-col gap-4">
-                        <div className="w-full h-2 bg-[#FAFAF8] dark:bg-[#0A0A0A] rounded-full overflow-hidden shadow-inner border border-black/5 dark:border-white/5">
+                        <div className="w-full h-2 bg-transparent rounded-full overflow-hidden shadow-inner border border-black/5 dark:border-white/5">
                             <motion.div className="h-full bg-[#5B21B6]" initial={{ width: 0 }} animate={{ width: (selectedAnswers[currentIndex]?.length > 0) ? "100%" : "30%" }} transition={{ duration: 1.5 }}/>
                         </div>
                         <p className="text-xs font-medium text-[#666666] dark:text-[#8E8E8A]">L'Agent MOR analyse votre raisonnement thérapeutique...</p>
@@ -586,15 +586,15 @@ const Quiz = () => {
                          <span className="text-[10px] font-black uppercase tracking-widest text-[#888888]">Progression</span>
                          <p className="text-2xl font-light tracking-tighter">{currentIndex + (showExplanation ? 1 : 0)} <span className="text-[11px] font-bold uppercase text-[#888888]">/ {questions.length}</span></p>
                      </div>
-                     <Progress value={((currentIndex + (showExplanation ? 1 : 0)) / questions.length) * 100} className="h-1.5 w-full bg-[#FAFAF8] dark:bg-[#0A0A0A] [&>div]:bg-[#111111] dark:[&>div]:bg-white" />
+                     <Progress value={((currentIndex + (showExplanation ? 1 : 0)) / questions.length) * 100} className="h-1.5 w-full bg-transparent [&>div]:bg-[#111111] dark:[&>div]:bg-white" />
                  </div>
 
                  <div className="grid grid-cols-2 gap-4">
-                     <div className="p-4 bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 rounded-2xl flex flex-col justify-center">
+                     <div className="p-4 bg-transparent border border-black/5 dark:border-white/5 rounded-2xl flex flex-col justify-center">
                          <span className="text-4xl font-light tracking-tighter text-emerald-500 mb-1">{currentCorrect}</span>
                          <span className="text-[9px] font-black uppercase tracking-widest text-[#888888]">Réponses Justes</span>
                      </div>
-                     <div className="p-4 bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 rounded-2xl flex flex-col justify-center">
+                     <div className="p-4 bg-transparent border border-black/5 dark:border-white/5 rounded-2xl flex flex-col justify-center">
                          <span className="text-4xl font-light tracking-tighter text-rose-500 mb-1">{currentIncorrect}</span>
                          <span className="text-[9px] font-black uppercase tracking-widest text-[#888888]">Erreurs</span>
                      </div>
@@ -608,7 +608,7 @@ const Quiz = () => {
         {morOpen && (
           <motion.div 
             variants={morVariants} initial="hidden" animate="visible" exit="hidden"
-            className="fixed top-0 bottom-0 right-0 z-[200] w-full sm:max-w-lg bg-[#FAFAF8] dark:bg-[#0A0A0A] border-l-[1.5px] border-black/10 dark:border-white/10 shadow-2xl flex flex-col"
+            className="fixed top-0 bottom-0 right-0 z-[200] w-full sm:max-w-lg bg-transparent border-l-[1.5px] border-black/10 dark:border-white/10 shadow-2xl flex flex-col"
           >
             <div className="p-6 border-b-[1.5px] border-black/5 dark:border-white/5 bg-white dark:bg-[#161614] shrink-0">
                 <div className="flex items-center justify-between mb-2">
@@ -622,7 +622,7 @@ const Quiz = () => {
                 <p className="text-[10px] font-black uppercase tracking-widest text-[#888888]">Discussion avec l'Agent MOR - Justification du QCM ID {currentIndex + 1}</p>
             </div>
             
-            <div className="flex-1 overflow-hidden p-6 editorial-scrollbar bg-[#FAFAF8] dark:bg-[#0A0A0A]">
+            <div className="flex-1 overflow-hidden p-6 editorial-scrollbar bg-transparent">
                 <AskMor initialMessage={`Analyse cliniquement l'explication suivante du QCM :\n\n${morContext}`} />
             </div>
           </motion.div>

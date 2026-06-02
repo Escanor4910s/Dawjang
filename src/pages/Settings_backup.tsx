@@ -202,11 +202,11 @@ const Settings = () => {
   const handleSignOut = async () => { await supabase.auth.signOut(); navigate("/"); };
 
   if (loading) {
-    return (<div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>);
+    return (<div className="min-h-screen bg-transparent flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>);
   }
 
   return (
-    <div className="min-h-screen bg-dashboard bg-doodle-watermark py-8 relative overflow-hidden">
+    <div className="min-h-screen bg-transparent py-8 relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-accent/10 rounded-full blur-[80px] pointer-events-none" />

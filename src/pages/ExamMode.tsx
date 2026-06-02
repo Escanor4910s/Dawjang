@@ -201,7 +201,7 @@ const ExamMode = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-transparent flex items-center justify-center">
         <Brain className="h-12 w-12 text-primary animate-pulse" />
       </div>
     );
@@ -213,7 +213,7 @@ const ExamMode = () => {
     const avgTime = timePerQuestion.reduce((a, b) => a + b, 0) / questions.length;
 
     return (
-      <div className="min-h-screen bg-background py-8">
+      <div className="min-h-screen bg-transparent py-8">
         <div className="container mx-auto px-4 max-w-3xl">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <Card>
@@ -299,7 +299,7 @@ const ExamMode = () => {
   const timeElapsed = totalTime - Math.max(0, timeLeft);
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0A0A0A] text-[#111111] dark:text-[#F4F4F2] font-sans selection:bg-[#5B21B6]/30 transition-colors duration-500">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans selection:bg-[#5B21B6]/30 transition-colors duration-500">
       
       {/* ─── INJECTION CSS : VAGUE NÉBULEUSE (Identique au mode Pratique) ─── */}
       <style dangerouslySetInnerHTML={{__html: `
@@ -424,7 +424,7 @@ const ExamMode = () => {
                     className={`w-full text-left p-6 rounded-2xl border-[1.5px] transition-all duration-300 flex items-start gap-6 outline-none shadow-sm hover:shadow-md ${
                       isSelected 
                         ? "border-indigo-600 bg-indigo-600/5 dark:bg-indigo-600/10" 
-                        : "border-black/10 dark:border-white/10 bg-[#FAFAF8] dark:bg-[#0A0A0A] hover:border-[#111111] dark:hover:border-white/40"
+                        : "border-black/10 dark:border-white/10 bg-transparent hover:border-[#111111] dark:hover:border-white/40"
                     }`}
                   >
                     <div className={`h-10 w-10 shrink-0 rounded-xl border-[1.5px] flex items-center justify-center text-xl font-bold transition-all duration-300 mt-0.5 ${
@@ -477,7 +477,7 @@ const ExamMode = () => {
                      const isCurrent = currentIndex === idx;
                      const isAnswered = selectedAnswers[idx]?.length > 0;
                      
-                     let btnClass = "border-black/10 dark:border-white/10 bg-[#FAFAF8] dark:bg-[#0A0A0A] text-[#888888] hover:border-[#111111] dark:hover:border-white";
+                     let btnClass = "border-black/10 dark:border-white/10 bg-transparent text-[#888888] hover:border-[#111111] dark:hover:border-white";
                      if (isAnswered) btnClass = "border-indigo-600 bg-indigo-600 text-white shadow-md";
                      if (isCurrent && !isAnswered) btnClass = "border-[#111111] dark:border-white bg-transparent text-[#111111] dark:text-white";
                      if (isCurrent && isAnswered) btnClass = "border-[#111111] dark:border-white bg-indigo-600 text-white shadow-md ring-4 ring-indigo-500/20";
@@ -505,7 +505,7 @@ const ExamMode = () => {
                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">En cours</span>
                  </div>
                  <div className="flex items-center gap-3">
-                     <div className="h-3 w-3 rounded-full bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/10 dark:border-white/10" />
+                     <div className="h-3 w-3 rounded-full bg-transparent border border-black/10 dark:border-white/10" />
                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">À faire</span>
                  </div>
              </div>

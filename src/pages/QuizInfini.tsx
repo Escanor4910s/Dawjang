@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { Infinity as InfinityIcon, CheckCircle2, XCircle, Loader2, StopCircle, Sparkles } from "lucide-react";
-import { generateQuizWithPuter } from "@/lib/puterAiService";
+import { generateQuizWithLovable } from "@/lib/lovableAiService";
 
 interface InfQuestion { question: string; choices: string[]; correct: number[]; explanation?: string; }
 
@@ -42,7 +42,7 @@ const QuizInfini = () => {
     setPicked([]);
     try {
       const askedSummary = history.slice(-5).map(h => `- ${h.q.question.slice(0, 80)}`).join("\n");
-      const generatedQuestions = await generateQuizWithPuter(
+      const generatedQuestions = await generateQuizWithLovable(
         `${content}\n\n[CONTEXTE: questions déjà posées, ne pas répéter]\n${askedSummary}`,
         1, type, difficulty
       );
@@ -92,7 +92,7 @@ const QuizInfini = () => {
   const accuracy = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-background bg-doodle-watermark py-6 px-4">
+    <div className="min-h-screen bg-transparent py-6 px-4">
       <div className="max-w-3xl mx-auto space-y-4">
         <header className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2">

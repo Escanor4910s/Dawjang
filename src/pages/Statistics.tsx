@@ -62,7 +62,7 @@ export const Statistics = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans pt-8 pb-20">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans pt-8 pb-20">
       <div className="max-w-[1400px] mx-auto px-6 space-y-8">
         
         {/* LA BANDEROLE ANIMÉE */}

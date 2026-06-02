@@ -13,8 +13,8 @@ import { UserPreferencesProvider } from "./hooks/useUserPreferences";
 import { PlanGuard } from "./components/PlanGuard";
 import { registerSW } from 'virtual:pwa-register';
 import { toast } from "sonner";
+import { LivingCanvas } from "./components/LivingCanvas";
 import "./lib/i18n";
-
 // Register PWA with notification
 registerSW({
   onOfflineReady() {
@@ -84,6 +84,7 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
+          <LivingCanvas />
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
               {/* Public pages — no Layout (sidebar) */}

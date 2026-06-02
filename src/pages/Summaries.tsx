@@ -5,6 +5,14 @@ import { Plus, Trash2, Eye, BookOpen, FileText, Zap, RefreshCw, Layers, ArrowRig
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { AnimatedBanner } from "@/components/AnimatedBanner";
+import { exportSummaryToPDF } from "@/utils/pdfEngine";
+import { exportSummaryToWord } from "@/utils/wordEngine";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Summary { id: string; title: string; summary_type: string; content: string; created_at: string; course_id?: string; }
 
@@ -75,9 +83,22 @@ const Summaries = () => {
     toast.success("Actualisé !"); 
   };
 
+  const handleDownload = async (summary: Summary, format: "pdf" | "word", e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      if (format === "pdf") {
+        await exportSummaryToPDF(summary.title, summary.content);
+      } else if (format === "word") {
+        await exportSummaryToWord(summary.title, summary.content);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] flex items-center justify-center">
+      <div className="min-h-screen bg-transparent flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <RefreshCw className="h-6 w-6 animate-spin text-[#111111] dark:text-white" />
           <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Synchronisation...</span>
@@ -87,7 +108,7 @@ const Summaries = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans">
       <div className="max-w-[1400px] mx-auto px-6 py-12 md:py-20 space-y-16 relative z-10">
         
         {/* LA BANDEROLE ANIMÉE */}
@@ -123,7 +144,7 @@ const Summaries = () => {
             className="w-full max-w-3xl mx-auto relative z-10"
           >
             <div className="bg-white dark:bg-[#161614] border-2 border-dashed border-black/10 dark:border-white/10 rounded-[2rem] p-20 flex flex-col items-center justify-center text-center transition-colors hover:border-[#5B21B6]/30">
-              <div className="w-20 h-20 bg-[#FAFAF8] dark:bg-[#0E0E0C] rounded-full flex items-center justify-center mb-8 border border-black/5 dark:border-white/5">
+              <div className="w-20 h-20 bg-transparent rounded-full flex items-center justify-center mb-8 border border-black/5 dark:border-white/5">
                 <FileText className="h-8 w-8 text-[#111111] dark:text-white" />
               </div>
               <h3 className="text-3xl font-light text-[#111111] dark:text-white mb-4">Bibliothèque vierge</h3>
@@ -164,7 +185,7 @@ const Summaries = () => {
                       {/* En-tête de la carte */}
                       <div className="p-8 pb-0">
                         <div className="flex items-start justify-between gap-4 mb-6">
-                          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 text-[#111111] dark:text-[#F4F4F2] group-hover:bg-[#5B21B6] group-hover:text-white group-hover:border-[#5B21B6] transition-colors duration-300">
+                          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-transparent border border-black/5 dark:border-white/5 text-[#111111] dark:text-[#F4F4F2] group-hover:bg-[#5B21B6] group-hover:text-white group-hover:border-[#5B21B6] transition-colors duration-300">
                             <Icon className="h-3.5 w-3.5" />
                             <span className="text-[9px] font-bold uppercase tracking-widest">{config.label}</span>
                           </div>
@@ -188,16 +209,42 @@ const Summaries = () => {
                         <div className="flex gap-2">
                             <button 
                               onClick={(e) => { e.stopPropagation(); navigate(`/summary/${summary.id}`); }}
-                              className="h-10 px-4 rounded-full bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 hover:bg-[#5B21B6] hover:text-white transition-colors duration-200"
+                              className="h-10 px-4 rounded-full bg-transparent text-[#111111] dark:text-[#F4F4F2] text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 hover:bg-[#5B21B6] hover:text-white transition-colors duration-200"
                             >
                               <Eye className="h-3.5 w-3.5" /> Ouvrir
                             </button>
+                            <DropdownMenu>
+                              <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                                <DropdownMenuTrigger asChild>
+                                  <button 
+                                    className="h-10 w-10 rounded-full bg-transparent text-[#888888] flex items-center justify-center hover:bg-[#5B21B6] hover:text-white transition-colors duration-200"
+                                    title="Télécharger (PDF)"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                              </div>
+                              <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-[#161614] border-black/10 dark:border-white/10 rounded-xl p-2 shadow-xl">
+                                <DropdownMenuItem 
+                                  onClick={(e) => handleDownload(summary, "pdf", e)}
+                                  className="cursor-pointer text-xs font-bold uppercase tracking-widest text-[#111111] dark:text-white hover:bg-[#5B21B6] hover:text-white rounded-lg p-3 transition-colors"
+                                >
+                                  Format PDF (.pdf)
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={(e) => handleDownload(summary, "word", e)}
+                                  className="cursor-pointer text-xs font-bold uppercase tracking-widest text-[#111111] dark:text-white hover:bg-[#5B21B6] hover:text-white rounded-lg p-3 transition-colors mt-1"
+                                >
+                                  Format Word (.docx)
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                         
                         <div className="flex items-center gap-2">
                             <button 
                               onClick={(e) => handleDelete(summary.id, e)} 
-                              className="h-10 w-10 rounded-full bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#888888] flex items-center justify-center hover:bg-[#DC2626] hover:text-white transition-colors duration-200"
+                              className="h-10 w-10 rounded-full bg-transparent text-[#888888] flex items-center justify-center hover:bg-[#DC2626] hover:text-white transition-colors duration-200"
                               title="Supprimer la session"
                             >
                               <Trash2 className="h-4 w-4" />

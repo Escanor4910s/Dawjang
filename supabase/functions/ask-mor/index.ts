@@ -13,7 +13,7 @@ const corsHeaders = {
 // --- Input validation schema ---
 const AskMorSchema = z.object({
   question: z.string().min(1).max(2000),
-  courseId: z.string().uuid(),
+  courseId: z.string().uuid().optional(),
   priority: z.boolean().optional(),
 });
 
@@ -158,33 +158,42 @@ serve(async (req) => {
 
     const user = { id: planCheck.userId };
 
-    // Fetch course content
-    const { data: course, error: courseError } = await supabase
-      .from('courses')
-      .select('id, title, content, user_id')
-      .eq('id', courseId)
-      .eq('user_id', user.id)
-      .single();
+    let course = null;
+    
+    if (courseId) {
+      const { data: fetchedCourse, error: courseError } = await supabase
+        .from('courses')
+        .select('id, title, content, user_id')
+        .eq('id', courseId)
+        .eq('user_id', user.id)
+        .single();
 
-    if (courseError || !course) {
-      console.error('Course fetch error:', courseError);
-      return new Response(
-        JSON.stringify({ error: 'Course not found or access denied' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      if (courseError || !fetchedCourse) {
+        console.error('Course fetch error:', courseError);
+        return new Response(
+          JSON.stringify({ error: 'Course not found or access denied' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      course = fetchedCourse;
     }
 
-    // Extract relevant excerpts from course
-    const relevantContent = extractRelevantExcerpts(course.content, question);
+    // Extract relevant excerpts from course if available
+    const relevantContent = course ? extractRelevantExcerpts(course.content, question) : "";
     const sources: Source[] = [];
 
     // Build context with course content
-    let contextPrompt = relevantContent.length > 0 
-      ? `📚 CONTENU DU COURS "${course.title}" :\n\n${relevantContent}\n\n---\n\nQuestion de l'étudiant : ${question}\n\nInstructions :\n1. Réponds en t'appuyant PRIORITAIREMENT sur le contenu du cours ci-dessus\n2. Complète avec tes connaissances médicales générales si le cours ne couvre pas tout\n3. Indique clairement si l'info vient du cours ou de connaissances générales\n4. Sois pédagogue et structure ta réponse`
-      : `Question de l'étudiant : ${question}\n\nInstructions :\nSi l'étudiant te salue ou pose une question générale, réponds de façon amicale en te présentant comme Mor, et demande-lui comment tu peux l'aider avec son cours "${course.title}". N'invente pas de détails sur le cours s'il n'y a pas de question précise.`;
+    let contextPrompt = "";
+    if (course && relevantContent.length > 0) {
+      contextPrompt = `📚 CONTENU DU COURS "${course.title}" :\n\n${relevantContent}\n\n---\n\nQuestion de l'étudiant : ${question}\n\nInstructions :\n1. Réponds en t'appuyant PRIORITAIREMENT sur le contenu du cours ci-dessus\n2. Complète avec tes connaissances médicales générales si le cours ne couvre pas tout\n3. Indique clairement si l'info vient du cours ou de connaissances générales\n4. Sois pédagogue et structure ta réponse`;
+    } else if (course) {
+      contextPrompt = `Question de l'étudiant : ${question}\n\nInstructions :\nSi l'étudiant te salue ou pose une question générale, réponds de façon amicale en te présentant comme Mor, et demande-lui comment tu peux l'aider avec son cours "${course.title}". N'invente pas de détails sur le cours s'il n'y a pas de question précise.`;
+    } else {
+      contextPrompt = `Question de l'étudiant : ${question}\n\nInstructions :\nSi l'étudiant te salue ou pose une question générale, réponds de façon amicale en te présentant comme Mor. Réponds à sa question en utilisant tes connaissances médicales générales.`;
+    }
 
     // Add course source
-    if (relevantContent.length > 100) {
+    if (course && relevantContent.length > 100) {
       sources.push({
         type: "course",
         text: `Cours: ${course.title}`

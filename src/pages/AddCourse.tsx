@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useFileReader } from "@/hooks/useFileReader";
 import { useAdaptiveDifficulty } from "@/hooks/useAdaptiveDifficulty";
 import { useToast } from "@/hooks/use-toast";
-import { generateQuizWithPuter } from "@/lib/puterAiService";
+import { generateQuizWithLovable } from "@/lib/lovableAiService";
 
 interface ExistingCourse { id: string; title: string; content: string; file_name: string | null; created_at: string; }
 
@@ -154,8 +154,8 @@ export const AddCourse = () => {
         return;
       }
 
-      toast.loading("Génération des QCM avec l'IA (Puter)...", { id: toastId });
-      const generatedQuestions = await generateQuizWithPuter(courseContent, parseInt(questionCount), quizType, difficulty);
+      toast.loading("Génération des QCM avec l'IA (Lovable)...", { id: toastId });
+      const generatedQuestions = await generateQuizWithLovable(courseContent, parseInt(questionCount), quizType, difficulty);
 
       const validQuestions = generatedQuestions.filter((q: any) => q.question && Array.isArray(q.choices) && q.choices.length >= 2 && Array.isArray(q.correct) && q.correct.length > 0);
       if (validQuestions.length === 0) throw new Error("Aucune question valide générée");
@@ -193,7 +193,7 @@ export const AddCourse = () => {
     : "Élection : Une seule proposition est strictement exacte.";
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0A0A0A] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans pt-8 pb-32 relative overflow-hidden transition-colors duration-500">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans pt-8 pb-32 relative overflow-hidden transition-colors duration-500">
       
       {/* Halo d'ambiance en arrière-plan */}
       <div className="absolute top-0 right-1/4 w-[600px] h-[600px] bg-[#5B21B6]/10 dark:bg-[#5B21B6]/20 blur-[120px] rounded-full pointer-events-none z-0" />
@@ -232,7 +232,7 @@ export const AddCourse = () => {
 
               <div className="space-y-3">
                 <label className="text-[10px] font-black uppercase tracking-widest text-[#111111] dark:text-white ml-2">Titre du cours</label>
-                <input type="text" value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)} placeholder="Ex: Anatomie cardiovasculaire..." className="w-full bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 focus:border-[#5B21B6]/40 rounded-[1.5rem] px-6 py-5 text-sm font-bold text-[#111111] dark:text-white placeholder:text-[#888888]/50 shadow-inner outline-none transition-all focus:ring-4 ring-[#5B21B6]/5" />
+                <input type="text" value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)} placeholder="Ex: Anatomie cardiovasculaire..." className="w-full bg-transparent border border-black/5 dark:border-white/5 focus:border-[#5B21B6]/40 rounded-[1.5rem] px-6 py-5 text-sm font-bold text-[#111111] dark:text-white placeholder:text-[#888888]/50 shadow-inner outline-none transition-all focus:ring-4 ring-[#5B21B6]/5" />
               </div>
 
               <AnimatePresence mode="wait">
@@ -266,7 +266,7 @@ export const AddCourse = () => {
                         <select 
                           value={selectedCourseId || ""} 
                           onChange={(e) => setSelectedCourseId(e.target.value)} 
-                          className="w-full appearance-none bg-[#FAFAF8] dark:bg-[#0A0A0A] border border-black/5 dark:border-white/5 focus:border-[#5B21B6]/40 rounded-[1.5rem] px-6 py-5 text-sm font-bold text-[#111111] dark:text-white shadow-inner outline-none transition-all focus:ring-4 ring-[#5B21B6]/5 cursor-pointer"
+                          className="w-full appearance-none bg-transparent border border-black/5 dark:border-white/5 focus:border-[#5B21B6]/40 rounded-[1.5rem] px-6 py-5 text-sm font-bold text-[#111111] dark:text-white shadow-inner outline-none transition-all focus:ring-4 ring-[#5B21B6]/5 cursor-pointer"
                         >
                           <option value="">Choisissez dans votre bibliothèque...</option>
                           {existingCourses.map(course => (

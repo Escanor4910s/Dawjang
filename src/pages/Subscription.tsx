@@ -264,14 +264,14 @@ const Subscription = () => {
 
   if (loading || roleLoading) {
     return (
-      <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] flex items-center justify-center">
+      <div className="min-h-screen bg-transparent flex items-center justify-center">
         <div className="animate-pulse text-[#5B21B6] text-lg font-medium">Chargement...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans pt-8 pb-24 transition-colors duration-300">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans pt-8 pb-24 transition-colors duration-300">
       <div className="max-w-[1400px] mx-auto px-6 space-y-12">
         {/* En-tête : La Banderole Animée */}
         <AnimatedBanner
@@ -343,7 +343,7 @@ const Subscription = () => {
                 <div className="mb-8">
                   <div className="flex items-center gap-3 mb-4">
                     <div
-                      className={`p-3 rounded-2xl bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 ${plan.color}`}>
+                      className={`p-3 rounded-2xl bg-transparent border border-black/5 dark:border-white/5 ${plan.color}`}>
 
                       <Icon className="h-6 w-6" />
                     </div>

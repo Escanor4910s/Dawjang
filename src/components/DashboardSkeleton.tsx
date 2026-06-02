@@ -4,7 +4,7 @@ import { Sun, Monitor, BookOpen, Target, TrendingUp, Clock } from "lucide-react"
 
 export const DashboardSkeleton = () => {
   return (
-    <div className="min-h-screen bg-dashboard text-foreground bg-doodle-watermark font-sans overflow-x-hidden px-4 pt-2 pb-6 sm:px-8 sm:pt-4 sm:pb-8">
+    <div className="min-h-screen bg-dashboard text-foreground font-sans overflow-x-hidden px-4 pt-2 pb-6 sm:px-8 sm:pt-4 sm:pb-8">
       <div className="max-w-[1600px] mx-auto space-y-8 relative">
         {/* Glow Effects */}
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />

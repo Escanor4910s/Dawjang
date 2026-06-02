@@ -184,7 +184,7 @@ export const EcosPage = () => {
   const itemVariants = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100 } } };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans pt-4 pb-20 w-full transition-colors duration-300">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans pt-4 pb-20 w-full transition-colors duration-300">
       
       {/* Scrollbar Éditoriale Invisible */}
       <style dangerouslySetInnerHTML={{__html: `
@@ -244,7 +244,7 @@ export const EcosPage = () => {
                 </div>
                 
                 <div className="flex items-center gap-4 mb-12 pb-6 border-b border-black/5 dark:border-white/5 relative z-10">
-                  <div className="h-14 w-14 rounded-2xl bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 flex items-center justify-center">
+                  <div className="h-14 w-14 rounded-2xl bg-transparent border border-black/5 dark:border-white/5 flex items-center justify-center">
                     <Sparkles className="h-6 w-6 text-[#5B21B6]" />
                   </div>
                   <div>
@@ -271,7 +271,7 @@ export const EcosPage = () => {
                           {["Facile", "Moyen", "Difficile"].map((level) => (
                             <button key={level} onClick={() => setDifficulty(level.toLowerCase() as any)}
                               className={`flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all duration-200 ${
-                                difficulty === level.toLowerCase() ? "bg-[#111111] dark:bg-white text-white dark:text-[#111111] border-[#111111] dark:border-white shadow-md" : "bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#888888] border-black/5 dark:border-white/5 hover:border-black/20 dark:hover:border-white/30 hover:text-[#111111] dark:hover:text-white"
+                                difficulty === level.toLowerCase() ? "bg-[#111111] dark:bg-white text-white dark:text-[#111111] border-[#111111] dark:border-white shadow-md" : "bg-transparent text-[#888888] border-black/5 dark:border-white/5 hover:border-black/20 dark:hover:border-white/30 hover:text-[#111111] dark:hover:text-white"
                               }`}
                             >
                               {level}
@@ -292,7 +292,7 @@ export const EcosPage = () => {
                           ].map((mode) => (
                             <button key={mode.id} onClick={() => setGenerationMode(mode.id as any)}
                               className={`p-5 rounded-xl border flex flex-col items-center gap-3 transition-all duration-200 ${
-                                generationMode === mode.id ? "bg-[#5B21B6] border-[#5B21B6] text-white shadow-md" : "bg-[#FAFAF8] dark:bg-[#0E0E0C] border-black/5 dark:border-white/5 text-[#888888] hover:border-black/20 dark:hover:border-white/30 hover:text-[#111111] dark:hover:text-white"
+                                generationMode === mode.id ? "bg-[#5B21B6] border-[#5B21B6] text-white shadow-md" : "bg-transparent border-black/5 dark:border-white/5 text-[#888888] hover:border-black/20 dark:hover:border-white/30 hover:text-[#111111] dark:hover:text-white"
                               }`}
                             >
                               <mode.icon className="h-6 w-6" />
@@ -321,7 +321,7 @@ export const EcosPage = () => {
                               <select 
                                 value={selectedLesson} 
                                 onChange={(e) => setSelectedLesson(e.target.value)}
-                                className="w-full bg-[#FAFAF8] dark:bg-[#0E0E0C] dark:text-white border border-black/10 dark:border-white/10 focus:border-[#5B21B6] focus:ring-1 focus:ring-[#5B21B6] rounded-xl px-5 py-4 text-sm font-medium transition-all outline-none appearance-none"
+                                className="w-full bg-transparent dark:text-white border border-black/10 dark:border-white/10 focus:border-[#5B21B6] focus:ring-1 focus:ring-[#5B21B6] rounded-xl px-5 py-4 text-sm font-medium transition-all outline-none appearance-none"
                               >
                                 <option value="" disabled>Sélectionnez une leçon...</option>
                                 {userLessons.length === 0 ? (
@@ -353,7 +353,7 @@ export const EcosPage = () => {
                                   value={searchQuery} 
                                   onChange={(e) => setSearchQuery(e.target.value)} 
                                   placeholder="Ex: Choc anaphylactique..."
-                                  className="w-full bg-[#FAFAF8] dark:bg-[#0E0E0C] dark:text-white border border-black/10 dark:border-white/10 focus:border-[#5B21B6] focus:ring-1 focus:ring-[#5B21B6] rounded-xl pl-11 pr-5 py-4 text-sm font-medium transition-all outline-none"
+                                  className="w-full bg-transparent dark:text-white border border-black/10 dark:border-white/10 focus:border-[#5B21B6] focus:ring-1 focus:ring-[#5B21B6] rounded-xl pl-11 pr-5 py-4 text-sm font-medium transition-all outline-none"
                                 />
                               </div>
                             </motion.div>
@@ -398,7 +398,7 @@ export const EcosPage = () => {
                     >
                       <div>
                         <div className="flex justify-between items-start mb-6">
-                           <span className="text-[9px] font-bold uppercase tracking-widest text-[#111111] dark:text-white bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 px-3 py-1.5 rounded-md">
+                           <span className="text-[9px] font-bold uppercase tracking-widest text-[#111111] dark:text-white bg-transparent border border-black/5 dark:border-white/5 px-3 py-1.5 rounded-md">
                             {c.specialty}
                           </span>
                           <span className="text-[9px] font-bold uppercase tracking-widest text-[#5B21B6] bg-[#5B21B6]/10 px-3 py-1.5 rounded-md">
@@ -416,7 +416,7 @@ export const EcosPage = () => {
                         <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888] flex items-center gap-2">
                           <Heart className="h-3 w-3 text-red-500" /> {c.questions.length} Étapes
                         </span>
-                         <div className="h-10 w-10 rounded-full bg-[#FAFAF8] dark:bg-[#0E0E0C] flex items-center justify-center group-hover:bg-[#111111] transition-colors">
+                         <div className="h-10 w-10 rounded-full bg-transparent flex items-center justify-center group-hover:bg-[#111111] transition-colors">
                            <ArrowRight className="h-4 w-4 text-[#111111] dark:text-white group-hover:text-white transition-colors" />
                         </div>
                       </div>
@@ -441,7 +441,7 @@ export const EcosPage = () => {
                 <h2 className="text-5xl font-light tracking-tighter mb-4 text-[#111111] dark:text-white">Bilan de Garde.</h2>
                 <p className="text-[#666666] dark:text-[#8E8E8A] mb-10 font-medium">Débriefing officiel par votre superviseur clinique.</p>
                 
-                <div className="bg-[#FAFAF8] dark:bg-[#0E0E0C] rounded-[2rem] p-10 mb-10 border border-black/5 dark:border-white/5 shadow-inner">
+                <div className="bg-transparent rounded-[2rem] p-10 mb-10 border border-black/5 dark:border-white/5 shadow-inner">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888] block mb-4">Score de Précision</span>
                   <span className="text-7xl font-light tracking-tighter text-[#111111] dark:text-white">
                     {score} <span className="text-2xl text-[#666666] font-medium tracking-normal">pts</span>
@@ -509,7 +509,7 @@ export const EcosPage = () => {
                       </span>
                     </div>
                     {isUrgencyMode && !hasAnswered && (
-                      <div className={`px-4 py-2 rounded-full border ${timeLeft <= 15 ? "bg-red-50 dark:bg-red-900/20 border-red-500 text-red-500 animate-pulse" : "bg-[#FAFAF8] dark:bg-[#0E0E0C] border-black/10 dark:border-white/10 text-[#111111] dark:text-white"}`}>
+                      <div className={`px-4 py-2 rounded-full border ${timeLeft <= 15 ? "bg-red-50 dark:bg-red-900/20 border-red-500 text-red-500 animate-pulse" : "bg-transparent border-black/10 dark:border-white/10 text-[#111111] dark:text-white"}`}>
                         <span className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
                           <Timer className="h-3 w-3" /> {timeLeft}s
                         </span>
@@ -583,9 +583,9 @@ export const EcosPage = () => {
                   
                   {/* Feedback Chat */}
                   <div className="flex-grow overflow-y-auto editorial-scrollbar pr-2 mb-6">
-                    <div className="bg-[#FAFAF8] dark:bg-[#0E0E0C] rounded-[1.5rem] p-6 border border-black/5 dark:border-white/5 relative">
+                    <div className="bg-transparent rounded-[1.5rem] p-6 border border-black/5 dark:border-white/5 relative">
                       {/* Petite flèche de chat */}
-                      <div className="absolute -top-2 left-6 w-4 h-4 bg-[#FAFAF8] dark:bg-[#0E0E0C] border-l border-t border-black/5 dark:border-white/5 rotate-45" />
+                      <div className="absolute -top-2 left-6 w-4 h-4 bg-transparent border-l border-t border-black/5 dark:border-white/5 rotate-45" />
                       <p className="text-sm text-[#111111] dark:text-[#F4F4F2] leading-relaxed font-medium relative z-10">
                         {morComment}
                       </p>
@@ -606,7 +606,7 @@ export const EcosPage = () => {
                   
                   {/* Score en direct */}
                   <div className="shrink-0 pt-6 border-t border-black/5 dark:border-white/5 mt-auto">
-                     <div className="flex justify-between items-center bg-[#FAFAF8] dark:bg-[#0E0E0C] p-4 rounded-xl border border-black/5 dark:border-white/5">
+                     <div className="flex justify-between items-center bg-transparent p-4 rounded-xl border border-black/5 dark:border-white/5">
                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Score en direct</span>
                        <span className="text-lg font-bold text-[#111111] dark:text-white">{score} pts</span>
                      </div>

@@ -57,7 +57,7 @@ const Diagnostics = () => {
   const toggle = (id: string) => setExpanded((p) => ({ ...p, [id]: !p[id] }));
 
   return (
-    <div className="min-h-screen bg-background bg-doodle-watermark p-4 sm:p-6">
+    <div className="min-h-screen bg-transparent p-4 sm:p-6">
       <div className="max-w-5xl mx-auto space-y-6">
         <header className="flex items-center justify-between flex-wrap gap-3">
           <div>

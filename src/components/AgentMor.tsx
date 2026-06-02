@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { askMorWithPuter } from "@/lib/puterAiService";
+import { askMorWithLovable } from "@/lib/lovableAiService";
 
 // --- Types ---
 type MorState = "widget" | "floating" | "minimized" | "sidebar";
@@ -23,9 +23,10 @@ interface AgentMorProps {
   forceState?: MorState;
   contextMessage?: string;
   onClose?: () => void;
+  courseId?: string;
 }
 
-export const AgentMor = ({ forceState, contextMessage, onClose }: AgentMorProps) => {
+export const AgentMor = ({ forceState, contextMessage, onClose, courseId }: AgentMorProps) => {
   const [uiState, setUiState] = useState<MorState>(forceState || "widget");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([
@@ -63,7 +64,7 @@ export const AgentMor = ({ forceState, contextMessage, onClose }: AgentMorProps)
         content: m.content
       }));
       
-      const { answer } = await askMorWithPuter(historyForApi, contextMessage || "", "Discussion Générale");
+      const { answer } = await askMorWithLovable(historyForApi, courseId, contextMessage);
       
       setMessages(prev => prev.map(m => 
         m.id === typingId 

@@ -7,6 +7,14 @@ import { toast } from "sonner";
 import CourseMindMap from "@/components/CourseMindMap";
 import { motion, AnimatePresence } from "framer-motion";
 import GlowCard from "@/components/GlowCard";
+import { exportSummaryToPDF } from "@/utils/pdfEngine";
+import { exportSummaryToWord } from '@/utils/wordEngine';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // --- Types ---
 interface Summary {
@@ -111,76 +119,23 @@ export const SummaryView = () => {
 
   // --- MOTEUR DE GÉNÉRATION D'IMAGES (NANO BANANA PRO) ---
   useEffect(() => {
-    const generateIllustrations = async () => {
-      // On ne génère que si Puter est disponible, qu'on a un résumé, et pas encore d'images générées pour ce run
-      if (summary && (window as any).puter && !isGeneratingImages) {
-        
-        // Find chunks that need illustrations but don't have them yet
-        const needsCover = !illustrations[0];
-        const chunksToIllustrate = chunks.filter((chunk, idx) => chunk.illustrationPrompt && !illustrations[idx]);
-        
-        if (needsCover || chunksToIllustrate.length > 0) {
-          setIsGeneratingImages(true);
-          toast.info("L'Agent MOR dessine vos schémas cliniques...", { id: "img-gen" });
-          
-          try {
-            const newIllustrations = { ...illustrations };
-            
-            // 1. Image de couverture
-            if (needsCover) {
-              const coverPrompt = `A vintage, highly detailed medical textbook illustration of ${summary.title}, clean white background, educational schematic, 8k resolution, anatomical accuracy`;
-              const coverImg = await (window as any).puter.ai.txt2img(coverPrompt, { model: "gemini-3.1-flash-image-preview" });
-              newIllustrations[0] = coverImg.src;
-              setIllustrations({ ...newIllustrations });
-            }
-
-            // 2. Images contextuelles (Synergie)
-            for (let i = 0; i < chunks.length; i++) {
-              const chunk = chunks[i];
-              if (chunk.illustrationPrompt && !newIllustrations[i]) {
-                // Generate base image
-                const basePrompt = `${chunk.illustrationPrompt}, highly detailed medical illustration, educational schematic, clean white background, 8k resolution`;
-                const baseImg = await (window as any).puter.ai.txt2img(basePrompt, { model: "gemini-3.1-flash-image-preview" });
-                
-                // Synergistic Refinement
-                let base64Image = baseImg.src;
-                if (base64Image.includes("base64,")) {
-                    base64Image = base64Image.split("base64,")[1];
-                }
-                const refinePrompt = `Enhance this medical illustration to 8k resolution, photorealistic clinical quality, sharp lines, highly professional textbook style`;
-                const finalImg = await (window as any).puter.ai.txt2img(refinePrompt, {
-                    model: "gemini-2.5-flash-image-preview",
-                    input_image: base64Image,
-                    input_image_mime_type: "image/png"
-                });
-
-                newIllustrations[i] = finalImg.src;
-                setIllustrations({ ...newIllustrations });
-              }
-            }
-
-            toast.success("Illustrations cliniques générées !", { id: "img-gen" });
-          } catch (err) {
-            console.error("Erreur Nano Banana:", err);
-            toast.dismiss("img-gen");
-          } finally {
-            setIsGeneratingImages(false);
-          }
-        }
-      }
-    };
-
+    /* La génération d'images avec Puter a été temporairement désactivée
+       suite au basculement vers Lovable AI, qui ne dispose pas encore
+       d'API Edge Function pour la génération d'images.
+    const generateIllustrations = async () => { ... }
     generateIllustrations();
+    */
   }, [summary, chunks]);
 
-  // --- MOTEUR D'EXPORT PDF (Natif Vectoriel via @media print) ---
-  const handleDownloadPDF = () => {
-    if (viewMode !== "text") {
-      setViewMode("text");
-      setTimeout(() => window.print(), 500);
-    } else {
-      window.print();
-    }
+  // ─── LE NOUVEL EXPORT PDF ASYNCHRONE ───
+  const handleDownloadPDF = async () => {
+    if (!summary) return;
+    await exportSummaryToPDF(summary.title, summary.content);
+  };
+
+  const handleDownloadWord = async () => {
+    if (!summary) return;
+    await exportSummaryToWord(summary.title, summary.content);
   };
 
   const handleCopy = async () => {
@@ -197,7 +152,7 @@ export const SummaryView = () => {
   const config = typeConfig[summary.summary_type] || typeConfig.structured;
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans relative overflow-hidden transition-colors duration-500">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans relative overflow-hidden transition-colors duration-500">
       
       <style dangerouslySetInnerHTML={{__html: `
         /* Ombre Éditoriale */
@@ -267,9 +222,29 @@ export const SummaryView = () => {
                 ))}
               </div>
 
-              <button onClick={handleDownloadPDF} className="h-11 px-5 rounded-2xl bg-white text-[#111111] border border-white/20 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-[0_10px_20px_rgba(0,0,0,0.2)] font-black text-xs uppercase tracking-wider">
-                <Download className="h-4 w-4" /> Éditer PDF
-              </button>
+              {/* Bouton Télécharger */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="h-11 px-5 rounded-2xl bg-white text-[#111111] border border-white/20 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-[0_10px_20px_rgba(0,0,0,0.2)] font-black text-xs uppercase tracking-wider">
+                    <Download className="h-4 w-4" /> 
+                    Télécharger
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-48 bg-white dark:bg-[#111111] border-white/10 shadow-2xl rounded-xl p-2 z-50">
+                  <DropdownMenuItem 
+                    onClick={handleDownloadPDF}
+                    className="cursor-pointer text-xs font-bold uppercase tracking-widest text-[#111111] dark:text-white hover:bg-[#5B21B6] hover:text-white rounded-lg p-3 transition-colors"
+                  >
+                    Format PDF (.pdf)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={handleDownloadWord}
+                    className="cursor-pointer text-xs font-bold uppercase tracking-widest text-[#111111] dark:text-white hover:bg-[#5B21B6] hover:text-white rounded-lg p-3 transition-colors mt-1"
+                  >
+                    Format Word (.docx)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>

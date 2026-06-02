@@ -113,7 +113,16 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    // Never ship source maps to production — they expose the full source tree
+    // Never ship source maps to production
     sourcemap: mode === 'development',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['framer-motion', 'lucide-react', 'sonner'],
+          'pdf-vendor': ['@react-pdf/renderer'],
+        }
+      }
+    }
   },
 }));

@@ -153,7 +153,7 @@ const DuelGame = () => {
 
   if (!duel) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-dashboard bg-doodle-watermark relative overflow-hidden">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-transparent relative overflow-hidden">
         <div className="absolute top-[-10%] right-[-10%] w-[350px] h-[350px] bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
         <Card className="max-w-md w-full bg-card/45 backdrop-blur-2xl border border-white/5 shadow-xl rounded-[2.5rem] p-8 text-center space-y-6 relative z-10">
           <div className="relative flex items-center justify-center h-24 my-2">
@@ -180,7 +180,7 @@ const DuelGame = () => {
   // Waiting for opponent
   if (duel.status === "waiting") {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-dashboard bg-doodle-watermark relative overflow-hidden">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-transparent relative overflow-hidden">
         <div className="absolute top-[-10%] right-[-10%] w-[350px] h-[350px] bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
         <Card className="max-w-md w-full bg-card/45 backdrop-blur-2xl border border-white/5 shadow-xl rounded-[2.5rem] p-8 text-center space-y-6 relative z-10">
           <div className="relative flex items-center justify-center h-32 my-2">
@@ -230,7 +230,7 @@ const DuelGame = () => {
   // Error: no valid questions
   if (duel.status === "active" && (!duel.questions || duel.questions.length === 0)) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-dashboard bg-doodle-watermark relative overflow-hidden">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-transparent relative overflow-hidden">
         <div className="absolute top-[-10%] right-[-10%] w-[350px] h-[350px] bg-red-500/5 rounded-full blur-[80px] pointer-events-none" />
         <Card className="max-w-md w-full bg-card/45 backdrop-blur-2xl border border-red-500/10 shadow-xl rounded-[2.5rem] p-8 text-center space-y-6 relative z-10">
           <div className="h-16 w-16 mx-auto rounded-2xl bg-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive">
@@ -256,8 +256,8 @@ const DuelGame = () => {
   // Countdown
   if (countdown !== null) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dashboard text-foreground bg-doodle-watermark relative overflow-hidden">
-        <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-40 pointer-events-none" />
+      <div className="min-h-screen flex items-center justify-center bg-transparent text-foreground relative overflow-hidden">
+        <div className="absolute inset-0 bg-transparent/80 backdrop-blur-md z-40 pointer-events-none" />
         {/* Glowing blur effects */}
         <div className="absolute top-[20%] left-[20%] w-[300px] h-[300px] bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
         <div className="absolute bottom-[20%] right-[20%] w-[300px] h-[300px] bg-violet-500/10 rounded-full blur-[80px] pointer-events-none" />
@@ -295,7 +295,7 @@ const DuelGame = () => {
     const tied = myScore === theirScore;
 
     return (
-      <div className="min-h-screen p-4 flex items-center justify-center bg-dashboard bg-doodle-watermark relative overflow-hidden">
+      <div className="min-h-screen p-4 flex items-center justify-center bg-transparent relative overflow-hidden">
         {/* Glow backgrounds */}
         <div className="absolute top-[-10%] right-[-10%] w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-violet-500/10 rounded-full blur-[100px] pointer-events-none" />
@@ -421,7 +421,7 @@ const DuelGame = () => {
   if (!currentQuestion) {
     console.warn("[DuelGame] No question at index", duel.current_question_index, "questions:", duel.questions);
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-dashboard bg-doodle-watermark">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-transparent">
         <Card className="max-w-md w-full">
           <CardContent className="p-6 text-center space-y-4">
             <Swords className="h-12 w-12 mx-auto text-muted-foreground" />
@@ -463,7 +463,7 @@ const DuelGame = () => {
   const scoreRatio = (myScoreVal / totalScoreVal) * 100;
 
   return (
-    <div className="min-h-screen p-4 sm:p-8 bg-dashboard bg-doodle-watermark relative overflow-hidden flex flex-col justify-center">
+    <div className="min-h-screen p-4 sm:p-8 bg-transparent relative overflow-hidden flex flex-col justify-center">
       {/* Background decorations */}
       <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-500/10 rounded-full blur-[120px] pointer-events-none" />

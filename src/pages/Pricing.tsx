@@ -29,16 +29,16 @@ const tiers = PRICING_TIERS.map(tier => ({
           bg: "bg-white dark:bg-[#161614] text-[#111111] dark:text-white",
           border: "border-[#5B21B6]/20",
           shadow: "shadow-[0_10px_30px_-15px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_-15px_rgba(91,33,182,0.15)]",
-          btn: "bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-white border border-black/5 hover:border-[#5B21B6] hover:text-[#5B21B6]",
-          iconBg: "bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] border border-black/5",
+          btn: "bg-transparent text-[#111111] dark:text-white border border-black/5 hover:border-[#5B21B6] hover:text-[#5B21B6]",
+          iconBg: "bg-transparent text-[#111111] border border-black/5",
           check: "text-[#111111] dark:text-white"
         }
       : {
           bg: "bg-white dark:bg-[#161614] text-[#111111] dark:text-white",
           border: "border-black/5 dark:border-white/5",
           shadow: "shadow-[0_10px_30px_-15px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]",
-          btn: "bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-white border border-black/5 hover:border-black/20",
-          iconBg: "bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#888888] border border-black/5",
+          btn: "bg-transparent text-[#111111] dark:text-white border border-black/5 hover:border-black/20",
+          iconBg: "bg-transparent text-[#888888] border border-black/5",
           check: "text-[#888888]"
         }
 }));
@@ -91,7 +91,7 @@ const Pricing = () => {
   const [annual, setAnnual] = useState(true);
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#0E0E0C] text-[#111111] dark:text-[#F4F4F2] bg-doodle-watermark font-sans selection:bg-[#5B21B6]/20 transition-colors duration-500">
+    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans selection:bg-[#5B21B6]/20 transition-colors duration-500">
       
       <LandingHeader forceSolid />
       
@@ -120,7 +120,7 @@ const Pricing = () => {
             {/* SÉLECTEUR DE FACTURATION (Interaction Physique) */}
             <div className="inline-flex bg-white dark:bg-[#161614] p-1.5 rounded-full relative border border-black/5 dark:border-white/5 shadow-sm hover:shadow-md transition-shadow duration-300">
               <motion.div 
-                className="absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-[#FAFAF8] dark:bg-[#0E0E0C] border border-black/5 dark:border-white/5 rounded-full shadow-sm z-0"
+                className="absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-transparent border border-black/5 dark:border-white/5 rounded-full shadow-sm z-0"
                 animate={{ left: annual ? "6px" : "calc(50% + 0px)" }}
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
               />
@@ -219,17 +219,17 @@ const Pricing = () => {
               <table className="w-full text-left min-w-[800px] border-collapse">
                 <thead>
                   <tr>
-                    <th className="py-8 px-10 font-black text-[#888888] uppercase tracking-widest text-[10px] w-2/5 border-b border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#0E0E0C]">
+                    <th className="py-8 px-10 font-black text-[#888888] uppercase tracking-widest text-[10px] w-2/5 border-b border-black/5 dark:border-white/5 bg-transparent">
                       Fonctionnalités
                     </th>
-                    <th className="py-8 px-6 font-bold text-[#111111] dark:text-white text-center w-1/5 text-xs uppercase tracking-widest border-b border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#0E0E0C]">
+                    <th className="py-8 px-6 font-bold text-[#111111] dark:text-white text-center w-1/5 text-xs uppercase tracking-widest border-b border-black/5 dark:border-white/5 bg-transparent">
                       Découverte
                     </th>
                     <th className="py-8 px-6 font-black text-[#5B21B6] dark:text-violet-400 text-center w-1/5 text-xs uppercase tracking-widest relative border-b border-[#5B21B6]/20 bg-[#5B21B6]/[0.02]">
                       Premium
                       <div className="absolute top-0 left-0 right-0 h-1 bg-[#5B21B6]" />
                     </th>
-                    <th className="py-8 px-6 font-bold text-[#111111] dark:text-white text-center w-1/5 text-xs uppercase tracking-widest border-b border-black/5 dark:border-white/5 bg-[#FAFAF8] dark:bg-[#0E0E0C]">
+                    <th className="py-8 px-6 font-bold text-[#111111] dark:text-white text-center w-1/5 text-xs uppercase tracking-widest border-b border-black/5 dark:border-white/5 bg-transparent">
                       Excellence
                     </th>
                   </tr>
@@ -293,7 +293,7 @@ const Pricing = () => {
             <p className="text-sm font-medium text-[#888888] mb-8 max-w-md leading-relaxed">
               Facultés de médecine ou associations étudiantes : nous concevons des architectures sur mesure pour votre promotion.
             </p>
-            <Button asChild className="rounded-full h-12 px-8 bg-[#FAFAF8] dark:bg-[#0E0E0C] hover:bg-black/5 text-[#111111] dark:text-white border border-black/10 dark:border-white/10 transition-all font-bold text-xs uppercase tracking-widest">
+            <Button asChild className="rounded-full h-12 px-8 bg-transparent hover:bg-black/5 text-[#111111] dark:text-white border border-black/10 dark:border-white/10 transition-all font-bold text-xs uppercase tracking-widest">
               <Link to="/contact">Contacter l'équipe</Link>
             </Button>
           </div>

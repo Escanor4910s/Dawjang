@@ -183,7 +183,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] text-[#1A1A1A] selection:bg-[#0F3B2E]/20 font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-transparent text-[#1A1A1A] selection:bg-[#0F3B2E]/20 font-sans overflow-x-hidden">
       
       {/* HEADER — Glassmorphism Ultra Premium */}
       <motion.nav
@@ -377,7 +377,7 @@ const Index = () => {
                     <h3 className="text-2xl font-serif text-[#1A1A1A] mb-4">Génération de QCM sur-mesure</h3>
                     <p className="text-[#1A1A1A]/60 leading-relaxed text-sm">Le moteur d'IA analyse la sémantique de vos polys et crée des QCM complexes, évitant les banques de questions génériques et obsolètes.</p>
                   </div>
-                  <div className="absolute right-[-5%] bottom-[-10%] w-[50%] h-[100%] bg-[#FDFBF7] rounded-tl-2xl border-t border-l border-black/5 shadow-2xl p-6 flex flex-col gap-4 transform group-hover:-translate-x-4 group-hover:-translate-y-4 transition-transform duration-700 ease-out z-10">
+                  <div className="absolute right-[-5%] bottom-[-10%] w-[50%] h-[100%] bg-transparent rounded-tl-2xl border-t border-l border-black/5 shadow-2xl p-6 flex flex-col gap-4 transform group-hover:-translate-x-4 group-hover:-translate-y-4 transition-transform duration-700 ease-out z-10">
                     <div className="flex items-center gap-3 border-b border-black/5 pb-3">
                       <div className="w-3 h-3 rounded-full bg-emerald-400" />
                       <div className="h-2 w-16 bg-black/10 rounded-full" />
@@ -496,7 +496,7 @@ const Index = () => {
         </section>
 
         {/* TESTIMONIALS */}
-        <section className="py-32 px-0 relative overflow-hidden bg-[#FDFBF7]">
+        <section className="py-32 px-0 relative overflow-hidden bg-transparent">
           {/* Marquee Animation styles moved to index.css */}
           
           <div className="text-center mb-20 px-6 relative z-20">
@@ -517,7 +517,7 @@ const Index = () => {
                 <div key={i} className="bg-white border border-black/5 p-8 rounded-3xl shadow-[0_2px_10px_rgba(0,0,0,0.02)] w-[360px] flex-shrink-0 hover:shadow-[0_10px_30px_rgba(0,0,0,0.06)] transition-all duration-300">
                   <p className="text-[14px] mb-8 leading-relaxed text-[#1A1A1A]/60 font-medium relative z-10">"{t.text}"</p>
                   <div className="flex items-center gap-3 pt-2 relative z-10">
-                    <div className="w-8 h-8 bg-[#FDFBF7] border border-black/5 rounded-full flex items-center justify-center text-[#0F3B2E] font-serif font-bold text-xs">
+                    <div className="w-8 h-8 bg-transparent border border-black/5 rounded-full flex items-center justify-center text-[#0F3B2E] font-serif font-bold text-xs">
                       {t.name.charAt(0)}
                     </div>
                     <div>
