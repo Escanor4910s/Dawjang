@@ -46,43 +46,22 @@ export const LivingCanvas = () => {
         }
       `}} />
 
-      {/* ─── COUCHE 2 : L'AURORE COGNITIVE (Lumières en mouvement de va-et-vient) ─── */}
-      <div className="absolute inset-0 z-10 opacity-70 dark:opacity-100">
+      {/* ─── COUCHE 2 : L'AURORE COGNITIVE (Lumières statiques optimisées) ─── */}
+      <div className="absolute inset-0 z-10 opacity-50 dark:opacity-70">
         
-        {/* Le Courant Violet (Thème principal) */}
-        <motion.div 
-          animate={{ 
-            x: ["-10vw", "20vw", "-10vw"],
-            y: ["-10vh", "15vh", "-10vh"],
-            opacity: [0.15, 0.35, 0.15],
-            scale: [1, 1.2, 1]
-          }}
-          transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-0 left-0 w-[50vw] h-[50vw] bg-[#5B21B6] rounded-full blur-[140px] mix-blend-multiply dark:mix-blend-screen"
+        {/* Le Courant Violet */}
+        <div 
+          className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-[#5B21B6] rounded-full blur-[140px]"
         />
 
-        {/* Le Flux Émeraude (Stabilité Clinique) */}
-        <motion.div 
-          animate={{ 
-            x: ["10vw", "-25vw", "10vw"],
-            y: ["10vh", "-20vh", "10vh"],
-            opacity: [0.1, 0.25, 0.1],
-            scale: [1, 1.3, 1]
-          }}
-          transition={{ duration: 30, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-          className="absolute bottom-[-10%] right-[-10%] w-[55vw] h-[55vw] bg-[#10B981] rounded-full blur-[150px] mix-blend-multiply dark:mix-blend-screen"
+        {/* Le Flux Émeraude */}
+        <div 
+          className="absolute bottom-[-10%] right-[-10%] w-[55vw] h-[55vw] bg-[#10B981] rounded-full blur-[150px]"
         />
 
-        {/* L'Étincelle Ambre (Dynamisme) */}
-        <motion.div 
-          animate={{ 
-            x: ["-5vw", "15vw", "-5vw"],
-            y: ["-5vh", "25vh", "-5vh"],
-            opacity: [0.05, 0.15, 0.05],
-            scale: [0.8, 1.1, 0.8]
-          }}
-          transition={{ duration: 20, repeat: Infinity, ease: "easeInOut", delay: 5 }}
-          className="absolute top-[30%] left-[30%] w-[35vw] h-[35vw] bg-[#F59E0B] rounded-full blur-[120px] mix-blend-multiply dark:mix-blend-screen"
+        {/* L'Étincelle Ambre */}
+        <div 
+          className="absolute top-[30%] left-[30%] w-[35vw] h-[35vw] bg-[#F59E0B] rounded-full blur-[120px]"
         />
       </div>
 

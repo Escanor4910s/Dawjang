@@ -28,6 +28,55 @@ export async function generateSummaryWithLovable(
 }
 
 /**
+ * Shuffles QCM options intelligently to avoid repeating the same correct answer position (e.g. avoiding A, A, A).
+ */
+function smartShuffleQCM(qcmArray: any[]): any[] {
+  const result = [];
+  let lastCorrectIndex = -1;
+
+  for (const q of qcmArray) {
+    let options = q.options || q.choices || [];
+    if (!options || options.length === 0) {
+      result.push(q);
+      continue;
+    }
+    
+    let bestShuffled = [...options];
+    for (let attempt = 0; attempt < 10; attempt++) {
+      // Fisher-Yates shuffle
+      const shuffled = [...options];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      
+      // Find the index of the first correct answer in this permutation
+      let firstCorrectIdx = -1;
+      for (let i = 0; i < shuffled.length; i++) {
+        if (q.correct && q.correct.includes(shuffled[i])) {
+          firstCorrectIdx = i;
+          break;
+        }
+      }
+      
+      bestShuffled = shuffled;
+      // Accept this permutation if it doesn't repeat the last correct position
+      if (firstCorrectIdx !== lastCorrectIndex) {
+        lastCorrectIndex = firstCorrectIdx;
+        break;
+      }
+    }
+    
+    // Assign the smartly shuffled options back
+    if (q.options) q.options = bestShuffled;
+    if (q.choices) q.choices = bestShuffled;
+    
+    result.push(q);
+  }
+  return result;
+}
+
+/**
  * Génération de QCM via Lovable AI (Edge Function Supabase)
  */
 export async function generateQuizWithLovable(
@@ -51,7 +100,8 @@ export async function generateQuizWithLovable(
     throw new Error(data.error);
   }
 
-  return data.qcm || [];
+  const rawQcm = data.qcm || [];
+  return smartShuffleQCM(rawQcm);
 }
 
 /**

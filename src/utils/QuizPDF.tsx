@@ -1,3 +1,4 @@
+import React, { Fragment } from 'react';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
 const styles = StyleSheet.create({
@@ -118,6 +119,27 @@ interface QuizData {
   }>;
 }
 
+const Header = () => (
+  <View style={styles.header} fixed>
+    <View>
+      <Text style={styles.headerTitle}>HIPPOCAMPUS</Text>
+      <Text style={styles.headerText}>Évaluation Médicale</Text>
+    </View>
+    <Text style={styles.headerText}>Document Officiel</Text>
+  </View>
+);
+
+const Footer = () => (
+  <View style={styles.footer} fixed>
+    <Text style={styles.pageNumber}>
+      Hippocampus - AI Medical Learning
+    </Text>
+    <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => (
+      `Page ${pageNumber} / ${totalPages}`
+    )} />
+  </View>
+);
+
 export const QuizPDF = ({ data }: { data: QuizData | QuizData[] }) => {
   const isList = Array.isArray(data);
   const quizzes = isList ? data : [data];
@@ -125,60 +147,78 @@ export const QuizPDF = ({ data }: { data: QuizData | QuizData[] }) => {
   return (
     <Document>
       {quizzes.map((quiz, quizIndex) => (
-        <Page key={quizIndex} size="A4" style={styles.page}>
-          <View style={styles.header} fixed>
-            <View>
-              <Text style={styles.headerTitle}>HIPPOCAMPUS</Text>
-              <Text style={styles.headerText}>Évaluation Médicale</Text>
-            </View>
-            <Text style={styles.headerText}>Document Officiel</Text>
-          </View>
+        <Fragment key={quizIndex}>
+          {/* PAGE 1 : ÉNONCÉS (SANS RÉPONSES NI EXPLICATIONS) */}
+          <Page size="A4" style={styles.page}>
+            <Header />
+            <Text style={styles.title}>{quiz.title.toUpperCase()} - ÉNONCÉ</Text>
 
-          <Text style={styles.title}>{quiz.title.toUpperCase()}</Text>
+            {quiz.questions.map((q, qIndex) => {
+              const options = q.choices || q.options || [];
+              return (
+                <View key={qIndex} style={styles.questionContainer} wrap={false}>
+                  <Text style={styles.questionText}>
+                    Question {qIndex + 1} : {q.question}
+                  </Text>
 
-          {quiz.questions.map((q, qIndex) => {
-            const options = q.choices || q.options || [];
-            return (
-              <View key={qIndex} style={styles.questionContainer} wrap={false}>
-                <Text style={styles.questionText}>
-                  Question {qIndex + 1} : {q.question}
-                </Text>
-
-                <View style={styles.optionsList}>
-                  {options.map((opt, optIndex) => {
-                    const isCorrect = q.correct.includes(opt);
-                    return (
+                  <View style={styles.optionsList}>
+                    {options.map((opt, optIndex) => (
                       <View key={optIndex} style={styles.optionItem}>
                         <Text style={styles.optionLetter}>
                           {String.fromCharCode(65 + optIndex)}.
                         </Text>
-                        <Text style={[styles.optionText, isCorrect && styles.correctOption]}>
+                        <Text style={styles.optionText}>
                           {opt}
                         </Text>
                       </View>
-                    );
-                  })}
-                </View>
-
-                {q.explanation && (
-                  <View style={styles.explanationBox}>
-                    <Text style={styles.explanationLabel}>Explication :</Text>
-                    <Text style={styles.explanationText}>{q.explanation}</Text>
+                    ))}
                   </View>
-                )}
-              </View>
-            );
-          })}
+                </View>
+              );
+            })}
 
-          <View style={styles.footer} fixed>
-            <Text style={styles.pageNumber}>
-              Hippocampus - AI Medical Learning
-            </Text>
-            <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => (
-              `Page ${pageNumber} / ${totalPages}`
-            )} />
-          </View>
-        </Page>
+            <Footer />
+          </Page>
+
+          {/* PAGE 2+ : CORRIGÉS (AVEC RÉPONSES ET EXPLICATIONS) */}
+          <Page size="A4" style={styles.page}>
+            <Header />
+            <Text style={styles.title}>{quiz.title.toUpperCase()} - CORRIGÉ</Text>
+
+            {quiz.questions.map((q, qIndex) => {
+              const options = q.choices || q.options || [];
+              // Trouver les lettres des bonnes réponses (ex: "A, C")
+              const correctLetters = q.correct
+                .map(c => {
+                  const idx = options.indexOf(c);
+                  return idx >= 0 ? String.fromCharCode(65 + idx) : null;
+                })
+                .filter(Boolean)
+                .join(', ');
+
+              return (
+                <View key={qIndex} style={styles.questionContainer} wrap={false}>
+                  <Text style={styles.questionText}>
+                    Question {qIndex + 1}
+                  </Text>
+
+                  <Text style={[styles.optionText, styles.correctOption, { marginBottom: 6 }]}>
+                    Réponse(s) correcte(s) : {correctLetters ? `${correctLetters} - ` : ''}{q.correct.join(' | ')}
+                  </Text>
+
+                  {q.explanation && (
+                    <View style={styles.explanationBox}>
+                      <Text style={styles.explanationLabel}>Explication :</Text>
+                      <Text style={styles.explanationText}>{q.explanation}</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+
+            <Footer />
+          </Page>
+        </Fragment>
       ))}
     </Document>
   );
