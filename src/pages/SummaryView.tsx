@@ -1,404 +1,365 @@
-import { useState, useEffect, useMemo } from "react";
+// src/pages/SummaryView.tsx
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { ArrowLeft, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, BookOpen, FileText, Zap, Copy, Check, Eye, Network, Shield, ImageIcon, Sparkles } from "lucide-react";
-import { toast } from "sonner";
-import CourseMindMap from "@/components/CourseMindMap";
-import { motion, AnimatePresence } from "framer-motion";
-import GlowCard from "@/components/GlowCard";
-import { exportSummaryToPDF } from "@/utils/pdfEngine";
-import { exportSummaryToWord } from '@/utils/wordEngine';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { EditorView, type EditorSummaryItem } from "@/components/synthesis/EditorView";
+import { PdfExportStudioModal } from "@/components/pdf/PdfExportStudioModal";
+import { exportSummaryToWord } from "@/utils/wordEngine";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { untypedTable } from "@/lib/untypedDb";
+import { cleanAndStructureMarkdown } from "@/utils/formatters";
+import { sanitizeAndFormatForDawJang } from "@/lib/coPilotSummaryEngine";
+import { DOCTRINE_LABELS, type Doctrine } from "@/config/doctrineConfig";
+import { getLocalSummaries, saveLocalSummaries } from "@/pages/GenerateSummary";
+import { unTombstoneEntity } from "@/lib/syncEngine";
 
-// --- Types ---
-interface Summary {
-  id: string;
-  title: string;
-  summary_type: string;
-  content: string;
-  created_at: string;
-}
+export default function SummaryView() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { toast } = useToast();
 
-const typeConfig: Record<string, { icon: React.ElementType; label: string }> = {
-  complete: { icon: BookOpen, label: "Polycopié Complet" },
-  structured: { icon: FileText, label: "Résumé Structuré" },
-  concise: { icon: Zap, label: "Fiche Concise" },
-};
+  const resolveSummaryLocally = useCallback((targetId: string): EditorSummaryItem | null => {
+    if (!targetId) return null;
+    const cleanId = decodeURIComponent(targetId).trim();
+    const cleanIdLower = cleanId.toLowerCase();
 
-// --- Moteur de Parsing (Transformer le texte en blocs) ---
-const parseSummaryToChunks = (text: string) => {
-  const chunks: { title: string; content: string[]; illustrationPrompt?: string }[] = [];
-  let currentChunk = { title: "Introduction Clinique", content: [] as string[], illustrationPrompt: undefined as string | undefined };
-  
-  const lines = text.split('\n');
-  lines.forEach(line => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
-
-    // Check for illustration prompt
-    const illustrationMatch = trimmed.match(/^\[ILLUSTRATION:\s*(.+?)\]$/i);
-    if (illustrationMatch) {
-      currentChunk.illustrationPrompt = illustrationMatch[1];
-      return; // Do not add to content
+    // 1. Chercher dans getLocalSummaries() standard
+    const allSummaries = getLocalSummaries();
+    const localMatch = allSummaries.find(
+      (s) =>
+        s &&
+        (String(s.id || "").trim() === cleanId ||
+          (s.title && String(s.title).toLowerCase() === cleanIdLower) ||
+          (cleanId.length > 5 && s.title && String(s.title).toLowerCase().includes(cleanIdLower)))
+    );
+    if (localMatch) {
+      unTombstoneEntity("summary", localMatch.id, localMatch.title);
+      return {
+        ...localMatch,
+        htmlContent: sanitizeAndFormatForDawJang(localMatch.htmlContent),
+      };
     }
 
-    if (/^#/.test(trimmed) || /^===/.test(trimmed) || /^--/.test(trimmed)) {
-      if (currentChunk.content.length > 0 || currentChunk.title !== "Introduction Clinique") {
-        chunks.push({ ...currentChunk });
+    // 2. Recherche directe brute dans tous les registres localStorage (sans filtre tombstone)
+    const rawKeys = [
+      "hippocampus_clean_summaries_v2",
+      "hippocampus_clean_summaries",
+      "hippocampus_local_summaries_v2",
+      "hippocampus_clean_summaries_v4",
+      "hippocampus_saved_summaries_v2",
+      "dawjang_last_generated_summary",
+    ];
+    for (const k of rawKeys) {
+      try {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const list = Array.isArray(parsed) ? parsed : [parsed];
+          const match = list.find(
+            (s: any) =>
+              s &&
+              (String(s.id).trim() === cleanId ||
+                s.id === cleanId ||
+                (s.title && String(s.title).toLowerCase() === cleanIdLower) ||
+                cleanId === "last" ||
+                cleanId === "latest" ||
+                cleanId === "new")
+          );
+          if (match && (match.htmlContent || match.content)) {
+            const normalizedMatch: EditorSummaryItem = {
+              id: String(match.id || cleanId),
+              title: String(match.title || "Synthèse sans titre"),
+              subject: String(match.subject || match.discipline || "Médecine"),
+              updatedAt: String(match.updatedAt || "Aujourd'hui"),
+              wordCount: Number(match.wordCount) || 100,
+              doctrineLabel: String(
+                match.doctrineLabel ||
+                DOCTRINE_LABELS.objectives_verbatim
+              ),
+              htmlContent: sanitizeAndFormatForDawJang(match.htmlContent || match.content || ""),
+            };
+            unTombstoneEntity("summary", normalizedMatch.id, normalizedMatch.title);
+            saveLocalSummaries([
+              normalizedMatch,
+              ...getLocalSummaries().filter((s) => s.id !== normalizedMatch.id),
+            ]);
+            return normalizedMatch;
+          }
+        }
+      } catch {
+        // ignore
       }
-      currentChunk = { title: trimmed.replace(/^[#=\-\s]+|[=\-\s]+$/g, ''), content: [], illustrationPrompt: undefined };
-    } else {
-      currentChunk.content.push(trimmed);
     }
-  });
-  if (currentChunk.content.length > 0) chunks.push(currentChunk);
-  return chunks;
-};
 
-// --- Rendu Typographique Fait Main ---
-const renderFormattedText = (text: string, isFirstParagraph = false) => {
-  if (/^[\-\*]\s/.test(text)) {
-    const cleanText = text.replace(/^[\-\*]\s/, "");
-    const formatted = cleanText.replace(/\*\*(.*?)\*\*/g, "<strong class='font-black text-[#111111]'>$1</strong>");
+    // 3. Secours de session ou dernier résumé généré
+    try {
+      const backupRaw =
+        sessionStorage.getItem(`dawjang_active_summary_${cleanId}`) ||
+        localStorage.getItem("dawjang_last_generated_summary");
+      if (backupRaw) {
+        const backup = JSON.parse(backupRaw);
+        if (
+          backup &&
+          (backup.id === cleanId ||
+            !cleanId ||
+            cleanId.startsWith("sum-") ||
+            cleanId === "latest" ||
+            cleanId === "last" ||
+            cleanId === "new" ||
+            allSummaries.length === 0)
+        ) {
+          const normalizedBackup: EditorSummaryItem = {
+            id: String(backup.id || cleanId),
+            title: String(backup.title || "Synthèse sans titre"),
+            subject: String(backup.subject || backup.discipline || "Médecine"),
+            updatedAt: String(backup.updatedAt || "Aujourd'hui"),
+            wordCount: Number(backup.wordCount) || 100,
+            doctrineLabel: String(
+              backup.doctrineLabel ||
+              DOCTRINE_LABELS.objectives_verbatim
+            ),
+            htmlContent: sanitizeAndFormatForDawJang(backup.htmlContent || backup.content || ""),
+          };
+          unTombstoneEntity("summary", normalizedBackup.id, normalizedBackup.title);
+          saveLocalSummaries([
+            normalizedBackup,
+            ...getLocalSummaries().filter((s) => s.id !== normalizedBackup.id),
+          ]);
+          return normalizedBackup;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // 4. Filet de sécurité : si l'identifiant est un ID temporaire et qu'on a des résumés locaux
+    if (allSummaries.length > 0 && cleanId.startsWith("sum-")) {
+      return allSummaries[0];
+    }
+
+    // 5. Filet de sécurité ultime : charger le dernier résumé généré ou le premier disponible
+    try {
+      const fallbackLast = localStorage.getItem("dawjang_last_generated_summary");
+      if (fallbackLast) {
+        const parsed = JSON.parse(fallbackLast);
+        if (parsed && (parsed.htmlContent || parsed.content)) {
+          return {
+            id: String(parsed.id || cleanId),
+            title: String(parsed.title || "Synthèse Médicale"),
+            subject: String(parsed.subject || "Médecine"),
+            updatedAt: String(parsed.updatedAt || "Aujourd'hui"),
+            wordCount: Number(parsed.wordCount) || 100,
+            doctrineLabel: String(parsed.doctrineLabel || DOCTRINE_LABELS.objectives_verbatim),
+            htmlContent: sanitizeAndFormatForDawJang(parsed.htmlContent || parsed.content || ""),
+          };
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    if (allSummaries.length > 0) {
+      return allSummaries[0];
+    }
+
+    return null;
+  }, []);
+
+  const [summary, setSummary] = useState<EditorSummaryItem | null>(() => {
+    if (!id) return null;
+    return resolveSummaryLocally(id);
+  });
+  const [loading, setLoading] = useState<boolean>(!summary);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+
+  const loadSummaryById = useCallback(async () => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    const cleanId = decodeURIComponent(id).trim();
+
+    const localMatch = resolveSummaryLocally(cleanId);
+    if (localMatch) {
+      setSummary(localMatch);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
+      let query = supabase.from("summaries").select("*");
+      if (isUuid) {
+        query = query.eq("id", cleanId);
+      } else if (!cleanId.startsWith("sum-")) {
+        query = query.ilike("title", `%${cleanId}%`);
+      } else {
+        query = query.order("created_at", { ascending: false }).limit(1);
+      }
+      const { data, error } = await query.maybeSingle();
+
+      if (!error && data) {
+        const row: any = data;
+        const rawContent = row.content || "";
+        const cleanedMarkdown = sanitizeAndFormatForDawJang(
+          cleanAndStructureMarkdown(rawContent)
+        );
+        const plain = cleanedMarkdown.replace(/[#*`>|]/g, " ");
+        const wc = Math.max(1, plain.trim().split(/\s+/).filter(Boolean).length);
+        const meta = row.metadata || {};
+
+        const loadedItem: EditorSummaryItem = {
+          id: row.id,
+          title: row.title || "Synthèse sans titre",
+          subject: meta.subject || row.summary_type || "Médecine",
+          updatedAt: row.created_at
+            ? new Date(row.created_at).toLocaleDateString("fr-FR", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })
+            : "Aujourd'hui",
+          wordCount: wc,
+          doctrineLabel:
+            meta.doctrineLabel ||
+            DOCTRINE_LABELS[meta.doctrine as Doctrine] ||
+            DOCTRINE_LABELS.objectives_verbatim,
+          htmlContent: cleanedMarkdown,
+        };
+
+        unTombstoneEntity("summary", loadedItem.id, loadedItem.title);
+        setSummary(loadedItem);
+        const currentLocal = getLocalSummaries();
+        saveLocalSummaries([
+          loadedItem,
+          ...currentLocal.filter((item) => item.id !== loadedItem.id),
+        ]);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, [id, resolveSummaryLocally]);
+
+  useEffect(() => {
+    loadSummaryById();
+  }, [loadSummaryById]);
+
+  const handleSaveSummary = async (updatedHtml: string, updatedTitle: string) => {
+    if (!summary) return;
+    const plain = updatedHtml.replace(/<[^>]*>/g, " ").replace(/[#*`>|]/g, " ");
+    const wc = Math.max(1, plain.trim().split(/\s+/).filter(Boolean).length);
+
+    const updatedItem: EditorSummaryItem = {
+      ...summary,
+      title: updatedTitle,
+      htmlContent: updatedHtml,
+      wordCount: wc,
+      updatedAt: "À l'instant",
+    };
+
+    setSummary(updatedItem);
+
+    const existing = getLocalSummaries();
+    saveLocalSummaries(
+      existing.some((s) => s.id === summary.id)
+        ? existing.map((s) => (s.id === summary.id ? updatedItem : s))
+        : [updatedItem, ...existing]
+    );
+
+    try {
+      await untypedTable("summaries")
+        .update({
+          title: updatedTitle,
+          content: updatedHtml,
+        })
+        .eq("id", summary.id);
+    } catch {
+      // Sauvegardé en local
+    }
+
+    toast({
+      title: "Modifications enregistrées",
+      description: "Votre synthèse a été mise à jour.",
+    });
+  };
+
+  const handleExportWord = async () => {
+    if (!summary) return;
+    await exportSummaryToWord(summary.title, summary.htmlContent);
+    toast({
+      title: "Export Word (.docx) réussi",
+      description: `Le fichier "${summary.title}.docx" a été téléchargé.`,
+    });
+  };
+
+  if (loading) {
     return (
-      <div className="flex gap-4 mb-4 pl-4 relative">
-        <span className="absolute left-0 top-[0.4em] w-1.5 h-1.5 rounded-full bg-[#5B21B6] print:bg-black" />
-        <span dangerouslySetInnerHTML={{ __html: formatted }} className="text-justify leading-relaxed text-[#111111]" />
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-8 py-16 text-center space-y-3">
+        <Loader2 className="h-8 w-8 text-[#D96B43] animate-spin mx-auto" />
+        <p className="text-sm text-[#71717A]">Ouverture de votre synthèse académique...</p>
       </div>
     );
   }
-  
-  const formatted = text.replace(/\*\*(.*?)\*\*/g, "<strong class='font-black text-[#111111]'>$1</strong>");
-  
-  // Effet de Lettrine (Drop Cap) pour le tout premier paragraphe du document
-  if (isFirstParagraph) {
+
+  if (!summary) {
     return (
-      <p className="mb-6 text-justify leading-[1.9] first-letter:float-left first-letter:text-6xl first-letter:font-serif first-letter:font-black first-letter:pr-3 first-letter:text-[#5B21B6] print:first-letter:text-black text-[#111111]" dangerouslySetInnerHTML={{ __html: formatted }} />
-    );
-  }
-
-  return <p className="mb-6 text-justify leading-[1.9] text-[#111111]" dangerouslySetInnerHTML={{ __html: formatted }} />;
-};
-
-
-export const SummaryView = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
-  const [viewMode, setViewMode] = useState<"text" | "card" | "mindmap">("text");
-
-  // État pour les images générées par Nano Banana (Puter)
-  const [illustrations, setIllustrations] = useState<{ [key: number]: string }>({});
-  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
-
-  useEffect(() => {
-    const fetchSummary = async () => {
-      try {
-        const { data, error } = await supabase.from("summaries").select("*").eq("id", id).single();
-        if (error) throw error;
-        setSummary(data);
-      } catch (error) {
-        toast.error("Résumé introuvable");
-        navigate("/summaries");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSummary();
-  }, [id, navigate]);
-
-  const chunks = useMemo(() => summary ? parseSummaryToChunks(summary.content) : [], [summary]);
-
-  // --- MOTEUR DE GÉNÉRATION D'IMAGES (NANO BANANA PRO) ---
-  useEffect(() => {
-    /* La génération d'images avec Puter a été temporairement désactivée
-       suite au basculement vers Lovable AI, qui ne dispose pas encore
-       d'API Edge Function pour la génération d'images.
-    const generateIllustrations = async () => { ... }
-    generateIllustrations();
-    */
-  }, [summary, chunks]);
-
-  // ─── LE NOUVEL EXPORT PDF ASYNCHRONE ───
-  const handleDownloadPDF = async () => {
-    if (!summary) return;
-    await exportSummaryToPDF(summary.title, summary.content);
-  };
-
-  const handleDownloadWord = async () => {
-    if (!summary) return;
-    await exportSummaryToWord(summary.title, summary.content);
-  };
-
-  const handleCopy = async () => {
-    if (!summary) return;
-    await navigator.clipboard.writeText(summary.content);
-    setCopied(true);
-    toast.success("Texte copié");
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  if (loading) return <div className="min-h-screen bg-transparent flex items-center justify-center animate-pulse"><BookOpen className="h-10 w-10 text-white" /></div>;
-  if (!summary) return null;
-
-  const config = typeConfig[summary.summary_type] || typeConfig.structured;
-
-  return (
-    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans relative overflow-hidden transition-colors duration-500">
-      
-      <style dangerouslySetInnerHTML={{__html: `
-        /* Ombre Éditoriale */
-        .editorial-shadow { box-shadow: 0 0 0 1px rgba(0,0,0,0.05), 0 4px 12px -2px rgba(0,0,0,0.05); }
-        
-        /* Grille Fiches */
-        .masonry-grid { column-count: 1; column-gap: 1.5rem; }
-        @media (min-width: 768px) { .masonry-grid { column-count: 2; } }
-
-        /* Shimmer Loader pour images */
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        .animate-shimmer {
-          animation: shimmer 2s infinite linear;
-        }
-
-        /* --- STYLES D'IMPRESSION (PDF) --- */
-        @media print {
-          @page { size: A4; margin: 20mm 15mm; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white !important; }
-          .print\\:hidden { display: none !important; }
-          .editorial-shadow { box-shadow: none !important; border: none !important; }
-          #academic-print-area { max-width: 100% !important; padding: 0 !important; margin: 0 !important; background: white !important; }
-          .break-inside-avoid { page-break-inside: avoid; break-inside: avoid; }
-          .page-break-before { page-break-before: always; }
-          h1, h2, h3, h4 { page-break-after: avoid; break-after: avoid; }
-          img { max-width: 100% !important; page-break-inside: avoid; }
-          * { color: black !important; }
-        }
-      `}} />
-
-      {/* ─── LE BANDEAU DE CONTRÔLE (Design Ambre Éditorial) ─── */}
-      <div className="px-6 pt-8 pb-12 mb-8 relative z-10 max-w-[1000px] mx-auto">
-        <div className="bg-gradient-to-br from-[#D97706]/90 via-[#C2410C]/90 to-[#9A3412]/90 backdrop-blur-xl p-8 rounded-[2rem] border border-white/10 shadow-lg print:hidden overflow-hidden relative">
-          <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.25] mix-blend-overlay pointer-events-none" />
-          
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6 relative z-10">
-            
-            <div className="text-center md:text-left space-y-2">
-              <h2 className="text-xs font-black uppercase tracking-[0.2em] text-white/70">
-                {config.label}
-              </h2>
-              <h1 className="text-3xl md:text-4xl font-serif font-black text-white tracking-tight drop-shadow-sm">
-                {summary.title}
-              </h1>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              {/* Sélecteur de vue (Frosted Glass) */}
-              <div className="flex bg-black/30 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shadow-inner">
-                {[
-                  { id: "text", label: "Manuscrit" },
-                  { id: "card", label: "Fiches" },
-                  { id: "mindmap", label: "Carte" }
-                ].map((mode) => (
-                  <button 
-                    key={mode.id}
-                    onClick={() => setViewMode(mode.id as any)}
-                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 outline-none relative ${
-                      viewMode === mode.id ? "bg-white text-[#111111] shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
-                    }`}
-                  >
-                    {mode.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Bouton Télécharger */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="h-11 px-5 rounded-2xl bg-white text-[#111111] border border-white/20 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-[0_10px_20px_rgba(0,0,0,0.2)] font-black text-xs uppercase tracking-wider">
-                    <Download className="h-4 w-4" /> 
-                    Télécharger
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-48 bg-white dark:bg-[#111111] border-white/10 shadow-2xl rounded-xl p-2 z-50">
-                  <DropdownMenuItem 
-                    onClick={handleDownloadPDF}
-                    className="cursor-pointer text-xs font-bold uppercase tracking-widest text-[#111111] dark:text-white hover:bg-[#5B21B6] hover:text-white rounded-lg p-3 transition-colors"
-                  >
-                    Format PDF (.pdf)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={handleDownloadWord}
-                    className="cursor-pointer text-xs font-bold uppercase tracking-widest text-[#111111] dark:text-white hover:bg-[#5B21B6] hover:text-white rounded-lg p-3 transition-colors mt-1"
-                  >
-                    Format Word (.docx)
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+      <div className="max-w-[900px] mx-auto px-4 sm:px-6 md:px-8 py-16">
+        <div className="rounded-2xl border border-[#EAE4DC] dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-[#FAF8F5] dark:bg-zinc-800 border border-[#EAE4DC] dark:border-zinc-700 flex items-center justify-center mx-auto">
+            <BookOpen className="h-5 w-5 text-[#D96B43]" />
+          </div>
+          <h2 className="text-xl font-serif font-semibold text-[#18181B] dark:text-zinc-100">
+            Synthèse introuvable
+          </h2>
+          <p className="text-xs text-[#71717A] max-w-md mx-auto">
+            Cette synthèse n'existe plus ou a été supprimée de votre bibliothèque.
+          </p>
+          <div className="flex items-center justify-center gap-2.5 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => navigate("/summaries")}
+              className="rounded-xl border-[#EAE4DC] text-xs gap-1.5"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Retour à la Bibliothèque</span>
+            </Button>
+            <Button
+              onClick={() => navigate("/summaries/new")}
+              className="rounded-xl bg-[#18181B] text-[#FAF8F5] text-xs"
+            >
+              Créer une nouvelle synthèse
+            </Button>
           </div>
         </div>
       </div>
+    );
+  }
 
-      {/* ─── ZONE DE LECTURE ─── */}
-      <div className="max-w-[1400px] mx-auto px-6 relative z-10 min-h-[600px] pb-20">
-        
-        <div className="w-full">
-          <AnimatePresence mode="wait">
-            
-            {/* =========================================================
-                1. MODE TEXTE : LE MANUSCRIT (Avec Images Contextuelles)
-                ========================================================= */}
-            {viewMode === "text" && (
-              <motion.div key="text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <div className="bg-white max-w-[850px] mx-auto p-10 sm:p-16 editorial-shadow rounded-none sm:rounded-[2.5rem] relative" id="academic-print-area">
-                  {/* En-tête du Document */}
-                  <div className="border-b-[1.5px] border-[#111111] pb-10 mb-14 text-center relative z-10 break-inside-avoid">
-                    <div className="w-12 h-12 mx-auto mb-6 bg-black/5 rounded-full flex items-center justify-center border border-black/10 shadow-sm print:hidden">
-                      <Shield className="h-5 w-5 text-[#111111]" />
-                    </div>
-                    <h4 className="text-[10px] font-black tracking-[0.3em] text-[#888888] uppercase mb-5">
-                      Éditions Médicales — Note de Synthèse
-                    </h4>
-                    <h1 className="text-4xl sm:text-5xl font-serif text-[#111111] leading-[1.15] tracking-tight">
-                      {summary.title}
-                    </h1>
-                  </div>
+  return (
+    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8 space-y-6">
+      <EditorView
+        summary={summary}
+        onBack={() => navigate("/summaries")}
+        onSave={handleSaveSummary}
+        onExportPDF={() => setIsPdfModalOpen(true)}
+        onExportWord={handleExportWord}
+        onRecalibrate={() => navigate("/summaries/new")}
+      />
 
-                  {/* Corps Typographique Fait Main */}
-                  <div className="font-serif text-[#111111] relative z-10">
-                    
-                    {/* Cover Image (if generated) */}
-                    {illustrations[0] && (
-                       <div className="my-10 flex flex-col items-center break-inside-avoid">
-                         <div className="p-2 bg-white border border-black/10 shadow-lg inline-block print:border-none print:shadow-none">
-                           <img 
-                             src={illustrations[0]} 
-                             alt="Illustration de couverture" 
-                             className="max-h-[400px] w-auto object-contain"
-                           />
-                         </div>
-                         <p className="text-[10px] font-sans font-bold text-[#888888] uppercase tracking-widest mt-4 flex items-center gap-1.5">
-                           <ImageIcon className="h-3 w-3" /> Fig 1. — Illustration Générale
-                         </p>
-                       </div>
-                    )}
-
-                    {chunks.map((chunk, idx) => (
-                      <div key={idx} id={`section-${idx}`} className={`mb-16 ${idx > 0 && chunk.title.length < 30 ? 'page-break-before' : ''}`}>
-                        
-                        <h2 className="text-2xl font-sans font-black text-[#111111] mb-8 pb-2 border-b-2 border-black/[0.05] uppercase tracking-tight break-after-avoid">
-                          {idx + 1}. {chunk.title}
-                        </h2>
-
-                        {/* Intégration Dynamique de l'Image Contextuelle si demandée */}
-                        {chunk.illustrationPrompt && (
-                          <div className="my-10 flex flex-col items-center break-inside-avoid">
-                            {illustrations[idx] ? (
-                              <>
-                                <div className="p-3 bg-white border border-black/10 shadow-md rounded-xl inline-block print:border-none print:shadow-none print:p-0">
-                                  <img 
-                                    src={illustrations[idx]} 
-                                    alt={`Illustration pour ${chunk.title}`} 
-                                    className="max-h-[350px] w-auto rounded-lg object-contain"
-                                  />
-                                </div>
-                                <p className="text-[10px] font-sans font-bold text-[#888888] uppercase tracking-widest mt-3 flex items-center gap-1.5">
-                                  <ImageIcon className="h-3 w-3" /> Fig {idx + 2}. — Modélisation Synaptik-1
-                                </p>
-                              </>
-                            ) : (
-                              <div className="w-full max-w-[400px] h-[250px] bg-black/5 rounded-xl border border-black/10 relative overflow-hidden flex flex-col items-center justify-center print:hidden">
-                                <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
-                                <Sparkles className="h-6 w-6 text-[#5B21B6]/50 mb-3" />
-                                <p className="text-[10px] font-sans font-black uppercase tracking-widest text-[#888888]">Génération de l'image clinique...</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="text-[16px] sm:text-[17px]">
-                          {chunk.content.map((text, i) => (
-                            <div key={i}>{renderFormattedText(text, idx === 0 && i === 0 && !illustrations[0] && !chunk.illustrationPrompt)}</div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* =========================================================
-                2. MODE FICHES : LA GRILLE NEO-BRUTALISTE (Inspiration Canva)
-                ========================================================= */}
-            {viewMode === "card" && (
-              <motion.div key="card" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <div className="masonry-grid">
-                  {chunks.map((chunk, idx) => (
-                    <div key={idx} className="break-inside-avoid mb-6 bg-white border-2 border-[#111111] rounded-xl overflow-hidden shadow-[6px_6px_0px_rgba(17,17,17,1)] hover:translate-y-[-2px] hover:shadow-[8px_8px_0px_rgba(17,17,17,1)] transition-all duration-300">
-                      
-                      {/* L'image de couverture s'il y en a une sur la fiche */}
-                      {illustrations[idx] && (
-                        <div className="w-full h-48 bg-gray-100 border-b-2 border-[#111111] overflow-hidden">
-                          <img src={illustrations[idx]} className="w-full h-full object-cover" alt="Illu" />
-                        </div>
-                      )}
-
-                      <div className="bg-[#FFD166] px-5 py-4 border-b-2 border-[#111111] flex items-center justify-center text-center">
-                        <h4 className="text-xs font-black uppercase tracking-wider text-[#111111]">
-                          {idx + 1}. {chunk.title}
-                        </h4>
-                      </div>
-                      
-                      <div className="p-6 text-sm text-[#111111] font-medium leading-relaxed bg-[#FAFAF8]">
-                        {chunk.content.map((text, i) => {
-                          if (/^[\-\*]\s/.test(text)) {
-                            const clean = text.replace(/^[\-\*]\s/, "");
-                            const formatted = clean.replace(/\*\*(.*?)\*\*/g, "<strong class='font-black'>$1</strong>");
-                            return (
-                              <div key={i} className="flex gap-3 mb-3 pl-2">
-                                <span className="text-xl leading-none mt-[-2px] text-[#5B21B6]">•</span>
-                                <span dangerouslySetInnerHTML={{ __html: formatted }} className="text-justify" />
-                              </div>
-                            );
-                          }
-                          const formatted = text.replace(/\*\*(.*?)\*\*/g, "<strong class='font-black'>$1</strong>");
-                          return <p key={i} className="mb-4 text-justify" dangerouslySetInnerHTML={{ __html: formatted }} />;
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {/* =========================================================
-                3. MODE CARTE (Mindmap)
-                ========================================================= */}
-            {viewMode === "mindmap" && (
-              <motion.div key="mindmap" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <GlowCard innerClassName="bg-white min-h-[650px] overflow-hidden p-0 border-2 border-[#111111] shadow-[8px_8px_0px_rgba(17,17,17,1)]">
-                  <CourseMindMap content={summary.content} title={summary.title} />
-                </GlowCard>
-              </motion.div>
-            )}
-
-          </AnimatePresence>
-        </div>
-      </div>
+      <PdfExportStudioModal
+        open={isPdfModalOpen}
+        onOpenChange={setIsPdfModalOpen}
+        mode="summary"
+        title={summary.title}
+        htmlOrMarkdownContent={summary.htmlContent}
+        subject={summary.subject}
+        architectureLabel={summary.doctrineLabel}
+      />
     </div>
   );
-};
-
-export default SummaryView;
+}

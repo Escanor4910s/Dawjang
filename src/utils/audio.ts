@@ -4,6 +4,7 @@ class AudioEffects {
 
   private init() {
     if (!this.ctx) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
     if (this.ctx.state === 'suspended') {
@@ -36,6 +37,10 @@ class AudioEffects {
     } catch (e) {
       console.warn("Web Audio API not allowed or failed to play soft click.", e);
     }
+  }
+
+  playClick() {
+    this.playSoftClick();
   }
 
   // Soft lowpass filtered white noise sweep mimicking a physical smooth slide
@@ -108,6 +113,90 @@ class AudioEffects {
     }
   }
 
+  // Alias for backward compatibility — most call sites use playSuccess()
+  playSuccess() {
+    this.playSuccessChime();
+  }
+
+  // Soft pop sound for toggles (e.g., ThemeToggle)
+  playToggle() {
+    try {
+      this.init();
+      if (!this.ctx) return;
+
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(800, this.ctx.currentTime + 0.05);
+
+      gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
+
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.1);
+    } catch (e) {
+      console.warn("Failed to play toggle sound.", e);
+    }
+  }
+
+  // Bright, short ping for notifications opening
+  playNotificationPing() {
+    try {
+      this.init();
+      if (!this.ctx) return;
+
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, this.ctx.currentTime); // A5
+      osc.frequency.exponentialRampToValueAtTime(1760, this.ctx.currentTime + 0.02); // A6
+
+      gain.gain.setValueAtTime(0.0, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.06, this.ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
+
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.35);
+    } catch (e) {
+      console.warn("Failed to play notification ping.", e);
+    }
+  }
+
+  // Deep, muffled thud for errors
+  playError() {
+    try {
+      this.init();
+      if (!this.ctx) return;
+
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(100, this.ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.15);
+
+      gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.2);
+    } catch (e) {
+      console.warn("Failed to play error sound.", e);
+    }
+  }
+
   // ----------------------------------------------------
   // ADVANCED BINAURAL BEATS FOR FLOW STATE
   // ----------------------------------------------------
@@ -174,13 +263,16 @@ class AudioEffects {
     try {
       this.binauralNodes.oscL.stop();
       this.binauralNodes.oscR.stop();
-    } catch (e) {}
+    } catch (e) {
+      console.warn("Error stopping binaural beats", e);
+    }
     this.binauralNodes = null;
   }
 
   // ----------------------------------------------------
   // IMMERSIVE HEARTBEAT LOOP FOR HIGH PRESSURE ECOS
   // ----------------------------------------------------
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private heartbeatInterval: any = null;
 
   startHeartbeatLoop(bpm: number, onBeat?: () => void) {
@@ -216,7 +308,9 @@ class AudioEffects {
         osc2.stop(now + 0.3);
 
         if (onBeat) onBeat();
-      } catch (e) {}
+      } catch (e) {
+        console.warn("Heartbeat loop error", e);
+      }
     };
 
     // First beat triggers instantly

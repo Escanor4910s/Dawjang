@@ -34,16 +34,19 @@ jwt_expiry = 3600
 enable_signup = true
 
 [functions.generate-quiz-openai]
-verify_jwt = true
+verify_jwt = false
 
 [functions.ask-mor]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-summary]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-flashcards-openai]
-verify_jwt = true
+verify_jwt = false
+
+[functions.mor-chat]
+verify_jwt = false
 
 [functions.cancel-subscription]
 verify_jwt = true

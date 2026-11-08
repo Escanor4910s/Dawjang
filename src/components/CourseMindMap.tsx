@@ -70,6 +70,10 @@ const generateNodesAndEdges = (title: string, content: string) => {
       return;
     }
     
+     
+     
+     
+    // eslint-disable-next-line no-useless-escape
     const bulletMatch = line.match(/^[\-\*]\s+(.+)/) || line.match(/^[0-9]+[\.\)]\s+(.+)/);
     if (bulletMatch && currentSectionId) {
       itemIndex++;

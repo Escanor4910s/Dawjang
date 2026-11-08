@@ -1,6 +1,5 @@
 /**
  * Fisher-Yates (Knuth) shuffle algorithm - O(n) time, unbiased
- * Shuffles an array in place and returns it.
  */
 function fisherYatesShuffle<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -11,46 +10,89 @@ function fisherYatesShuffle<T>(array: T[]): T[] {
   return shuffled;
 }
 
-interface RawQuestion {
+export interface RawQuestion {
   id?: string;
   question: string;
   choices: string[];
   correct: number[];
   explanation?: string;
+  lockOrder?: boolean;
+  lockChoices?: boolean;
 }
 
-interface ShuffledQuestion {
+export interface ShuffledQuestion {
   id: string;
   question: string;
   choices: string[];
   correct: number[];
   explanation?: string;
-  originalChoiceMap: number[]; // maps new index -> original index
+  originalChoiceMap: number[];
 }
 
 /**
- * Shuffles both the order of questions AND the order of choices within each question.
- * Updates the `correct` indices to match the new choice positions.
- * Ensures no bias and O(n*m) performance where n=questions, m=choices.
+ * Détecte si une question a des choix codés fixes (Groupage A=1+2+3, Jumelage Vrai-Vrai, Association, ou lockChoices)
+ * qui ne doivent JAMAIS être mélangés aléatoirement.
  */
-export function shuffleQuiz(questions: RawQuestion[]): ShuffledQuestion[] {
-  // 1. Shuffle question order
-  const shuffledQuestions = fisherYatesShuffle(questions);
+function shouldLockChoices(q: RawQuestion): boolean {
+  if (q.lockChoices) return true;
+  const qText = (q.question || "").toUpperCase();
+  if (
+    qText.includes("[GROUPAGE") ||
+    qText.includes("[JUMELAGE") ||
+    qText.includes("[CAUSE") ||
+    qText.includes("[ASSOCIATION") ||
+    qText.includes("[CAS CLINIQUE") ||
+    qText.includes("[ÉLECTION") ||
+    qText.includes("[CENSURE") ||
+    qText.includes("[COMPLÉMENTS")
+  ) {
+    return true;
+  }
+  const choices = q.choices || [];
+  if (
+    choices.length === 5 &&
+    choices[0].trim().startsWith("A") &&
+    choices[1].trim().startsWith("B") &&
+    choices[2].trim().startsWith("C")
+  ) {
+    return true;
+  }
+  return false;
+}
 
-  // 2. For each question, shuffle choices and remap correct indices
-  return shuffledQuestions.map((q, idx) => {
+/**
+ * Mélange les questions et les choix UNIQUEMENT pour les QCM classiques.
+ * Pour le mode "Clonage d'Examen Officiel" (lockOrder: true), préserve à 100%
+ * le défilement séquentiel de l'épreuve (Blocs Élection -> Censure -> Groupage -> Jumelage -> Association ou Cas Cliniques).
+ */
+export function shuffleQuiz(questions: RawQuestion[], preserveExamOrder = false): ShuffledQuestion[] {
+  const isLockedExam =
+    preserveExamOrder || questions.some((q) => q.lockOrder === true || shouldLockChoices(q));
+
+  const orderedQuestions = isLockedExam ? [...questions] : fisherYatesShuffle(questions);
+
+  return orderedQuestions.map((q, idx) => {
     const choices = q.choices || [];
     const correctSet = new Set(q.correct || []);
 
-    // Create index array [0, 1, 2, 3, 4] then shuffle it
+    if (isLockedExam || shouldLockChoices(q)) {
+      const identityIndices = choices.map((_, i) => i);
+      return {
+        id: q.id || String(idx),
+        question: q.question,
+        choices: [...choices],
+        correct: [...(q.correct || [0])],
+        explanation: q.explanation,
+        originalChoiceMap: identityIndices,
+      };
+    }
+
     const choiceIndices = choices.map((_, i) => i);
     const shuffledIndices = fisherYatesShuffle(choiceIndices);
-
-    // Build new choices array and remap correct indices
-    const newChoices = shuffledIndices.map(origIdx => choices[origIdx]);
+    const newChoices = shuffledIndices.map((origIdx) => choices[origIdx]);
     const newCorrect = shuffledIndices
       .map((origIdx, newIdx) => (correctSet.has(origIdx) ? newIdx : -1))
-      .filter(idx => idx !== -1);
+      .filter((i) => i !== -1);
 
     return {
       id: q.id || String(idx),
@@ -63,16 +105,12 @@ export function shuffleQuiz(questions: RawQuestion[]): ShuffledQuestion[] {
   });
 }
 
-/**
- * Generates a unique session seed based on user ID and session ID.
- * Can be used for deterministic shuffling if needed in the future.
- */
 export function generateSessionSeed(userId: string, sessionId: string): number {
   let hash = 0;
   const str = `${userId}-${sessionId}-${Date.now()}`;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash |= 0;
   }
   return Math.abs(hash);

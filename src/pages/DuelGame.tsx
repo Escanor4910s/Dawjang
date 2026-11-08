@@ -9,11 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { useDuel, DuelQuestion } from "@/hooks/useDuel";
 import { useGamificationContext } from "@/components/gamification/GamificationProvider";
 import confetti from "canvas-confetti";
+import { getSavedStudentProfile } from "@/pages/Settings";
 
 // Simple sound effects using Web Audio API
 const playSound = (type: "correct" | "wrong" | "tick" | "victory" | "clash") => {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -50,7 +51,7 @@ const playSound = (type: "correct" | "wrong" | "tick" | "victory" | "clash") => 
             o2.frequency.value = 659; o2.type = "sine"; g2.gain.value = 0.15;
             g2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
             o2.start(); o2.stop(ctx.currentTime + 0.3);
-          } catch {}
+          } catch { /* ignoré volontairement */ }
         }, 200);
         setTimeout(() => {
           try {
@@ -59,7 +60,7 @@ const playSound = (type: "correct" | "wrong" | "tick" | "victory" | "clash") => 
             o3.frequency.value = 784; o3.type = "sine"; g3.gain.value = 0.15;
             g3.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
             o3.start(); o3.stop(ctx.currentTime + 0.5);
-          } catch {}
+          } catch { /* ignoré volontairement */ }
         }, 400);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
         osc.start(); osc.stop(ctx.currentTime + 0.3);
@@ -72,7 +73,7 @@ const playSound = (type: "correct" | "wrong" | "tick" | "victory" | "clash") => 
         osc.start(); osc.stop(ctx.currentTime + 0.2);
         break;
     }
-  } catch {}
+  } catch { /* ignoré volontairement */ }
 };
 
 const DuelGame = () => {
@@ -92,6 +93,8 @@ const DuelGame = () => {
   const [showClash, setShowClash] = useState(false);
   const [comboCount, setComboCount] = useState(0);
   const [xpAwarded, setXpAwarded] = useState(false);
+  const defaultDuelDuration = getSavedStudentProfile().defaultDuelTimer || 15;
+  const [timeLeft, setTimeLeft] = useState<number>(defaultDuelDuration);
 
   // Timer for each question
   useEffect(() => {
@@ -99,7 +102,25 @@ const DuelGame = () => {
     setQuestionStartTime(Date.now());
     setSelectedAnswer(null);
     setShowResult(false);
+    setTimeLeft(defaultDuelDuration);
   }, [duel?.current_question_index, duel?.status]);
+
+  // Question countdown logic
+  useEffect(() => {
+    if (!duel || duel.status !== "active" || countdown !== null || showResult) return;
+    if (hasAnsweredCurrent) return;
+
+    if (timeLeft <= 0) {
+      // Auto submit wrong answer
+      submitAnswer(duel.current_question_index, "Temps écoulé", false, defaultDuelDuration * 1000).catch(console.error);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setTimeLeft(prev => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [duel, countdown, showResult, hasAnsweredCurrent, timeLeft, submitAnswer]);
 
   // Auto-advance when both answered
   useEffect(() => {
@@ -110,10 +131,12 @@ const DuelGame = () => {
       playSound("clash");
       setTimeout(() => setShowClash(false), 1000);
       setTimeout(() => {
-        advanceQuestion();
+        if (isCreator) {
+          advanceQuestion();
+        }
       }, 3000);
     }
-  }, [hasAnsweredCurrent, opponentAnsweredCurrent, duel, advanceQuestion]);
+  }, [hasAnsweredCurrent, opponentAnsweredCurrent, duel, advanceQuestion, isCreator]);
 
   // Countdown at start
   useEffect(() => {
@@ -538,7 +561,8 @@ const DuelGame = () => {
               <CardContent className="p-6 sm:p-8 space-y-6">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-extrabold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5 text-primary" /> Diagnostic Clinique
+                    <Clock className={`h-3.5 w-3.5 ${timeLeft <= 5 ? "text-destructive animate-pulse" : "text-primary"}`} /> 
+                    {timeLeft}s Restants
                   </span>
                   
                   {comboCount >= 2 && (

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -26,12 +26,90 @@ interface MorPopup { message: string; type: "encouragement" | "celebration" | "t
 interface Question { id?: string; question: string; choices: string[]; correct: number[]; explanation?: string; }
 interface Course { id: string; courseId: string; title: string; questions: Question[]; fileName?: string; questionCount?: number; questionType?: string; aiModel?: string; metadata?: any; createdAt: string; }
 
+export interface QuizOption {
+  id: string;
+  label: string;
+  text: string;
+  isCorrect: boolean;
+}
+
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  options: QuizOption[];
+  explanation?: string;
+  subject?: string;
+  qcmType?: string;
+  stemBlocks?: any[];
+  [key: string]: any;
+}
+
+export interface QuizDeck {
+  id: string;
+  title: string;
+  subject: string;
+  questions: QuizQuestion[];
+  createdAt?: string;
+  qcmFormat?: string;
+  difficulty?: string;
+  [key: string]: any;
+}
+
+export function getSavedQuizDecks(): QuizDeck[] {
+  try {
+    const raw = localStorage.getItem("hippocampus_saved_quizzes") || localStorage.getItem("dawjang_user_quizzes_v1");
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item: any) => {
+      const qList = item.questions || item.quiz?.questions || [];
+      return {
+        id: String(item.id || `deck-${Date.now()}`),
+        title: String(item.title || "QCM Sauvegardé"),
+        subject: String(item.subject || "Médecine"),
+        createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+        questions: qList.map((q: any, qIdx: number) => {
+          const rawChoices = q.choices || q.options || [];
+          const correctAnswers = Array.isArray(q.correct) ? q.correct : [0];
+          return {
+            id: String(q.id || `q-${qIdx}`),
+            question: String(q.question || `Question ${qIdx + 1}`),
+            explanation: q.explanation || "",
+            subject: q.subject || item.subject || "Médecine",
+            options: rawChoices.map((c: any, cIdx: number) => {
+              const label = String.fromCharCode(65 + cIdx);
+              if (typeof c === "object" && c !== null) {
+                return {
+                  id: String(c.id || label),
+                  label: String(c.label || label),
+                  text: String(c.text || c.label || ""),
+                  isCorrect: Boolean(c.isCorrect ?? correctAnswers.includes(cIdx)),
+                };
+              }
+              return {
+                id: label,
+                label,
+                text: String(c),
+                isCorrect: correctAnswers.includes(cIdx),
+              };
+            }),
+          };
+        }),
+      };
+    });
+  } catch (e) {
+    console.error("Erreur lecture saved quiz decks:", e);
+    return [];
+  }
+}
+
 const GROUPAGE_BAREME = `Barème de réponses (Groupage) :\nA = 1 + 2 + 3 sont vraies\nB = 1 et 3 seulement sont vraies\nC = 2 et 4 sont les seules justes\nD = 4 uniquement est juste\nE = Autre combinaison`;
 const GROUPAGE_ANSWERS = ["A", "B", "C", "D", "E"];
 
 const Quiz = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   
   const [course, setCourse] = useState<Course | null>(null);
@@ -53,7 +131,47 @@ const Quiz = () => {
 
   useEffect(() => {
     const loadQuizSession = async () => {
-      if (!courseId) { toast({ title: "Session invalide", variant: "destructive" }); navigate("/quiz-library"); return; }
+      // 1. Si un QCM ciblé (ex: issu de la stratégie Drive anti-pièges) a été transmis
+      const state = location.state as any;
+      if (state?.targetedQcm && Array.isArray(state.targetedQcm) && state.targetedQcm.length > 0) {
+        const letters = ["A", "B", "C", "D", "E"];
+        const targetedQuestions: Question[] = state.targetedQcm.map((tq: any, idx: number) => {
+          const rawChoices = Array.isArray(tq.options) ? tq.options : [];
+          const correctIndices: number[] = [];
+          if (Array.isArray(tq.reponses_exactes)) {
+            tq.reponses_exactes.forEach((l: string) => {
+              const pos = letters.indexOf(String(l).trim().toUpperCase());
+              if (pos >= 0) correctIndices.push(pos);
+            });
+          }
+          return {
+            id: `tq-${idx}`,
+            question: safeText(tq.question, `Question ciblée #${idx + 1}`),
+            choices: rawChoices.map((c: string) =>
+              safeText(String(c).replace(/^[A-E][\.\)\-\s]+/i, "").trim(), "")
+            ),
+            correct: correctIndices.length > 0 ? correctIndices : [0],
+            explanation: safeText(
+              tq.explication_anti_piege,
+              "Correction basée sur les annales et pièges du cours."
+            ),
+          };
+        });
+        setCourse({
+          id: `targeted-${Date.now()}`,
+          courseId: `targeted-${Date.now()}`,
+          title: `QCM Anti-Pièges · ${state.subject || "Médecine"}`,
+          questions: targetedQuestions,
+          createdAt: new Date().toISOString(),
+        });
+        setQuestions(targetedQuestions);
+        return;
+      }
+
+      if (!courseId) {
+        navigate("/qcm", { replace: true });
+        return;
+      }
       try {
         const { data: sessionData, error: sessionError } = await supabase
           .from("qcm_sessions").select(`*, courses (id, title, content, file_name)`).eq("id", courseId).single();
@@ -73,8 +191,11 @@ const Quiz = () => {
             choices: safeTextArray(q.choices || [], ""),
             correct: Array.isArray(q.correct) ? q.correct.map((c: any) => typeof c === 'number' ? c : parseInt(String(c), 10) || 0) : [0],
             explanation: safeText(q.explanation, "Explication non disponible"),
+            lockOrder: q.lockOrder,
+            lockChoices: q.lockChoices,
           }));
-          const shuffled = shuffleQuiz(rawQuestions);
+          const isExamCloning = sessionData.question_type === "clonage_examen" || sessionData.metadata?.mode === "exam_clone";
+          const shuffled = shuffleQuiz(rawQuestions, isExamCloning);
           setQuestions(shuffled);
         } else { toast({ title: "Aucune question disponible", variant: "destructive" }); navigate("/quiz-library"); }
       } catch { toast({ title: "Erreur de chargement", variant: "destructive" }); navigate("/quiz-library"); }
@@ -303,7 +424,7 @@ const Quiz = () => {
   }
 
   const cardVariants = { hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } } };
-  const morVariants = { hidden: { x: "100%" }, visible: { x: 0, transition: { type: "spring", stiffness: 300, damping: 30 } } };
+  const morVariants = { hidden: { x: "100%" }, visible: { x: 0, transition: { type: "spring" as const, stiffness: 300, damping: 30 } } };
 
   return (
     <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans selection:bg-[#5B21B6]/30 transition-colors duration-500">
@@ -400,6 +521,57 @@ const Quiz = () => {
 
           <div className="relative z-10">
             
+            {/* Barre supérieure de navigation rapide & progression (Vert = Trouvée, Rouge = Fausse, Terracotta = En cours) */}
+            <div className="flex items-center gap-2 flex-wrap mb-6 pb-4 border-b border-black/5 dark:border-white/5">
+              {questions.map((_, qIdx) => {
+                const isCurr = qIdx === currentIndex;
+                const isAnswered = Boolean(selectedAnswers[qIdx] && selectedAnswers[qIdx].length > 0);
+                const correctList = questions[qIdx]?.correct || [];
+                const userList = selectedAnswers[qIdx] || [];
+                const isExact =
+                  correctList.length > 0 &&
+                  correctList.length === userList.length &&
+                  correctList.every((c) => userList.includes(c));
+
+                let pillClass = "bg-muted/70 text-foreground/80 border-border hover:border-primary/40";
+                if (isAnswered) {
+                  if (isExact) {
+                    pillClass = isCurr
+                      ? "bg-emerald-600 text-white border-2 border-emerald-500 shadow-md ring-4 ring-emerald-500/30 scale-110 font-black"
+                      : "bg-emerald-500 text-white border border-emerald-600 shadow-sm hover:bg-emerald-600 font-extrabold";
+                  } else {
+                    pillClass = isCurr
+                      ? "bg-rose-600 text-white border-2 border-rose-500 shadow-md ring-4 ring-rose-500/30 scale-110 font-black"
+                      : "bg-rose-500 text-white border border-rose-600 shadow-sm hover:bg-rose-600 font-extrabold";
+                  }
+                } else if (isCurr) {
+                  pillClass =
+                    "bg-indigo-600 text-white border-2 border-indigo-700 shadow-md ring-4 ring-indigo-500/25 scale-110 font-black";
+                }
+
+                return (
+                  <button
+                    key={qIdx}
+                    type="button"
+                    onClick={() => {
+                      setCurrentIndex(qIdx);
+                      setShowExplanation(Boolean(selectedAnswers[qIdx] && selectedAnswers[qIdx].length > 0));
+                    }}
+                    className={`w-9 h-9 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center relative border ${pillClass}`}
+                    title={
+                      isAnswered
+                        ? isExact
+                          ? `Question ${qIdx + 1} : Réponse exacte (Trouvée)`
+                          : `Question ${qIdx + 1} : Réponse fausse (Ratée)`
+                        : `Question ${qIdx + 1}`
+                    }
+                  >
+                    {qIdx + 1}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* L'En-tête de la Question */}
             <div className="flex items-center justify-between mb-10 pb-6 border-b border-black/5 dark:border-white/5">
               {/* Le Badge Bleu-Violet Massif */}

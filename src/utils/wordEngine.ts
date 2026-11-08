@@ -25,6 +25,7 @@ export const exportSummaryToWord = async (title: string, rawContent: string) => 
         .replace(/[\u00A0\u200B\u202F\uFEFF]/g, " ");
 
     const roots = parseHierarchicalSummary(cleanText);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const children: any[] = [];
 
     // Titre principal
@@ -39,8 +40,8 @@ export const exportSummaryToWord = async (title: string, rawContent: string) => 
 
     const writeParagraphs = (content: string[]) => {
       content.forEach(line => {
-        const isBullet = /^[\-\*]\s/.test(line);
-        let rawText = isBullet ? line.substring(1).trim() : line;
+        const isBullet = /^[-*]\s/.test(line);
+        const rawText = isBullet ? line.substring(1).trim() : line;
         
         children.push(
           new Paragraph({
@@ -115,10 +116,12 @@ export const exportSummaryToWord = async (title: string, rawContent: string) => 
   }
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const exportQuizToWord = async (quizData: { title: string, questions: any[] }) => {
   const toastId = toast.loading("Génération du QCM au format Word...");
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const children: any[] = [];
 
     children.push(

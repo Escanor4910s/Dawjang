@@ -1,309 +1,529 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+// src/pages/Pricing.tsx
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Check,
+  ArrowRight,
+  Sparkles,
+  ShieldCheck,
+  Clock,
+  TrendingUp,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Check, Sparkles, Zap, Crown, Brain, MessageSquare, Trophy, CheckCircle2, Minus, ArrowRight, ShieldCheck } from "lucide-react";
-import LandingHeader from "@/components/landing/LandingHeader";
-import LandingFooter from "@/components/landing/LandingFooter";
+import { Input } from "@/components/ui/input";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import {
+  UserAvatar,
+  PlanTierIconBadge,
+  getStoredUserStats,
+  USER_GAMIFICATION_KEY,
+} from "@/components/UserAvatar";
+import {
+  DawJangDragonIcon,
+  DawJangWordmark,
+} from "@/components/landing/HippocampusLogo";
+import {
+  UNIFIED_DAWJANG_PLANS,
+  UnifiedPlanDefinition,
+} from "./Subscription";
+import { getSavedStudentProfile, saveStudentProfile } from "./Settings";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
-import { PRICING_TIERS } from "@/config/pricing";
-
-// ─── STYLES D'ÉLITE (Inspiration Dashboard) ───
-const tiers = PRICING_TIERS.map(tier => ({
-  ...tier,
-  price: tier.monthlyPrice.toLocaleString('fr-FR'),
-  icon: tier.id === "freemium" ? Sparkles : tier.id === "premium" ? Zap : Crown,
-  tagline: tier.description,
-  // Architecture des couleurs calquée sur l'interface d'administration
-  style: tier.id === "premium" 
-    ? {
-        bg: "bg-[#111111] text-white",
-        border: "border-[#111111] dark:border-white/10",
-        shadow: "shadow-[0_20px_50px_-15px_rgba(91,33,182,0.4)] hover:shadow-[0_30px_60px_-15px_rgba(91,33,182,0.6)]",
-        btn: "bg-white text-[#111111] hover:bg-[#5B21B6] hover:text-white",
-        iconBg: "bg-[#5B21B6] text-white shadow-inner",
-        check: "text-[#5B21B6] fill-white"
-      }
-    : tier.id === "pro" || tier.name === "Excellence"
-      ? {
-          bg: "bg-white dark:bg-[#161614] text-[#111111] dark:text-white",
-          border: "border-[#5B21B6]/20",
-          shadow: "shadow-[0_10px_30px_-15px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_-15px_rgba(91,33,182,0.15)]",
-          btn: "bg-transparent text-[#111111] dark:text-white border border-black/5 hover:border-[#5B21B6] hover:text-[#5B21B6]",
-          iconBg: "bg-transparent text-[#111111] border border-black/5",
-          check: "text-[#111111] dark:text-white"
-        }
-      : {
-          bg: "bg-white dark:bg-[#161614] text-[#111111] dark:text-white",
-          border: "border-black/5 dark:border-white/5",
-          shadow: "shadow-[0_10px_30px_-15px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]",
-          btn: "bg-transparent text-[#111111] dark:text-white border border-black/5 hover:border-black/20",
-          iconBg: "bg-transparent text-[#888888] border border-black/5",
-          check: "text-[#888888]"
-        }
-}));
-
-const featureComparison = [
+const COMPARISON_ROWS = [
   {
-    category: "Moteurs d'Apprentissage",
-    icon: Brain,
-    items: [
-      { name: "Génération de QCM par IA", discovery: "5 / jour", premium: "Illimité", excellence: "Illimité" },
-      { name: "Génération de Résumés", discovery: "1 / jour", premium: "Illimité", excellence: "Illimité" },
-      { name: "Flashcards (Algorithme SM-2)", discovery: false, premium: true, excellence: true },
-      { name: "Cas Cliniques Complexes", discovery: false, premium: false, excellence: true },
-    ]
+    feature: "Sceau distinctif sur le profil et la Carte Membre",
+    napoleon: "Étoile Impériale",
+    taoiste: "Diamant",
+    initie: "Boussole",
   },
   {
-    category: "Simulation & Évaluation",
-    icon: Trophy,
-    items: [
-      { name: "Mode Examen", discovery: false, premium: true, excellence: true },
-      { name: "Mode Duel Multijoueur", discovery: false, premium: true, excellence: true },
-      { name: "Statistiques d'évolution", discovery: "Basiques", premium: "Détaillées", excellence: "Prédictives" },
-    ]
+    feature: "Durée du forfait & Jours d'intérêts offerts",
+    napoleon: "365 jours (+35 j d'intérêts)",
+    taoiste: "180 jours (+15 j d'intérêts)",
+    initie: "30 jours (+3 j d'intérêts)",
   },
   {
-    category: "Intelligence & Support",
-    icon: MessageSquare,
-    items: [
-      { name: "Assistant MOR (Explications IA)", discovery: false, premium: "Standard", excellence: "Prioritaire" },
-      { name: "Modèle de Raisonnement", discovery: "Standard", premium: "Avancé", excellence: "Synaptik-1 (Maximum)" },
-      { name: "Support Client", discovery: "Standard", premium: "Rapide", excellence: "Prioritaire 7j/7" },
-    ]
-  }
+    feature: "Importation de cours et d'annales en masse",
+    napoleon: "Illimitée + Prioritaire",
+    taoiste: "Illimitée",
+    initie: "Unitaire",
+  },
+  {
+    feature: "Génération QCM IA (Censure, Groupage, Jumelage, Association)",
+    napoleon: "Les 6 formats IA",
+    taoiste: "Les 6 formats IA",
+    initie: "Manuel",
+  },
+  {
+    feature: "Mimétisme du style des professeurs (Banque d'annales)",
+    napoleon: "Haute capacité (2 500 cr.)",
+    taoiste: "Inclus (600 cr.)",
+    initie: "—",
+  },
+  {
+    feature: "Calculateur de Probabilités & Ciblage de fin de semestre",
+    napoleon: "Complet",
+    taoiste: "Complet",
+    initie: "Aperçu",
+  },
+  {
+    feature: "Liberté de résiliation ou pause d'abonnement",
+    napoleon: "En 1 clic (jours conservés)",
+    taoiste: "En 1 clic (jours conservés)",
+    initie: "Sans engagement",
+  },
 ];
 
-// --- COMPOSANTS D'ANIMATION FLUIDES ---
-const FadeIn = ({ children, delay = 0, className = "" }: any) => (
-  <motion.div 
-    initial={{ opacity: 0, y: 30 }} 
-    whileInView={{ opacity: 1, y: 0 }} 
-    viewport={{ once: true, margin: "-50px" }} 
-    transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }} 
-    className={className}
-  >
-    {children}
-  </motion.div>
-);
+export default function Pricing() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "semester">(
+    "semester"
+  );
+  const [selectedOffer, setSelectedOffer] =
+    useState<UnifiedPlanDefinition | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [payMethod, setPayMethod] = useState<"wave" | "om" | "card">("wave");
 
-const Pricing = () => {
-  const [annual, setAnnual] = useState(true);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("+221 77 ");
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    const prof = getSavedStudentProfile();
+    setFullName(prof.fullName || "");
+    setEmail(prof.email || "");
+    setPhone(prof.phone || "+221 77 ");
+  }, []);
+
+  const handleChooseOffer = (offer: UnifiedPlanDefinition) => {
+    if (offer.tier === "STD") {
+      localStorage.setItem("dawjang_active_plan_tier", "STD");
+      window.dispatchEvent(new CustomEvent("hippocampus-stats-updated"));
+      toast({
+        title: "Plan Initié activé",
+        description: "Votre emblème Boussole est actif sur votre profil.",
+      });
+      navigate("/dashboard");
+      return;
+    }
+    setSelectedOffer(offer);
+    setModalOpen(true);
+  };
+
+  const handleActivateOffer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOffer) return;
+
+    const currentProf = getSavedStudentProfile();
+    saveStudentProfile({
+      ...currentProf,
+      fullName: fullName.trim() || currentProf.fullName,
+      email: email.trim() || currentProf.email,
+      phone: phone.trim() || currentProf.phone,
+    });
+
+    const durationToAdd =
+      billingCycle === "monthly"
+        ? selectedOffer.monthlyDurationDays
+        : selectedOffer.cycleDurationDays;
+    const bonusDays =
+      billingCycle === "monthly"
+        ? Math.max(1, Math.round(selectedOffer.interestBonusDays / 3))
+        : selectedOffer.interestBonusDays;
+
+    const stats = getStoredUserStats();
+    const nextStats = {
+      ...stats,
+      isPremium: true,
+      credits: stats.credits + selectedOffer.creditsIncluded,
+      daysRemaining: durationToAdd + bonusDays,
+    };
+
+    localStorage.setItem("dawjang_active_plan_tier", selectedOffer.tier);
+    localStorage.setItem(USER_GAMIFICATION_KEY, JSON.stringify(nextStats));
+    window.dispatchEvent(new CustomEvent("hippocampus-stats-updated"));
+    window.dispatchEvent(new CustomEvent("hippocampus-profile-updated"));
+
+    setModalOpen(false);
+    toast({
+      title: `${selectedOffer.name} activé !`,
+      description: `${durationToAdd} jours + ${bonusDays} jours d'intérêts offerts et +${selectedOffer.creditsIncluded} crédits IA synchronisés.`,
+    });
+    navigate("/subscription");
+  };
 
   return (
-    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans selection:bg-[#5B21B6]/20 transition-colors duration-500">
-      
-      <LandingHeader forceSolid />
-      
-      <main className="pt-32 pb-24 relative z-10 max-w-[1400px] mx-auto px-6">
-        
-        {/* ─── EN-TÊTE TYPOGRAPHIQUE (Style Éditorial) ─── */}
-        <div className="max-w-4xl mx-auto text-center mb-24">
-          <FadeIn>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-black/5 dark:border-white/5 bg-white/50 dark:bg-[#161614]/50 backdrop-blur-md mb-8 shadow-sm">
-              <ShieldCheck className="h-4 w-4 text-[#5B21B6]" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Investissement Académique</span>
-            </div>
-            
-            <h1 className="text-5xl md:text-7xl font-serif leading-[1.05] tracking-tight mb-8 text-[#111111] dark:text-white">
-              L'excellence clinique <br />
-              <span className="italic text-[#5B21B6] relative inline-block">
-                a un prix.
-                <svg className="absolute w-full h-3 -bottom-1 left-0 text-[#5B21B6]/20" viewBox="0 0 100 20" preserveAspectRatio="none"><path d="M0 15 Q 50 0 100 15" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/></svg>
+    <div className="min-h-screen w-full bg-[#FAF9F5] dark:bg-[#111110] text-[#141413] dark:text-[#F5F3EE] selection:bg-primary/20 selection:text-primary">
+      <header className="sticky top-0 z-50 border-b border-[#E5E2DC] dark:border-white/10 bg-[#FAF9F5]/90 dark:bg-[#111110]/90 backdrop-blur-xl py-3.5">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8 flex items-center justify-between gap-4">
+          <Link
+            to="/"
+            className="group inline-flex items-center gap-2.5 focus:outline-none"
+          >
+            <DawJangDragonIcon className="h-9 w-9 text-foreground transition-transform duration-300 group-hover:scale-105" />
+            <div className="flex flex-col">
+              <DawJangWordmark size="md" />
+              <span className="text-[10.5px] font-medium text-muted-foreground leading-none mt-0.5">
+                Studio Académique
               </span>
-            </h1>
-            
-            <p className="text-lg md:text-xl text-[#666666] dark:text-[#8E8E8A] font-medium max-w-2xl mx-auto mb-14 leading-relaxed">
-              Une architecture tarifaire transparente. Conçue pour accompagner l'étudiant de la première année jusqu'à l'internat.
-            </p>
-            
-            {/* SÉLECTEUR DE FACTURATION (Interaction Physique) */}
-            <div className="inline-flex bg-white dark:bg-[#161614] p-1.5 rounded-full relative border border-black/5 dark:border-white/5 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <motion.div 
-                className="absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-transparent border border-black/5 dark:border-white/5 rounded-full shadow-sm z-0"
-                animate={{ left: annual ? "6px" : "calc(50% + 0px)" }}
-                transition={{ type: "spring", stiffness: 400, damping: 30 }}
-              />
-              <button onClick={() => setAnnual(true)} className={`relative z-10 w-44 py-3.5 text-xs font-bold uppercase tracking-widest transition-colors duration-300 flex items-center justify-center gap-2 ${annual ? 'text-[#111111] dark:text-white' : 'text-[#888888] hover:text-[#111111] dark:hover:text-white'}`}>
-                Annuel <span className="bg-[#5B21B6]/10 text-[#5B21B6] dark:text-violet-300 border border-[#5B21B6]/20 px-2 py-0.5 rounded-md text-[9px]">-20%</span>
-              </button>
-              <button onClick={() => setAnnual(false)} className={`relative z-10 w-44 py-3.5 text-xs font-bold uppercase tracking-widest transition-colors duration-300 ${!annual ? 'text-[#111111] dark:text-white' : 'text-[#888888] hover:text-[#111111] dark:hover:text-white'}`}>
-                Mensuel
-              </button>
             </div>
-          </FadeIn>
+          </Link>
+
+          <nav className="hidden md:flex items-center gap-1 rounded-full border border-border bg-card/80 px-2 py-1">
+            <Link
+              to="/"
+              className="rounded-full px-3.5 py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              ← Page d'accueil
+            </Link>
+            <span className="rounded-full bg-primary/12 px-3.5 py-1.5 text-[13px] font-semibold text-primary">
+              Plans & Emblèmes
+            </span>
+            <Link
+              to="/subscription"
+              className="rounded-full px-3.5 py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Gérer mon abonnement
+            </Link>
+          </nav>
+
+          <div className="flex items-center gap-2">
+            <UserAvatar inHeader={true} />
+            <ThemeToggle />
+          </div>
         </div>
+      </header>
 
-        {/* ─── LES CARTES DE PRIX (Élévation et Micro-animations) ─── */}
-        <div className="grid lg:grid-cols-3 gap-8 items-center mb-32">
-          {tiers.map((tier, index) => {
-            const Icon = tier.icon;
-            const displayPrice = annual && tier.monthlyPrice > 0 ? tier.yearlyPrice : tier.monthlyPrice;
-            const isPremium = tier.highlight;
-            
+      <main className="max-w-7xl mx-auto px-5 sm:px-8 py-16 space-y-20">
+        <section className="text-center max-w-3xl mx-auto space-y-5">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/35 bg-primary/10 px-3.5 py-1.5 text-[12px] font-semibold text-primary">
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>TROIS PHILOSOPHIES DE TRAVAIL • DURÉE & JOURS D'INTÉRÊTS GARANTIS</span>
+          </div>
+
+          <h1 className="font-serif text-4xl sm:text-6xl text-foreground tracking-tight leading-[1.06]">
+            Plan Napoléon, Plan Taoïste ou Plan Initié.
+          </h1>
+
+          <p className="text-[16px] text-muted-foreground leading-relaxed">
+            Choisissez votre doctrine d'étude. L'icône de votre plan s'inscrit
+            instantanément sur votre profil et sur votre{" "}
+            <strong className="text-foreground">Carte Membre</strong>, avec
+            possibilité de résilier en un clic à tout moment.
+          </p>
+
+          <div className="inline-flex items-center rounded-2xl border border-border bg-card p-1.5 shadow-2xs mt-2">
+            <button
+              type="button"
+              onClick={() => setBillingCycle("monthly")}
+              className={cn(
+                "rounded-xl px-4 py-2 text-[13px] font-semibold transition-all",
+                billingCycle === "monthly"
+                  ? "bg-foreground text-background shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Cadence mensuelle
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillingCycle("semester")}
+              className={cn(
+                "rounded-xl px-4 py-2 text-[13px] font-semibold transition-all flex items-center gap-2",
+                billingCycle === "semester"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <span>Forfait Semestriel / Annuel</span>
+              <span className="rounded-full bg-white/20 px-2 py-0.2 font-mono text-[10px]">
+                -25%
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-7 items-stretch">
+          {UNIFIED_DAWJANG_PLANS.map((offer) => {
+            const displayedDuration =
+              billingCycle === "monthly"
+                ? offer.monthlyDurationDays
+                : offer.cycleDurationDays;
+            const displayedBonus =
+              billingCycle === "monthly"
+                ? Math.max(1, Math.round(offer.interestBonusDays / 3))
+                : offer.interestBonusDays;
+
             return (
-              <FadeIn 
-                key={tier.name} 
-                delay={index * 0.1} 
-                className={`relative group h-full ${isPremium ? 'lg:scale-105 z-20' : 'z-10'}`}
+              <div
+                key={offer.id}
+                className={cn(
+                  "rounded-[28px] border p-8 flex flex-col justify-between space-y-7 transition-all duration-300",
+                  offer.imperialDark
+                    ? "border-amber-500/45 bg-[#141312] text-[#FAF9F5] shadow-[0_28px_65px_-15px_rgba(0,0,0,0.45)]"
+                    : offer.featured
+                    ? "border-primary bg-card shadow-[0_28px_65px_-15px_rgba(201,100,66,0.22)] lg:-translate-y-2"
+                    : "border-border/85 bg-card/80 hover:border-foreground/30"
+                )}
               >
-                {/* LA CARTE (Comportement Physique) */}
-                <div className={`relative h-full rounded-[3rem] p-10 md:p-12 flex flex-col transition-all duration-500 border
-                  ${tier.style.bg} ${tier.style.border} ${tier.style.shadow} hover:-translate-y-3
-                `}>
-                  {/* Badge Exclusif */}
-                  {isPremium && (
-                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#5B21B6] text-white text-[10px] font-black px-6 py-2 rounded-full uppercase tracking-widest shadow-md">
-                      Le plus choisi
-                    </div>
-                  )}
-                  
-                  {/* En-tête de carte */}
-                  <div className="mb-10">
-                    <div className={`w-14 h-14 rounded-[1.25rem] flex items-center justify-center mb-6 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 ${tier.style.iconBg}`}>
-                      <Icon className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-3xl font-serif font-bold mb-3 tracking-tight">{tier.name}</h3>
-                    <p className={`text-sm font-medium leading-relaxed min-h-[40px] ${isPremium ? 'text-white/70' : 'text-[#888888]'}`}>
-                      {tier.tagline}
-                    </p>
-                  </div>
-
-                  {/* Prix */}
-                  <div className="mb-12 border-b border-black/5 dark:border-white/5 pb-10">
-                    <div className="flex items-end gap-2 mb-2">
-                      <span className="text-5xl lg:text-6xl font-light tracking-tighter">
-                        {displayPrice === 0 ? 'Gratuit' : displayPrice.toLocaleString('fr-FR')}
-                      </span>
-                      {displayPrice > 0 && <span className={`text-sm font-bold mb-2 ${isPremium ? 'text-white/50' : 'text-[#888888]'}`}>FCFA</span>}
-                    </div>
-                    <span className={`text-[10px] font-bold uppercase tracking-widest ${isPremium ? 'text-white/50' : 'text-[#888888]'}`}>
-                      {displayPrice === 0 ? 'Accès illimité' : annual ? "Facturé annuellement" : "Facturé mensuellement"}
-                    </span>
-                  </div>
-
-                  {/* Fonctionnalités */}
-                  <ul className="space-y-5 mb-14 flex-1">
-                    {tier.features.map((feature, i) => (
-                      <li key={i} className="flex items-start gap-4 text-sm font-medium">
-                        <CheckCircle2 className={`w-5 h-5 flex-shrink-0 ${tier.style.check}`} />
-                        <span className={isPremium ? 'text-white' : 'text-[#111111] dark:text-[#F4F4F2]'}>
-                          {feature}
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3.5">
+                      <PlanTierIconBadge tier={offer.tier} size="lg" />
+                      <div>
+                        <span
+                          className={cn(
+                            "font-mono text-[10px] font-bold uppercase tracking-wider block",
+                            offer.imperialDark
+                              ? "text-amber-400"
+                              : "text-primary"
+                          )}
+                        >
+                          {offer.philosophyTag}
                         </span>
+                        <h2 className="font-serif text-2xl sm:text-3xl">
+                          {offer.name}
+                        </h2>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p
+                    className={cn(
+                      "text-[13.5px] leading-relaxed",
+                      offer.imperialDark
+                        ? "text-white/75"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {offer.subtitle}
+                  </p>
+
+                  <div
+                    className={cn(
+                      "pt-3 border-t space-y-2.5",
+                      offer.imperialDark
+                        ? "border-white/10"
+                        : "border-border/60"
+                    )}
+                  >
+                    <span className="font-serif text-4xl sm:text-5xl block">
+                      {billingCycle === "monthly"
+                        ? offer.monthlyFCFA
+                        : offer.semesterFCFA}
+                    </span>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-lg px-2.5 py-1 font-mono text-[11px] font-semibold",
+                          offer.imperialDark
+                            ? "bg-white/10 text-white"
+                            : "bg-secondary text-foreground"
+                        )}
+                      >
+                        <Clock className="h-3 w-3 text-primary" />
+                        Durée : {displayedDuration} j
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 font-mono text-[11px] font-bold text-emerald-500">
+                        <TrendingUp className="h-3 w-3" />+{displayedBonus} j
+                        d'intérêts
+                      </span>
+                    </div>
+                  </div>
+
+                  <ul
+                    className={cn(
+                      "space-y-3 pt-3 border-t text-[13.5px]",
+                      offer.imperialDark
+                        ? "border-white/10"
+                        : "border-border/60"
+                    )}
+                  >
+                    {offer.perks.map((perk) => (
+                      <li key={perk} className="flex items-start gap-2.5">
+                        <Check
+                          className={cn(
+                            "h-4 w-4 shrink-0 mt-0.5",
+                            offer.imperialDark
+                              ? "text-amber-400"
+                              : "text-primary"
+                          )}
+                        />
+                        <span>{perk}</span>
                       </li>
                     ))}
                   </ul>
-
-                  {/* Bouton d'Action Magnétique */}
-                  <Button asChild className={`w-full rounded-2xl h-16 text-xs font-black uppercase tracking-widest transition-all duration-300 shadow-sm outline-none group/btn ${tier.style.btn}`}>
-                    <Link to={`/subscription?plan=${tier.id}`} className="flex items-center justify-center gap-3">
-                      {tier.cta} 
-                      <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-                    </Link>
-                  </Button>
                 </div>
-              </FadeIn>
+
+                <Button
+                  onClick={() => handleChooseOffer(offer)}
+                  variant={offer.featured ? "default" : "outline"}
+                  className={cn(
+                    "w-full h-12 rounded-2xl text-[14px] font-semibold transition-all flex items-center justify-center gap-2",
+                    offer.imperialDark
+                      ? "bg-gradient-to-r from-amber-500 to-[#C96442] text-white hover:brightness-110 shadow-[0_4px_20px_rgba(201,100,66,0.35)] border-0 cursor-pointer"
+                      : offer.featured
+                      ? "bg-foreground text-background hover:bg-foreground/90 shadow-sm cursor-pointer"
+                      : "border-border bg-card hover:bg-secondary/70 text-foreground cursor-pointer"
+                  )}
+                >
+                  <span>Adopter le {offer.name}</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
             );
           })}
-        </div>
+        </section>
 
-        {/* ─── LE REGISTRE DE COMPARAISON (Le "Grand Livre" Suisse) ─── */}
-        <FadeIn delay={0.2} className="max-w-[1100px] mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-5xl font-serif text-[#111111] dark:text-white mb-4 tracking-tight">Comparaison Exhaustive</h2>
-            <p className="text-[#888888] font-medium">L'architecture détaillée de nos offres académiques.</p>
-          </div>
-
-          <div className="bg-white dark:bg-[#161614] rounded-[3rem] border border-black/5 dark:border-white/5 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-500">
-            <div className="overflow-x-auto editorial-scrollbar">
-              <table className="w-full text-left min-w-[800px] border-collapse">
-                <thead>
-                  <tr>
-                    <th className="py-8 px-10 font-black text-[#888888] uppercase tracking-widest text-[10px] w-2/5 border-b border-black/5 dark:border-white/5 bg-transparent">
-                      Fonctionnalités
-                    </th>
-                    <th className="py-8 px-6 font-bold text-[#111111] dark:text-white text-center w-1/5 text-xs uppercase tracking-widest border-b border-black/5 dark:border-white/5 bg-transparent">
-                      Découverte
-                    </th>
-                    <th className="py-8 px-6 font-black text-[#5B21B6] dark:text-violet-400 text-center w-1/5 text-xs uppercase tracking-widest relative border-b border-[#5B21B6]/20 bg-[#5B21B6]/[0.02]">
-                      Premium
-                      <div className="absolute top-0 left-0 right-0 h-1 bg-[#5B21B6]" />
-                    </th>
-                    <th className="py-8 px-6 font-bold text-[#111111] dark:text-white text-center w-1/5 text-xs uppercase tracking-widest border-b border-black/5 dark:border-white/5 bg-transparent">
-                      Excellence
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-black/5 dark:divide-white/5">
-                  {featureComparison.map((category) => (
-                    <React.Fragment key={category.category}>
-                      {/* En-tête de Catégorie */}
-                      <tr>
-                        <td colSpan={4} className="pt-12 pb-6 px-10 bg-white dark:bg-[#161614]">
-                          <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#5B21B6] dark:text-violet-400">
-                            <div className="p-2 rounded-lg bg-[#5B21B6]/10 border border-[#5B21B6]/20">
-                              <category.icon className="w-4 h-4" /> 
-                            </div>
-                            {category.category}
-                          </div>
-                        </td>
-                      </tr>
-                      {/* Lignes de spécifications */}
-                      {category.items.map((item) => (
-                        <tr key={item.name} className="hover:bg-[#FAFAF8] dark:hover:bg-white/[0.02] transition-colors group">
-                          <td className="py-5 px-10 text-sm font-medium text-[#111111] dark:text-[#F4F4F2]">{item.name}</td>
-                          
-                          <td className="py-5 px-6 text-center">
-                            {typeof item.discovery === 'boolean' ? (
-                              item.discovery ? <Check className="w-5 h-5 mx-auto text-[#111111] dark:text-white" /> : <Minus className="w-4 h-4 mx-auto text-[#888888]/50" />
-                            ) : (
-                              <span className="text-sm font-medium text-[#666666] dark:text-[#8E8E8A]">{item.discovery}</span>
-                            )}
-                          </td>
-                          
-                          <td className="py-5 px-6 text-center bg-[#5B21B6]/[0.02] border-x border-[#5B21B6]/10 transition-colors group-hover:bg-[#5B21B6]/[0.04]">
-                            {typeof item.premium === 'boolean' ? (
-                              item.premium ? <CheckCircle2 className="w-5 h-5 mx-auto text-[#5B21B6] dark:text-violet-400" /> : <Minus className="w-4 h-4 mx-auto text-[#888888]/50" />
-                            ) : (
-                              <span className="text-sm font-black text-[#5B21B6] dark:text-violet-400">{item.premium}</span>
-                            )}
-                          </td>
-                          
-                          <td className="py-5 px-6 text-center">
-                            {typeof item.excellence === 'boolean' ? (
-                              item.excellence ? <Check className="w-5 h-5 mx-auto text-[#111111] dark:text-white" /> : <Minus className="w-4 h-4 mx-auto text-[#888888]/50" />
-                            ) : (
-                              <span className="text-sm font-bold text-[#111111] dark:text-white">{item.excellence}</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
+        <section className="rounded-[28px] border border-border bg-card overflow-hidden shadow-xs">
+          <div className="p-6 sm:p-8 border-b border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-serif text-2xl sm:text-3xl text-foreground">
+                Matrice comparative des 3 Plans
+              </h3>
+              <p className="text-[13.5px] text-muted-foreground">
+                Comparez les capacités, la durée et les jours d'intérêts du Plan
+                Napoléon, du Plan Taoïste et du Plan Initié.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <PlanTierIconBadge tier="MAJOR" size="md" />
+              <PlanTierIconBadge tier="PRO" size="md" />
+              <PlanTierIconBadge tier="STD" size="md" />
             </div>
           </div>
-        </FadeIn>
 
-        {/* ─── SECTION CONTACT INSTITUTIONNEL ─── */}
-        <FadeIn delay={0.4} className="mt-32 text-center">
-          <div className="inline-flex flex-col items-center p-12 rounded-[3rem] border border-black/5 dark:border-white/5 bg-white dark:bg-[#161614] shadow-sm hover:shadow-md transition-shadow">
-            <h3 className="text-2xl font-serif text-[#111111] dark:text-white mb-4">Déploiement Universitaire ?</h3>
-            <p className="text-sm font-medium text-[#888888] mb-8 max-w-md leading-relaxed">
-              Facultés de médecine ou associations étudiantes : nous concevons des architectures sur mesure pour votre promotion.
-            </p>
-            <Button asChild className="rounded-full h-12 px-8 bg-transparent hover:bg-black/5 text-[#111111] dark:text-white border border-black/10 dark:border-white/10 transition-all font-bold text-xs uppercase tracking-widest">
-              <Link to="/contact">Contacter l'équipe</Link>
-            </Button>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-border/80 bg-secondary/40 font-mono text-[11px] uppercase text-muted-foreground">
+                  <th className="py-4 px-6">Instrument</th>
+                  <th className="py-4 px-6 text-center text-amber-600 dark:text-amber-400 font-bold">
+                    Plan Napoléon
+                  </th>
+                  <th className="py-4 px-4 text-center text-primary font-bold">
+                    Plan Taoïste
+                  </th>
+                  <th className="py-4 px-4 text-center">Plan Initié</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60 text-[13.5px]">
+                {COMPARISON_ROWS.map((row) => (
+                  <tr
+                    key={row.feature}
+                    className="hover:bg-secondary/25 transition-colors"
+                  >
+                    <td className="py-4 px-6 font-medium text-foreground">
+                      {row.feature}
+                    </td>
+                    <td className="py-4 px-6 text-center font-semibold text-foreground">
+                      {row.napoleon}
+                    </td>
+                    <td className="py-4 px-4 text-center font-semibold text-primary">
+                      {row.taoiste}
+                    </td>
+                    <td className="py-4 px-4 text-center text-muted-foreground">
+                      {row.initie}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </FadeIn>
-
+        </section>
       </main>
-      
-      <LandingFooter />
+
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <div className="flex items-center gap-2.5 mb-1">
+              {selectedOffer && (
+                <PlanTierIconBadge tier={selectedOffer.tier} size="md" />
+              )}
+              <span className="font-mono text-xs text-primary font-bold">
+                ACTIVATION INSTANTANÉE
+              </span>
+            </div>
+            <DialogTitle className="font-serif text-2xl font-normal">
+              Activer le {selectedOffer?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Paiement sécurisé par Wave, Orange Money ou Carte bancaire.
+              Résiliable en 1 clic depuis votre espace.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleActivateOffer} className="space-y-4 py-2">
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: "wave" as const, label: "Wave" },
+                { id: "om" as const, label: "Orange Money" },
+                { id: "card" as const, label: "Carte" },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setPayMethod(m.id)}
+                  className={cn(
+                    "rounded-xl border py-2.5 text-[12.5px] font-semibold transition-all",
+                    payMethod === m.id
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card text-muted-foreground"
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              <Input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Nom complet"
+                required
+              />
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Adresse e-mail"
+                required
+              />
+              <Input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+221 77 123 45 67"
+                required
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setModalOpen(false)}
+              >
+                Annuler
+              </Button>
+              <Button type="submit">Activer mon {selectedOffer?.name}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-};
-
-export default Pricing;
+}

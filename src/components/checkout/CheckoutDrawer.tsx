@@ -1,3 +1,4 @@
+import { untypedTable } from "@/lib/untypedDb";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Lock, ShieldCheck, Smartphone, CheckCircle2, ChevronRight, Sparkles } from "lucide-react";
@@ -17,6 +18,7 @@ interface CheckoutDrawerProps {
   onClose: () => void;
   plan: PlanDetails | null;
   initialIsAnnual: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   user: any;
   onSuccess: () => void;
 }
@@ -45,6 +47,7 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
     if (!isOpen || paymentMethod !== "paypal") return;
     const existingScript = document.getElementById("paypal-sdk");
     if (existingScript) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if ((window as any).paypal) {
         setPaypalLoaded(true);
       } else {
@@ -76,18 +79,24 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
       const euroPrice = (totalBill / 655.957).toFixed(2);
 
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).paypal.Buttons({
           style: { layout: "vertical", color: "gold", shape: "pill", label: "paypal" },
+           
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           createOrder: (data: any, actions: any) => {
             return actions.order.create({
               purchase_units: [{
-                description: `Abonnement Hippocampus - ${plan.name} (${isAnnual ? "Annuel" : "Mensuel"})`,
+                description: `Abonnement DawJang - ${plan.name} (${isAnnual ? "Annuel" : "Mensuel"})`,
                 amount: { currency_code: "EUR", value: euroPrice }
               }]
             });
           },
+           
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onApprove: async (data: any, actions: any) => {
             setIsProcessing(true);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             return actions.order.capture().then(async (details: any) => {
               try {
                 if (user) {
@@ -98,8 +107,20 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
 
                   if (profileError) throw profileError;
 
+              window.dispatchEvent(
+                new CustomEvent("hippocampus_plan_updated", {
+                  detail: { plan: plan.id },
+                })
+              );
+
+                  window.dispatchEvent(
+                    new CustomEvent("hippocampus_plan_updated", {
+                      detail: { plan: plan.id },
+                    })
+                  );
+
                   // Insert into subscriptions table
-                  const { error: subError } = await supabase.from("subscriptions" as any).insert({
+                  const { error: subError } = await untypedTable("subscriptions").insert({
                     user_id: user.id,
                     plan_id: plan.id,
                     status: "active",
@@ -120,6 +141,7 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
                   onClose();
                 }, 2000);
 
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               } catch (err: any) {
                 console.error("Supabase upgrade error after PayPal payment:", err);
                 setIsProcessing(false);
@@ -127,6 +149,7 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
               }
             });
           },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onError: (err: any) => {
             console.error("PayPal Error:", err);
             toast.error("Une erreur s'est produite lors de la transaction PayPal.");
@@ -143,6 +166,7 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
     }, 150);
 
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paypalLoaded, paymentMethod, isOpen, totalBill, plan?.id, plan?.name, isAnnual, user, onSuccess, onClose]);
 
   const handleMobileMoneyPayment = async () => {
@@ -171,6 +195,12 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
                 .eq("id", user.id);
 
               if (profileError) throw profileError;
+
+              window.dispatchEvent(
+                new CustomEvent("hippocampus_plan_updated", {
+                  detail: { plan: plan.id },
+                })
+              );
             }
             setIsProcessing(false);
             setIsSuccess(true);
@@ -180,6 +210,7 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
               setIsSuccess(false);
               onClose();
             }, 2000);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (err: any) {
             console.error("Supabase upgrade error:", err);
             setIsProcessing(false);
@@ -193,6 +224,7 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
         window.location.href = data.redirect_url;
       }, 1000);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error("PayTech function invocation failed:", err);
       toast.error("Erreur lors de la connexion à la passerelle PayTech.");
@@ -229,7 +261,7 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-[#111111]">Paiement Sécurisé</h2>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Hippocampus Checkout</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">DawJang Checkout</p>
                 </div>
               </div>
               <button 
@@ -337,6 +369,7 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
                             type="button"
                             whileHover={{ y: -4, scale: 1.02 }}
                             whileTap={{ scale: 0.97 }}
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             onClick={() => setMobileProvider(provider.id as any)}
                             className={`flex flex-col h-24 rounded-xl border items-center justify-center cursor-pointer transition-all duration-300 ${
                               mobileProvider === provider.id 

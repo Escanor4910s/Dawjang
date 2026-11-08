@@ -167,7 +167,7 @@ export const AgentMor = ({ forceState, contextMessage, onClose, courseId }: Agen
                 </div>
               </div>
               <button 
-                onClick={(e) => { e.stopPropagation(); onClose ? onClose() : setUiState("widget"); }}
+                onClick={(e) => { e.stopPropagation(); if (onClose) { onClose(); } else { setUiState("widget"); } }}
                 className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 text-[#888888]"
               >
                 <X className="h-4 w-4" />
@@ -207,7 +207,7 @@ export const AgentMor = ({ forceState, contextMessage, onClose, courseId }: Agen
                 <button onClick={() => setUiState("minimized")} className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 text-[#888888] transition-colors" title="Réduire">
                   <Minimize2 className="h-4 w-4" />
                 </button>
-                <button onClick={() => { onClose ? onClose() : setUiState("widget"); }} className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white text-[#888888] transition-colors" title="Fermer">
+                <button onClick={() => { if (onClose) { onClose(); } else { setUiState("widget"); } }} className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white text-[#888888] transition-colors" title="Fermer">
                   <X className="h-4 w-4" />
                 </button>
               </div>

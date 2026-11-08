@@ -19,7 +19,7 @@ import {
 
 const SIDEBAR_COOKIE_NAME = "sidebar:state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "16rem"
+const SIDEBAR_WIDTH = "17.25rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
@@ -196,15 +196,19 @@ const Sidebar = React.forwardRef<
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+            data-sheet="true"
+            data-slot="sheet-content"
+            className="sidebar-mobile-drawer fixed inset-y-0 left-0 z-50 h-[100dvh] max-h-[100dvh] w-[min(86vw,305px)] bg-[#F2EDE4] dark:bg-[#161413] p-0 text-sidebar-foreground overflow-hidden border-r border-[#DFD8CA] dark:border-stone-800 rounded-none rounded-r-2xl shadow-2xl m-0 [&>button]:hidden"
             style={
               {
-                "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+                "--sidebar-width": "min(86vw, 305px)",
               } as React.CSSProperties
             }
-            side={side}
+            side="left"
           >
-            <div className="flex h-full w-full flex-col">{children}</div>
+            <div className="flex h-full max-h-[100dvh] w-full flex-col overflow-hidden bg-[#F2EDE4] dark:bg-[#161413]">
+              {children}
+            </div>
           </SheetContent>
         </Sheet>
       )
@@ -759,3 +763,4 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+

@@ -49,6 +49,7 @@ const QuizInfini = () => {
       const q = generatedQuestions[0];
       if (!q || !Array.isArray(q.choices) || !Array.isArray(q.correct)) throw new Error("Format invalide");
       setCurrent(q);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       toast.error(e.message || "Erreur de génération");
     } finally { setLoading(false); }
@@ -76,6 +77,7 @@ const QuizInfini = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user && courseId) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase.from("qcm_sessions") as any).insert({
           user_id: user.id, course_id: courseId,
           title: `${title} (Infini · ${history.length}Q)`,
@@ -84,7 +86,7 @@ const QuizInfini = () => {
           metadata: { mode: "infini", correct: stats.correct, total: stats.total, difficulty },
         });
       }
-    } catch {}
+    } catch (e) { console.error("Error saving session:", e); }
     toast.success(`Session terminée : ${stats.correct}/${stats.total}`);
     navigate("/dashboard");
   };

@@ -1,7 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
+import { invokeWithRetry } from "@/lib/edgeRetry";
 
 /**
- * Génération de Résumé via Lovable AI (Edge Function Supabase)
+ * Génération de Résumé via Lovable AI / Relais Académique (Haute Résilience)
  */
 export async function generateSummaryWithLovable(
   content: string, 
@@ -11,67 +12,75 @@ export async function generateSummaryWithLovable(
 ): Promise<string> {
   console.log(`[Lovable AI] Generating summary of type: ${type}`);
   
-  const { data, error } = await supabase.functions.invoke('generate-summary', {
-    body: { content, type, title, template }
+  const { data, error } = await invokeWithRetry<{ summary?: string; content?: string }>("generate-summary", {
+    body: { content, type, title, template },
+    retries: 1,
   });
 
-  if (error) {
+  if (error || (!data?.summary && !data?.content)) {
     console.error("[Lovable AI] Error generating summary:", error);
-    throw new Error(error.message || "Erreur lors de la génération du résumé.");
+    throw new Error(error?.message || "Erreur lors de la génération du résumé.");
   }
 
-  if (data?.error) {
-    throw new Error(data.error);
-  }
-
-  return data.summary || "";
+  return data.summary || data.content || "";
 }
 
 /**
- * Shuffles QCM options intelligently to avoid repeating the same correct answer position (e.g. avoiding A, A, A).
+ * Shuffles QCM options intelligently to avoid repeating the same correct answer position (e.g. avoiding A, A, A),
+ * while preserving the exact mapping of 0-based `correct` indices and never shuffling Groupage A-E keys.
  */
-function smartShuffleQCM(qcmArray: any[]): any[] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function smartShuffleQCM(qcmArray: any[], quizType?: string): any[] {
+  if (quizType === "groupage" || quizType === "vrai-faux") {
+    return qcmArray;
+  }
+
   const result = [];
   let lastCorrectIndex = -1;
 
   for (const q of qcmArray) {
-    let options = q.options || q.choices || [];
-    if (!options || options.length === 0) {
+    const options: string[] = q.options || q.choices || [];
+    const correctIndices: number[] = Array.isArray(q.correct) ? q.correct : [];
+    const isGroupageChoices =
+      options.length === 5 &&
+      options.every((c, idx) => String(c).trim() === ["A", "B", "C", "D", "E"][idx]);
+
+    if (!options || options.length === 0 || isGroupageChoices) {
       result.push(q);
       continue;
     }
-    
-    let bestShuffled = [...options];
+
+    const indexed = options.map((text, origIdx) => ({
+      text,
+      isCorrect: correctIndices.includes(origIdx),
+    }));
+
+    let bestPerm = [...indexed];
     for (let attempt = 0; attempt < 10; attempt++) {
-      // Fisher-Yates shuffle
-      const shuffled = [...options];
-      for (let i = shuffled.length - 1; i > 0; i--) {
+      const perm = [...indexed];
+      for (let i = perm.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        [perm[i], perm[j]] = [perm[j], perm[i]];
       }
-      
-      // Find the index of the first correct answer in this permutation
-      let firstCorrectIdx = -1;
-      for (let i = 0; i < shuffled.length; i++) {
-        if (q.correct && q.correct.includes(shuffled[i])) {
-          firstCorrectIdx = i;
-          break;
-        }
-      }
-      
-      bestShuffled = shuffled;
-      // Accept this permutation if it doesn't repeat the last correct position
+
+      const firstCorrectIdx = perm.findIndex((item) => item.isCorrect);
+      bestPerm = perm;
       if (firstCorrectIdx !== lastCorrectIndex) {
         lastCorrectIndex = firstCorrectIdx;
         break;
       }
     }
-    
-    // Assign the smartly shuffled options back
-    if (q.options) q.options = bestShuffled;
-    if (q.choices) q.choices = bestShuffled;
-    
-    result.push(q);
+
+    const newChoices = bestPerm.map((item) => item.text);
+    const newCorrect = bestPerm
+      .map((item, idx) => (item.isCorrect ? idx : -1))
+      .filter((idx) => idx !== -1);
+
+    const updatedQ = { ...q, correct: newCorrect };
+    if (q.options) updatedQ.options = newChoices;
+    if (q.choices) updatedQ.choices = newChoices;
+
+    result.push(updatedQ);
   }
   return result;
 }
@@ -84,6 +93,7 @@ export async function generateQuizWithLovable(
   nbQuestions: number, 
   type: string, 
   difficulty: string = "facile"
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
   console.log(`[Lovable AI] Generating ${nbQuestions} questions (${type}, ${difficulty})`);
   
@@ -101,7 +111,34 @@ export async function generateQuizWithLovable(
   }
 
   const rawQcm = data.qcm || [];
-  return smartShuffleQCM(rawQcm);
+  return smartShuffleQCM(rawQcm, type);
+}
+
+/**
+ * Génération d'un cas clinique ECOS complet via Lovable AI
+ */
+export async function generateEcosCaseWithLovable(
+  courseId: string, 
+  difficulty: string = "moyen",
+  mode: string = "uploaded"
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  console.log(`[Lovable AI] Generating ECOS Case for course ${courseId} (${difficulty}, ${mode})`);
+  
+  const { data, error } = await supabase.functions.invoke('generate-ecos-case', {
+    body: { courseId, difficulty, mode }
+  });
+
+  if (error) {
+    console.error("[Lovable AI] Error generating ECOS case:", error);
+    throw new Error(error.message || "Erreur lors de la génération du cas clinique.");
+  }
+
+  if (data?.error) {
+    throw new Error(data.error);
+  }
+
+  return data.case || null;
 }
 
 /**
@@ -114,6 +151,7 @@ export async function askMorWithLovable(
   chatHistory: {role: "user" | "assistant", content: string}[], 
   courseId?: string,
   contextMessage?: string
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<{answer: string, sources: any[]}> {
   if (chatHistory.length === 0) throw new Error("L'historique est vide");
   

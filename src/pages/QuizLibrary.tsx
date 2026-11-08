@@ -1,19 +1,13 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FileText, Play, Plus, Trash2, Download, FileDown, Timer, Layers, RefreshCw, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { FileText, Play, Calendar, Plus, Trash2, Download, FileDown, CheckCircle, Timer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { exportQuizToPDF, exportQuizListToPDF } from "@/utils/pdfExport";
-import { exportQuizToWord } from "@/utils/wordEngine";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
-import { motion, AnimatePresence } from "framer-motion";
-import { AnimatedBanner } from "@/components/AnimatedBanner";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 interface QCMSession {
   id: string;
@@ -32,31 +26,28 @@ interface QCMSession {
   };
 }
 
-// --- Animations ---
-const containerVariants = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.08, delayChildren: 0.1 }
-  }
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 15 } }
-};
-
-const QuizLibrary = () => {
+export const QuizLibrary = () => {
   const [sessions, setSessions] = useState<QCMSession[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const fetchSessions = useCallback(async () => {
+  useEffect(() => {
+    checkAuth();
+    fetchSessions();
+  }, []);
+
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate("/auth");
+    }
+  };
+
+  const fetchSessions = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { navigate("/auth"); return; }
+      if (!user) return;
 
       const { data, error } = await supabase
         .from("qcm_sessions")
@@ -76,36 +67,51 @@ const QuizLibrary = () => {
       if (error) throw error;
       setSessions(data || []);
     } catch (error) {
-      toast({ title: "Erreur", description: "Impossible de charger les QCM", variant: "destructive" });
+      console.error("Error fetching sessions:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les QCM",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
-  }, [navigate, toast]);
+  };
 
-  useEffect(() => { fetchSessions(); }, [fetchSessions]);
-  useRealtimeSubscription({ table: "qcm_sessions", event: "*", onUpdate: fetchSessions });
-
-  const deleteSession = async (sessionId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const deleteSession = async (sessionId: string) => {
     try {
-      const { error } = await supabase.from("qcm_sessions").delete().eq("id", sessionId);
+      // Archive l'examen sous le statut 'deleted_memory' au lieu de détruire son empreinte :
+      // il disparaît de la bibliothèque mais l'IA garde la trace des questions pour ne jamais les reposer !
+      const { error } = await supabase
+        .from("qcm_sessions")
+        .update({ status: "deleted_memory" })
+        .eq("id", sessionId);
+
       if (error) throw error;
-      setSessions(prev => prev.filter(session => session.id !== sessionId));
-      toast({ title: "QCM supprimé", description: "Le dossier a été archivé avec succès" });
+
+      setSessions(sessions.filter(session => session.id !== sessionId));
+      toast({
+        title: "QCM supprimé",
+        description: "Le QCM a été supprimé avec succès",
+      });
     } catch (error) {
-      toast({ title: "Erreur", description: "Impossible de supprimer le QCM", variant: "destructive" });
+      console.error("Error deleting session:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le QCM",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleRefresh = async () => { 
-    setRefreshing(true); 
-    await fetchSessions(); 
-    toast({ title: "Bibliothèque synchronisée", description: "Vos QCM sont à jour." }); 
-  };
+  // Real-time subscription for QCM updates
+  useRealtimeSubscription({
+    table: "qcm_sessions",
+    event: "*",
+    onUpdate: fetchSessions,
+  });
 
-  const handleExportPDF = (session: QCMSession, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleExportPDF = (session: QCMSession) => {
     try {
       const questions = Array.isArray(session.questions) ? session.questions : [];
       exportQuizToPDF({
@@ -117,27 +123,17 @@ const QuizLibrary = () => {
           explanation: q.explanation,
         })),
       });
-      toast({ title: "Export réussi", description: "Le document PDF a été généré." });
-    } catch (error) {
-      toast({ title: "Erreur", description: "Impossible de générer le PDF", variant: "destructive" });
-    }
-  };
-
-  const handleExportWord = (session: QCMSession, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      const questions = Array.isArray(session.questions) ? session.questions : [];
-      exportQuizToWord({
-        title: session.title,
-        questions: questions.map((q: any) => ({
-          question: q.question || "",
-          options: q.choices || [],
-          correct: q.correct || [],
-          explanation: q.explanation,
-        })),
+      toast({
+        title: "PDF généré",
+        description: "Le QCM a été exporté avec succès",
       });
     } catch (error) {
-      toast({ title: "Erreur", description: "Impossible de générer le fichier Word", variant: "destructive" });
+      console.error("Error exporting PDF:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de générer le PDF",
+        variant: "destructive",
+      });
     }
   };
 
@@ -153,179 +149,210 @@ const QuizLibrary = () => {
         })) : [],
       }));
       exportQuizListToPDF(quizData);
-      toast({ title: "Livre généré", description: "L'ensemble de vos QCM a été compilé." });
+      toast({
+        title: "PDF généré",
+        description: "Le récapitulatif a été exporté avec succès",
+      });
     } catch (error) {
-      toast({ title: "Erreur", description: "Impossible de compiler le PDF", variant: "destructive" });
+      console.error("Error exporting PDF:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de générer le PDF",
+        variant: "destructive",
+      });
     }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-transparent flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <RefreshCw className="h-6 w-6 animate-spin text-[#111111] dark:text-white" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[#888888]">Synchronisation...</span>
+      <div className="min-h-screen bg-background py-8">
+        <div className="container mx-auto px-4">
+          <div className="animate-pulse space-y-4">
+            <div className="h-32 bg-muted rounded-lg"></div>
+            <div className="h-64 bg-muted rounded-lg"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (sessions.length === 0) {
+    return (
+      <div className="min-h-screen bg-background py-8">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold text-foreground mb-4 flex items-center justify-center space-x-2">
+                <FileText className="h-8 w-8 text-primary" />
+                <span>Mes QCM</span>
+              </h1>
+              <p className="text-muted-foreground text-lg">
+                Retrouvez tous vos questionnaires générés
+              </p>
+            </div>
+
+            <Card className="bg-gradient-card shadow-card border-0 p-8">
+              <CardContent className="text-center">
+                <div className="bg-muted/50 p-6 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+                  <FileText className="h-12 w-12 text-muted-foreground" />
+                </div>
+                <h3 className="text-2xl font-semibold text-foreground mb-4">
+                  Aucun QCM créé pour l'instant
+                </h3>
+                <p className="text-muted-foreground mb-6">
+                  Ajoutez votre premier cours pour commencer à générer des questionnaires
+                </p>
+                <Button size="lg" asChild className="shadow-medical">
+                  <Link to="/add-course" className="flex items-center space-x-2">
+                    <Plus className="h-5 w-5" />
+                    <span>Créer mon premier QCM</span>
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans">
-      <div className="max-w-[1400px] mx-auto px-6 py-12 md:py-20 space-y-16 relative z-10">
-        
-        {/* LA BANDEROLE ANIMÉE */}
-        <AnimatedBanner 
-          title="Mes QCM."
-          subtitle={`${sessions.length} questionnaire${sessions.length > 1 ? 's' : ''} d'évaluation généré${sessions.length > 1 ? 's' : ''}.`}
-          rightWidgets={
-            <>
-              {sessions.length > 0 && (
-                <button 
-                  onClick={handleExportAllPDF} 
-                  className="h-12 w-12 rounded-full border border-white/20 bg-white/10 flex items-center justify-center text-white hover:bg-white hover:text-black transition-all duration-300"
-                  title="Exporter le livre"
-                >
-                  <FileDown className="h-4 w-4" />
-                </button>
-              )}
-              <button 
-                onClick={handleRefresh} 
-                disabled={refreshing} 
-                className="h-12 w-12 rounded-full border border-white/20 bg-white/10 flex items-center justify-center text-white hover:bg-white hover:text-black transition-all duration-300"
-                aria-label="Actualiser"
-              >
-                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              </button>
-              <button 
-                onClick={() => navigate("/add-course")} 
-                className="h-12 px-6 rounded-full bg-white text-black transition-all duration-300 font-bold uppercase tracking-widest text-xs flex items-center gap-2 hover:bg-white/90 group"
-              >
-                Nouveau QCM 
-                <Plus className="h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
-              </button>
-            </>
-          }
-        />
-
-        {/* Grille de Contenu */}
-        {sessions.length === 0 ? (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-3xl mx-auto relative z-10"
-          >
-            <div className="bg-white dark:bg-[#161614] border-2 border-dashed border-black/10 dark:border-white/10 rounded-[2rem] p-20 flex flex-col items-center justify-center text-center transition-colors hover:border-[#5B21B6]/30">
-              <div className="w-20 h-20 bg-transparent rounded-full flex items-center justify-center mb-8 border border-black/5 dark:border-white/5">
-                <Layers className="h-8 w-8 text-[#111111] dark:text-white" />
-              </div>
-              <h3 className="text-3xl font-light text-[#111111] dark:text-white mb-4">Bibliothèque vierge</h3>
-              <p className="text-base text-[#666666] dark:text-[#8E8E8A] mb-10 max-w-md mx-auto">
-                Transformez vos cours en entraînements interactifs et générez vos premiers QCM.
+    <div className="min-h-screen bg-background py-4 sm:py-8 bg-doodle-watermark">
+      <div className="container mx-auto px-3 sm:px-4">
+        <div className="max-w-4xl mx-auto">
+          {/* Header - Mobile optimized */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8 animate-fade-in">
+            <div className="space-y-1">
+              <h1 className="text-2xl sm:text-4xl font-bold text-foreground flex items-center gap-2">
+                <FileText className="h-6 w-6 sm:h-8 sm:w-8 text-primary flex-shrink-0" />
+                <span>Mes QCM</span>
+              </h1>
+              <p className="text-sm sm:text-lg text-muted-foreground">
+                {sessions.length} questionnaire{sessions.length > 1 ? 's' : ''} disponible{sessions.length > 1 ? 's' : ''}
               </p>
-              <button 
-                onClick={() => navigate("/add-course")} 
-                className="px-8 py-4 bg-[#111111] dark:bg-white text-white dark:text-[#111111] rounded-full font-medium hover:bg-[#5B21B6] dark:hover:bg-[#5B21B6] dark:hover:text-white transition-colors duration-200 shadow-xl shadow-black/10 flex items-center gap-2 group"
-              >
-                Créer mon premier QCM <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-              </button>
             </div>
-          </motion.div>
-        ) : (
-          <motion.div 
-            variants={containerVariants}
-            initial="hidden"
-            animate="show"
-            className="grid gap-8 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 relative z-10"
-          >
-            <AnimatePresence>
-              {sessions.map((session) => (
-                <motion.div
-                  key={session.id}
-                  variants={itemVariants}
-                  exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
-                  layout
-                >
-                  <div 
-                    onClick={() => navigate(`/quiz/${session.id}`)}
-                    className="group bg-white dark:bg-[#161614] border border-black/10 dark:border-white/10 rounded-[2rem] flex flex-col h-[320px] cursor-pointer hover:border-[#5B21B6] hover:shadow-[0_12px_40px_-12px_rgba(91,33,182,0.15)] hover:-translate-y-1 transition-all duration-300 ease-out overflow-hidden relative z-10"
-                  >
-                    {/* En-tête de la carte */}
-                    <div className="p-8 pb-0">
-                      <div className="flex items-start justify-between gap-4 mb-6">
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-transparent border border-black/5 dark:border-white/5 text-[#111111] dark:text-[#F4F4F2] group-hover:bg-[#5B21B6] group-hover:text-white group-hover:border-[#5B21B6] transition-colors duration-300">
-                          <Layers className="h-3.5 w-3.5" />
-                          <span className="text-[9px] font-bold uppercase tracking-widest">{session.question_count} QCM</span>
-                        </div>
-                        <span className="text-[10px] font-bold text-[#888888] uppercase tracking-wider mt-1">
-                          {new Date(session.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}
-                        </span>
-                      </div>
-                      
-                      <h2 className="text-2xl font-medium tracking-tight leading-snug line-clamp-2 text-[#111111] dark:text-white mb-4">
-                        {session.title}
-                      </h2>
-                      
-                      <div className="text-sm text-[#666666] dark:text-[#8E8E8A] leading-relaxed line-clamp-2 flex items-center gap-2">
-                         <FileText className="h-4 w-4 shrink-0" /> 
-                         <span className="truncate">{session.courses?.file_name || "Source non spécifiée"}</span>
-                      </div>
+            
+            {/* Buttons - Stack on mobile, row on desktop */}
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button 
+                variant="outline" 
+                onClick={handleExportAllPDF} 
+                className="flex-1 sm:flex-none"
+                size="sm"
+              >
+                <FileDown className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Exporter tout</span>
+              </Button>
+              <Button asChild className="shadow-medical flex-1 sm:flex-none" size="sm">
+                <Link to="/add-course" className="flex items-center justify-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  <span>Nouveau</span>
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          {/* Quiz Cards - Improved mobile layout */}
+          <div className="grid gap-4 sm:gap-6">
+            {sessions.map((session, index) => (
+              <Card 
+                key={session.id} 
+                className="bg-gradient-card shadow-card border-0 card-hover animate-slide-up overflow-hidden"
+                style={{ animationDelay: `${index * 0.1}s` }}
+              >
+                <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-4">
+                  {/* Title row with delete button */}
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-base sm:text-xl line-clamp-2 flex-1">
+                      {session.title}
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteSession(session.id)}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0 h-8 w-8 p-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  {/* Meta info - wrap on mobile */}
+                  <CardDescription className="text-xs sm:text-sm mt-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <span className="truncate">{formatDate(session.created_at)}</span>
+                      </span>
+                      <Badge variant="secondary" className="text-xs">
+                        {session.question_count} Q
+                      </Badge>
+                      {session.courses?.file_name && (
+                        <Badge variant="outline" className="text-xs max-w-[120px] truncate hidden sm:inline-flex">
+                          {session.courses.file_name}
+                        </Badge>
+                      )}
+                    </div>
+                  </CardDescription>
+                </CardHeader>
+                
+                <CardContent className="p-4 sm:p-6 pt-0">
+                  {/* Content preview - hidden on mobile for cleaner look */}
+                  <p className="text-muted-foreground text-sm line-clamp-2 mb-4 hidden sm:block">
+                    {session.courses?.content ? session.courses.content.substring(0, 150) : "Contenu non disponible"}...
+                  </p>
+                  
+                  {/* Status and actions - mobile optimized */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge className="bg-success text-success-foreground text-xs">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        {session.status === "completed" ? "Complété" : "En cours"}
+                      </Badge>
+                      {session.ai_model && (
+                        <Badge variant="secondary" className="text-xs hidden sm:inline-flex">
+                          {session.ai_model}
+                        </Badge>
+                      )}
                     </div>
                     
-                    {/* Pied de carte avec ligne pointillée médicale/éditoriale */}
-                    <div className="mt-auto p-8 pt-6 border-t border-dashed border-black/10 dark:border-white/10 flex items-center justify-between">
-                      
-                      <div className="flex gap-2">
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); navigate(`/exam/${session.id}`); }}
-                            className="h-10 px-4 rounded-full bg-transparent text-[#111111] dark:text-[#F4F4F2] text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 hover:bg-[#5B21B6] hover:text-white transition-colors duration-200"
-                          >
-                            <Timer className="h-3.5 w-3.5" /> Examen
-                          </button>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button 
-                                onClick={(e) => e.stopPropagation()}
-                                className="h-10 w-10 rounded-full bg-transparent text-[#888888] flex items-center justify-center hover:bg-[#111111] dark:hover:bg-white hover:text-white dark:hover:text-[#111111] transition-colors duration-200"
-                                title="Exporter"
-                              >
-                                <Download className="h-4 w-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="w-48 bg-white dark:bg-[#111111] border-white/10 shadow-2xl rounded-xl p-2 z-50">
-                              <DropdownMenuItem 
-                                onClick={(e) => handleExportPDF(session, e)}
-                                className="cursor-pointer text-xs font-bold uppercase tracking-widest text-[#111111] dark:text-white hover:bg-[#5B21B6] hover:text-white rounded-lg p-3 transition-colors"
-                              >
-                                Format PDF (.pdf)
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={(e) => handleExportWord(session, e)}
-                                className="cursor-pointer text-xs font-bold uppercase tracking-widest text-[#111111] dark:text-white hover:bg-[#5B21B6] hover:text-white rounded-lg p-3 transition-colors mt-1"
-                              >
-                                Format Word (.docx)
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                          <button 
-                            onClick={(e) => deleteSession(session.id, e)} 
-                            className="h-10 w-10 rounded-full bg-transparent text-[#888888] flex items-center justify-center hover:bg-[#DC2626] hover:text-white transition-colors duration-200"
-                            title="Supprimer la session"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                      </div>
-
+                    {/* Action buttons - full width on mobile */}
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleExportPDF(session)}
+                        className="flex-1 sm:flex-none"
+                      >
+                        <Download className="h-4 w-4 sm:mr-1" />
+                        <span className="sm:inline">PDF</span>
+                      </Button>
+                      <Button asChild className="shadow-medical flex-1 sm:flex-none">
+                        <Link to={`/quiz/${session.id}`} className="flex items-center justify-center gap-1">
+                          <Play className="h-4 w-4" />
+                          <span>Commencer</span>
+                        </Link>
+                      </Button>
+                      <Button asChild variant="secondary" className="flex-1 sm:flex-none">
+                        <Link to={`/exam/${session.id}`} className="flex items-center justify-center gap-1">
+                          <Timer className="h-4 w-4" />
+                          <span>Examen</span>
+                        </Link>
+                      </Button>
                     </div>
                   </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </motion.div>
-        )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

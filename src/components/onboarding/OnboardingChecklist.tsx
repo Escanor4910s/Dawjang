@@ -1,149 +1,150 @@
- import { motion } from "framer-motion";
- import { useNavigate } from "react-router-dom";
- import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
- import { Button } from "@/components/ui/button";
- import { Progress } from "@/components/ui/progress";
- import { 
-   CheckCircle2, 
-   Circle, 
-   ChevronRight,
-   Sparkles,
-   X,
-   RotateCcw
- } from "lucide-react";
- import type { OnboardingStep } from "@/hooks/useOnboarding";
- 
- interface OnboardingChecklistProps {
-   steps: OnboardingStep[];
-   completionPercentage: number;
-   isComplete: boolean;
-   onDismiss?: () => void;
-   onReset?: () => void;
- }
- 
- const OnboardingChecklist = ({
-   steps,
-   completionPercentage,
-   isComplete,
-   onDismiss,
-   onReset,
- }: OnboardingChecklistProps) => {
-   const navigate = useNavigate();
- 
-   if (isComplete) {
-     return (
-       <motion.div
-         initial={{ opacity: 0, y: 20 }}
-         animate={{ opacity: 1, y: 0 }}
-       >
-         <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
-           <CardContent className="p-6">
-             <div className="flex items-center justify-between">
-               <div className="flex items-center gap-3">
-                 <div className="p-2 bg-primary/20 rounded-full">
-                   <Sparkles className="h-5 w-5 text-primary" />
-                 </div>
-                 <div>
-                   <h3 className="font-semibold">Bravo ! 🎉</h3>
-                   <p className="text-sm text-muted-foreground">
-                     Vous maîtrisez Hippocampus
-                   </p>
-                 </div>
-               </div>
-               <div className="flex gap-2">
-                 {onReset && (
-                   <Button variant="ghost" size="icon" onClick={onReset}>
-                     <RotateCcw className="h-4 w-4" />
-                   </Button>
-                 )}
-                 {onDismiss && (
-                   <Button variant="ghost" size="icon" onClick={onDismiss}>
-                     <X className="h-4 w-4" />
-                   </Button>
-                 )}
-               </div>
-             </div>
-           </CardContent>
-         </Card>
-       </motion.div>
-     );
-   }
- 
-   return (
-     <motion.div
-       initial={{ opacity: 0, y: 20 }}
-       animate={{ opacity: 1, y: 0 }}
-     >
-       <Card className="border-primary/20 overflow-hidden">
-         <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-transparent">
-           <div className="flex items-center justify-between">
-             <div className="flex items-center gap-3">
-               <div className="p-2 bg-primary/20 rounded-full">
-                 <Sparkles className="h-5 w-5 text-primary" />
-               </div>
-               <div>
-                 <CardTitle className="text-lg">Guide de démarrage</CardTitle>
-                 <p className="text-sm text-muted-foreground">
-                   {completionPercentage}% complété
-                 </p>
-               </div>
-             </div>
-             {onDismiss && (
-               <Button variant="ghost" size="icon" onClick={onDismiss}>
-                 <X className="h-4 w-4" />
-               </Button>
-             )}
-           </div>
-           <Progress value={completionPercentage} className="h-2 mt-3" />
-         </CardHeader>
-         
-         <CardContent className="p-4 pt-2">
-           <div className="space-y-2">
-             {steps.map((step, index) => (
-               <motion.div
-                 key={step.id}
-                 initial={{ opacity: 0, x: -20 }}
-                 animate={{ opacity: 1, x: 0 }}
-                 transition={{ delay: index * 0.05 }}
-               >
-                 <button
-                   onClick={() => step.route && navigate(step.route)}
-                   disabled={step.completed}
-                   className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all text-left ${
-                     step.completed
-                       ? "bg-muted/50 text-muted-foreground"
-                       : "hover:bg-accent cursor-pointer"
-                   }`}
-                 >
-                   {step.completed ? (
-                     <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
-                   ) : (
-                     <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                   )}
-                   
-                   <div className="flex-1 min-w-0">
-                     <p className={`font-medium text-sm ${step.completed ? "line-through" : ""}`}>
-                       {step.title}
-                     </p>
-                     <p className="text-xs text-muted-foreground truncate">
-                       {step.description}
-                     </p>
-                   </div>
-                   
-                   {!step.completed && step.action && (
-                     <div className="flex items-center gap-1 text-xs text-primary font-medium flex-shrink-0">
-                       <span className="hidden sm:inline">{step.action}</span>
-                       <ChevronRight className="h-4 w-4" />
-                     </div>
-                   )}
-                 </button>
-               </motion.div>
-             ))}
-           </div>
-         </CardContent>
-       </Card>
-     </motion.div>
-   );
- };
- 
- export default OnboardingChecklist;
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { CheckCircle2, Circle, ArrowRight, X } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+
+const DEFAULT_STEPS = [
+  {
+    id: "step-quiz",
+    title: "Construire ou générer un premier QCM",
+    desc: "Testez le constructeur manuel ou l'importation IA",
+    url: "/qcm",
+  },
+  {
+    id: "step-summary",
+    title: "Structurer une fiche avec le Rédacteur IA",
+    desc: "Transformez vos notes brutes en synthèse Rang A / Rang B",
+    url: "/summaries",
+  },
+  {
+    id: "step-infini",
+    title: "Enchaîner 5 questions en Mode Infini",
+    desc: "Évaluez vos réflexes diagnostiques en continu",
+    url: "/infini",
+  },
+  {
+    id: "step-flashcards",
+    title: "Valider votre session d'ancrage quotidien",
+    desc: "Consolidez votre mémoire à long terme avec FSRS",
+    url: "/flashcards",
+  },
+];
+
+const CHECKLIST_KEY = "hippocampus_onboarding_steps_v1";
+
+export interface OnboardingChecklistProps {
+  className?: string;
+  steps?: unknown[];
+  completionPercentage?: number;
+  isComplete?: boolean;
+  onDismiss?: () => void;
+  onReset?: () => void;
+}
+
+export function OnboardingChecklist({
+  className,
+  onDismiss,
+}: OnboardingChecklistProps = {}) {
+  const navigate = useNavigate();
+  const [completed, setCompleted] = useState<string[]>(["step-quiz"]);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(CHECKLIST_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setCompleted(parsed);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
+  if (dismissed) return null;
+
+  const toggleStep = (id: string, url: string) => {
+    const updated = completed.includes(id)
+      ? completed
+      : [...completed, id];
+    setCompleted(updated);
+    localStorage.setItem(CHECKLIST_KEY, JSON.stringify(updated));
+    navigate(url);
+  };
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    onDismiss?.();
+  };
+
+  const progress = Math.round((completed.length / DEFAULT_STEPS.length) * 100);
+
+  return (
+    <Card className={cn("relative", className)}>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-[15px]">
+            Prise en main du Studio DawJang
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[11.5px] font-semibold text-primary tabular-nums">
+              {completed.length}/{DEFAULT_STEPS.length}
+            </span>
+            <button
+              onClick={handleDismiss}
+              className="p-1 text-muted-foreground hover:text-foreground rounded-md transition-colors"
+              title="Masquer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+        <CardDescription>
+          Explorez les outils essentiels de votre environnement de travail médical.
+        </CardDescription>
+        <Progress value={progress} className="mt-2" />
+      </CardHeader>
+
+      <CardContent className="space-y-1.5 pt-2">
+        {DEFAULT_STEPS.map((s) => {
+          const isDone = completed.includes(s.id);
+          return (
+            <div
+              key={s.id}
+              onClick={() => toggleStep(s.id, s.url)}
+              className="group flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 cursor-pointer hover:bg-secondary/60 transition-colors duration-150"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                {isDone ? (
+                  <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                ) : (
+                  <Circle className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
+                )}
+                <div className="min-w-0">
+                  <p
+                    className={cn(
+                      "text-[13px] font-medium truncate transition-colors",
+                      isDone
+                        ? "line-through text-muted-foreground"
+                        : "text-foreground group-hover:text-primary"
+                    )}
+                  >
+                    {s.title}
+                  </p>
+                  <p className="text-[11.5px] text-muted-foreground truncate">
+                    {s.desc}
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+export default OnboardingChecklist;

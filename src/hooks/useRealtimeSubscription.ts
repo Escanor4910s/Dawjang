@@ -6,6 +6,8 @@ interface UseRealtimeSubscriptionProps {
   table: string;
   event?: 'INSERT' | 'UPDATE' | 'DELETE' | '*';
   onUpdate: () => void;
+  onInsert?: () => void;
+  onDelete?: () => void;
   filter?: string;
 }
 
@@ -13,6 +15,8 @@ export const useRealtimeSubscription = ({
   table,
   event = '*',
   onUpdate,
+  onInsert,
+  onDelete,
   filter,
 }: UseRealtimeSubscriptionProps) => {
   useEffect(() => {
@@ -25,6 +29,7 @@ export const useRealtimeSubscription = ({
       channel = supabase
         .channel(`${table}-changes`)
         .on(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           'postgres_changes' as any,
           {
             event,
@@ -32,8 +37,14 @@ export const useRealtimeSubscription = ({
             table,
             filter: filter || `user_id=eq.${user.id}`,
           },
-          (payload) => {
-            onUpdate();
+          (payload: { eventType?: string }) => {
+            if (payload?.eventType === 'INSERT' && onInsert) {
+              onInsert();
+            } else if (payload?.eventType === 'DELETE' && onDelete) {
+              onDelete();
+            } else {
+              onUpdate();
+            }
           }
         )
         .subscribe();
@@ -46,5 +57,5 @@ export const useRealtimeSubscription = ({
         supabase.removeChannel(channel);
       }
     };
-  }, [table, event, onUpdate, filter]);
+  }, [table, event, onUpdate, onInsert, onDelete, filter]);
 };

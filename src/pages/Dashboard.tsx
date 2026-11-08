@@ -1,607 +1,1306 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { BookOpen, TrendingUp, Target, Sun, Moon, ChevronDown, ChevronUp, Monitor, CheckCircle2, Play, Pause, RotateCcw, Volume2, VolumeX, Timer, Brain, ArrowRight, Activity, Medal, Star, ShieldAlert, Network } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
-import { useOnboardingContext } from "@/components/onboarding/OnboardingProvider";
-import { motion, AnimatePresence, useMotionValue, useMotionTemplate, useTransform, useSpring } from "framer-motion";
-import { AnimatedBanner } from "@/components/AnimatedBanner";
-import { uiAudio } from "@/utils/audio";
-import { Button } from "@/components/ui/button";
+import {
+  CheckSquare,
+  FileText,
+  Infinity as InfinityIcon,
+  Layers,
+  ArrowUpRight,
+  ArrowRight,
+  Plus,
+  Flame,
+  Target,
+  BookOpen,
+  Clock,
+  ChevronRight,
+  ChevronLeft,
+  Play,
+  Award,
+  Check,
+  Shield,
+  Sparkles,
+  Swords,
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { DawJangLogo } from "@/components/DawJangLogo";
+import { useGamification } from "@/hooks/useGamification";
+import {
+  BadgeDisplayModal,
+  AcademicBadgeCrest,
+} from "@/components/gamification/BadgeDisplay";
+import { getSavedStudentProfile, StudentProfileSN } from "@/pages/Settings";
+import {
+  getActivePlanBadge,
+  PlanTierIconBadge,
+} from "@/components/UserAvatar";
+import { cn } from "@/lib/utils";
 
-interface ActiveFocusUser { user_id: string; first_name: string; avatar_url: string | null; is_focusing: boolean; }
-interface QuizResult { id: string; course_id: string; score: number; total_questions: number; created_at: string; courses: { title: string; }; }
+interface ReadyQcmItem {
+  id: string;
+  title: string;
+  category: string;
+  questionCount: number;
+  lastScore?: number;
+  updatedAt: string;
+}
 
-// ─── INGÉNIERIE QUANTIQUE (Composants Magnétiques 200/200) ───
+interface SummaryItem {
+  id: string;
+  title: string;
+  objectivesCount: number;
+  tablesCount: number;
+  updatedAt: string;
+}
 
-// Bouton Magnétique : Attire l'élément vers la souris
-const MagneticWrapper = ({ children, strength = 0.2 }: { children: React.ReactNode, strength?: number }) => {
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const springX = useSpring(x, { stiffness: 150, damping: 15, mass: 0.1 });
-  const springY = useSpring(y, { stiffness: 150, damping: 15, mass: 0.1 });
+interface ActivityDay {
+  dayLetter: string;
+  dateLabel: string;
+  count: number;
+  intensity: 0 | 1 | 2 | 3;
+  isToday?: boolean;
+}
 
-  const handleMouse = (e: React.MouseEvent<HTMLDivElement>) => {
-    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
-    x.set((e.clientX - (left + width / 2)) * strength);
-    y.set((e.clientY - (top + height / 2)) * strength);
-  };
-  const reset = () => { x.set(0); y.set(0); };
+interface CarouselModuleItem {
+  id: string;
+  title: string;
+  badgeText: string;
+  description: string;
+  footerLeft: string;
+  footerRight: string;
+  route: string;
+  secondaryRoute?: string;
+  secondaryLabel?: string;
+  accentTag: string;
+  icon: "qcm" | "summaries" | "infini" | "smart" | "flashcards" | "library" | "predictions";
+}
 
-  return (
-    <motion.div onMouseMove={handleMouse} onMouseLeave={reset} style={{ x: springX, y: springY }} className="inline-block relative z-50">
-      {children}
-    </motion.div>
-  );
+const INITIAL_QCMS: ReadyQcmItem[] = [
+  {
+    id: "qcm-1",
+    title: "Anémies par déficits enzymatiques (G6PD & PK)",
+    category: "Hématologie",
+    questionCount: 15,
+    lastScore: 94,
+    updatedAt: "Aujourd'hui",
+  },
+  {
+    id: "qcm-2",
+    title: "Médecine Interne — Sémiologie & Constantes Érythrocytaires",
+    category: "Médecine Interne",
+    questionCount: 10,
+    lastScore: 90,
+    updatedAt: "Hier",
+  },
+  {
+    id: "qcm-3",
+    title: "Physiopathologie des Hémolyses Corpusculaires",
+    category: "Hématologie",
+    questionCount: 10,
+    lastScore: 86,
+    updatedAt: "Il y a 2 j",
+  },
+];
+
+const INITIAL_SUMMARIES: SummaryItem[] = [
+  {
+    id: "sum-1",
+    title: "Anémies par déficits enzymatiques — Pr Moussa Seck",
+    objectivesCount: 5,
+    tablesCount: 2,
+    updatedAt: "Aujourd'hui",
+  },
+  {
+    id: "sum-2",
+    title: "Médecine Interne — Généralités & Sémiologie",
+    objectivesCount: 6,
+    tablesCount: 3,
+    updatedAt: "Hier",
+  },
+  {
+    id: "sum-3",
+    title: "Physiopathologie des Hémolyses Corpusculaires",
+    objectivesCount: 4,
+    tablesCount: 1,
+    updatedAt: "Il y a 3 j",
+  },
+];
+
+const generate28DaysMatrix = (): ActivityDay[] => {
+  const letters = ["L", "M", "M", "J", "V", "S", "D"];
+  const pattern: (0 | 1 | 2 | 3)[] = [
+    2, 3, 2, 1, 3, 2, 1,
+    3, 2, 3, 2, 2, 1, 0,
+    2, 3, 3, 2, 3, 2, 2,
+    3, 3, 2, 3, 3, 2, 3,
+  ];
+  const counts = [
+    18, 32, 24, 12, 35, 20, 10,
+    29, 22, 38, 25, 19, 14, 0,
+    21, 34, 31, 26, 40, 22, 16,
+    33, 42, 28, 36, 45, 27, 30,
+  ];
+
+  return pattern.map((intensity, index) => ({
+    dayLetter: letters[index % 7],
+    dateLabel: `Jour ${index + 1}/28`,
+    count: counts[index],
+    intensity,
+    isToday: index === 27,
+  }));
 };
 
-const DrawnArrow = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <motion.path d="M10 90 Q 40 10 90 10 M 70 10 L 90 10 L 90 30" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, ease: "anticipate", delay: 0.5 }} />
-  </svg>
-);
-
-const HighlightCircle = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <motion.path d="M 50 10 C 80 10 90 40 90 50 C 90 80 40 90 30 80 C 10 60 20 10 50 10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2.5, ease: "easeInOut", delay: 0.2 }} />
-  </svg>
-);
-
-// Odromètre Ultra-Fluide
-const CountUp = ({ end, suffix = "", duration = 2000 }: { end: number, suffix?: string, duration?: number }) => {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    let start = 0; const increment = end / (duration / 16);
-    const timer = setInterval(() => {
-      start += increment;
-      if (start >= end) { setCount(end); clearInterval(timer); } 
-      else { setCount(Math.floor(start)); }
-    }, 16);
-    return () => clearInterval(timer);
-  }, [end, duration]);
-  return <>{count}{suffix}</>;
-};
-
-// Égaliseur Audio Physique
-const AudioEqualizer = () => (
-  <div className="flex items-end gap-[3px] h-3.5 w-3.5">
-    {[1, 2, 3].map((i) => (
-      <motion.div key={i} animate={{ height: ["20%", "100%", "20%"] }} transition={{ repeat: Infinity, duration: 0.35 + (i * 0.1), ease: "easeInOut" }} className="flex-1 bg-[#5B21B6] rounded-t-[1px] shadow-[0_0_8px_rgba(91,33,182,0.9)]" />
-    ))}
-  </div>
-);
-
-// Spotlight Holographique (Glass Volumétrique)
-const SpotlightCard = ({ children, className = "", onClick }: { children: React.ReactNode, className?: string, onClick?: () => void }) => {
-  const mouseX = useMotionValue(0); const mouseY = useMotionValue(0);
-  function handleMouseMove({ currentTarget, clientX, clientY }: React.MouseEvent) {
-    const { left, top } = currentTarget.getBoundingClientRect();
-    mouseX.set(clientX - left); mouseY.set(clientY - top);
-  }
-  return (
-    <motion.div layout onClick={onClick} onMouseMove={handleMouseMove} className={`relative group bg-white/70 dark:bg-[#050505]/70 backdrop-blur-3xl border border-black/5 dark:border-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)] dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] rounded-[2.5rem] overflow-hidden transition-all duration-700 hover:border-[#5B21B6]/50 hover:shadow-[0_20px_80px_-20px_rgba(91,33,182,0.25),inset_0_1px_1px_rgba(255,255,255,0.5)] hover:-translate-y-1.5 ${className}`}>
-      <motion.div className="pointer-events-none absolute -inset-px rounded-[2.5rem] opacity-0 transition duration-500 group-hover:opacity-100 z-0" style={{ background: useMotionTemplate`radial-gradient(700px circle at ${mouseX}px ${mouseY}px, rgba(91,33,182,0.15), transparent 40%)` }} />
-      <div className="relative z-10 h-full">{children}</div>
-    </motion.div>
-  );
-};
-
-// Skeleton Cinétique
-const DashboardBentoSkeleton = () => (
-  <div className="min-h-screen bg-transparent p-4 sm:p-8 space-y-8 overflow-hidden">
-    <div className="max-w-[1400px] mx-auto space-y-8">
-      <div className="w-full h-40 bg-black/5 dark:bg-white/5 rounded-[3rem] animate-pulse relative overflow-hidden"><div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/40 dark:via-white/10 to-transparent" /></div>
-      <div className="grid grid-cols-2 md:grid-cols-12 gap-6 lg:gap-8">
-        <div className="col-span-2 md:col-span-3 h-[350px] bg-black/5 dark:bg-white/5 rounded-[2.5rem] animate-pulse" />
-        <div className="col-span-2 md:col-span-6 h-[200px] bg-black/5 dark:bg-white/5 rounded-[2.5rem] animate-pulse" />
-        <div className="col-span-2 md:col-span-3 h-[200px] bg-black/5 dark:bg-white/5 rounded-[2.5rem] animate-pulse" />
-        <div className="col-span-2 md:col-span-9 h-[200px] bg-black/5 dark:bg-white/5 rounded-[2.5rem] animate-pulse" />
-        <div className="col-span-2 md:col-span-12 h-[300px] bg-black/5 dark:bg-white/5 rounded-[2.5rem] animate-pulse" />
-      </div>
-    </div>
-  </div>
-);
-
-const Dashboard = () => {
-  const [results, setResults] = useState<QuizResult[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [firstName, setFirstName] = useState<string>("");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [openAccordions, setOpenAccordions] = useState<{ [key: string]: boolean }>({ "recent": true, "devices": false, "benefits": false });
+export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { steps, completionPercentage, isComplete, refreshState } = useOnboardingContext();
+  const {
+    level,
+    rankTitle,
+    totalXp,
+    xpInCurrentLevel,
+    xpRequiredForNextLevel,
+    xpRemainingToLevelUp,
+    levelProgressPercent,
+    streakDays,
+    badges,
+    unlockedBadges,
+    nextClosestBadges,
+  } = useGamification();
 
-  const toggleAccordion = (key: string) => setOpenAccordions(prev => ({ ...prev, [key]: !prev[key] }));
+  const [profile, setProfile] = useState<StudentProfileSN>(getSavedStudentProfile);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() => {
+    const saved = getSavedStudentProfile();
+    return (
+      saved.avatarUrl ||
+      localStorage.getItem("hippocampus_user_avatar_url") ||
+      null
+    );
+  });
+  const [planBadge, setPlanBadge] = useState(getActivePlanBadge);
 
-  const hour = new Date().getHours();
-  const timeContext = hour < 5 ? { text: "Nocturne", icon: Moon, color: "text-indigo-400", bg: "bg-indigo-400/10", border: "border-indigo-400/20" } : hour < 12 ? { text: "Matinée", icon: Sun, color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" } : hour < 18 ? { text: "Après-midi", icon: Activity, color: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/20" } : { text: "Soirée", icon: Moon, color: "text-indigo-500", bg: "bg-indigo-500/10", border: "border-indigo-500/20" };
-  const TimeIcon = timeContext.icon;
+  const [qcmList, setQcmList] = useState<ReadyQcmItem[]>(INITIAL_QCMS);
+  const [summaryList, setSummaryList] = useState<SummaryItem[]>(INITIAL_SUMMARIES);
+  const [activeFeedTab, setActiveFeedTab] = useState<"qcm" | "summaries" | "memorization">("qcm");
+  const [hoveredDay, setHoveredDay] = useState<ActivityDay | null>(null);
 
-  const checkAuth = async () => { const { data: { session } } = await supabase.auth.getSession(); if (!session) navigate("/auth"); };
+  // Carrousel Konami / PlayStation des 7 Modules (affiche 2 cartes actives au centre + 2 cartes semi-occultées aux bords)
+  const [moduleCarouselIndex, setModuleCarouselIndex] = useState<number>(0);
 
-  // Gamification (XP)
-  const [xp, setXp] = useState(0);
-  const currentLevel = Math.floor(Math.sqrt(xp / 100)) + 1;
-  const xpForNextLevel = Math.pow(currentLevel, 2) * 100;
-  const xpProgress = (xp / xpForNextLevel) * 100;
+  // Carrousel de Badges directement intégré dans la carte de droite + Modale des 100 Badges
+  const [badgeSlideIndex, setBadgeSlideIndex] = useState<number>(0);
+  const [isBadgeModalOpen, setIsBadgeModalOpen] = useState<boolean>(false);
 
-  const fetchResults = useCallback(async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: profile } = await supabase.from("profiles").select("first_name, name, avatar_url").eq("id", user.id).single();
-      if (profile) { setFirstName(profile.first_name || profile.name || user.email?.split("@")[0] || ""); if (profile.avatar_url) setAvatarUrl(profile.avatar_url); }
-      const { data, error } = await supabase.from("quiz_results").select(`id, course_id, score, total_questions, created_at, courses(title)`).eq("user_id", user.id).order("created_at", { ascending: false });
-      if (error) throw error;
-      setResults(data || []);
-      if (data) setXp(data.reduce((acc, curr) => acc + (curr.score * 15), 1250));
-    } catch (error) { toast.error("Erreur de synchronisation neurale"); } finally { setLoading(false); }
+  const [dailyGoals, setDailyGoals] = useState([
+    { id: "g1", label: "Valider 1 cycle de mémorisation active (FSRS)", done: true, route: "/smart-flashcards" },
+    { id: "g2", label: "Résoudre 10 questions en Mode Infini", done: true, route: "/infini" },
+    { id: "g3", label: "Réviser les tableaux d'un résumé par objectifs", done: false, route: "/summaries" },
+  ]);
+
+  const activityMatrix = useMemo(() => generate28DaysMatrix(), []);
+
+  // Liste mixte pour le mini-carrousel de badges (derniers débloqués + prochains à débloquer)
+  const spotlightBadges = useMemo(() => {
+    const recentUnlocked = unlockedBadges.slice(-4).reverse();
+    const upcoming = nextClosestBadges.slice(0, 4);
+    return [...recentUnlocked, ...upcoming];
+  }, [unlockedBadges, nextClosestBadges]);
+
+  // Synchronisation du profil, de la photo d'avatar, des QCM locaux et des Synthèses
+  useEffect(() => {
+    const syncProfileAndData = () => {
+      const nextProf = getSavedStudentProfile();
+      setProfile(nextProf);
+      setAvatarUrl(
+        nextProf.avatarUrl ||
+          localStorage.getItem("hippocampus_user_avatar_url") ||
+          null
+      );
+      setPlanBadge(getActivePlanBadge());
+
+      // Lecture des banques QCM locales
+      try {
+        const rawDecks = localStorage.getItem("hippocampus_quiz_decks_v2");
+        if (rawDecks) {
+          const parsedDecks = JSON.parse(rawDecks);
+          if (Array.isArray(parsedDecks) && parsedDecks.length > 0) {
+            const mappedDecks: ReadyQcmItem[] = parsedDecks.slice(0, 6).map((d: any) => ({
+              id: d.id || `qcm-${Math.random()}`,
+              title: d.title || "Banque QCM",
+              category: d.category || d.subject || "Médecine",
+              questionCount: Array.isArray(d.questions) ? d.questions.length : d.questionCount || 10,
+              lastScore: d.bestScore ?? d.lastScore,
+              updatedAt: d.updatedAt || "Récent",
+            }));
+            setQcmList(mappedDecks);
+          }
+        }
+      } catch {}
+
+      // Lecture des synthèses locales
+      try {
+        const rawSums = localStorage.getItem("hippocampus_local_summaries_v2");
+        if (rawSums) {
+          const parsedSums = JSON.parse(rawSums);
+          if (Array.isArray(parsedSums) && parsedSums.length > 0) {
+            const mappedSums: SummaryItem[] = parsedSums.slice(0, 6).map((s: any) => ({
+              id: s.id,
+              title: s.title || "Synthèse de cours",
+              objectivesCount:
+                (Array.isArray(s.objectives) && s.objectives.length) ||
+                (s.content?.match(/^##\s+/gm) || []).length ||
+                5,
+              tablesCount: (s.content?.match(/\|.*\|.*\n\|[\s\-:|]+\|/g) || []).length || 2,
+              updatedAt: "Récent",
+            }));
+            setSummaryList(mappedSums);
+          }
+        }
+      } catch {}
+    };
+
+    syncProfileAndData();
+
+    const fetchDashboardData = async () => {
+      try {
+        const { data: summariesData } = await supabase
+          .from("summaries")
+          .select("id, title, content, created_at")
+          .order("created_at", { ascending: false })
+          .limit(5);
+
+        if (summariesData && summariesData.length > 0) {
+          setSummaryList((prev) => {
+            const remoteItems: SummaryItem[] = summariesData.map((s: any) => ({
+              id: s.id,
+              title: s.title || "Synthèse de cours",
+              objectivesCount: (s.content?.match(/^##\s+/gm) || []).length || 4,
+              tablesCount: (s.content?.match(/\|.*\|.*\n\|[\s\-:|]+\|/g) || []).length || 1,
+              updatedAt: "Récent",
+            }));
+            const merged = [...prev];
+            for (const r of remoteItems) {
+              if (!merged.some((m) => m.id === r.id)) merged.push(r);
+            }
+            return merged.slice(0, 6);
+          });
+        }
+      } catch {
+        // Mode local
+      }
+    };
+    fetchDashboardData();
+
+    window.addEventListener("hippocampus-profile-updated", syncProfileAndData);
+    window.addEventListener("hippocampus-stats-updated", syncProfileAndData);
+    return () => {
+      window.removeEventListener("hippocampus-profile-updated", syncProfileAndData);
+      window.removeEventListener("hippocampus-stats-updated", syncProfileAndData);
+    };
   }, []);
 
-  useRealtimeSubscription({ table: 'quiz_results', event: '*', onUpdate: fetchResults });
-  useEffect(() => { checkAuth(); fetchResults(); refreshState(); }, [fetchResults, refreshState]);
+  // Les 7 Modules du Studio réunis dans le Carrousel Konami / PlayStation
+  const studioModules: CarouselModuleItem[] = useMemo(
+    () => [
+      {
+        id: "mod-qcm",
+        title: "Constructeur de QCM",
+        badgeText: `${qcmList.length} banque(s)`,
+        description:
+          "Générez des QCM de niveau professoral (Élection, Censure, Groupage, Jumelage, Association) avec mimétisme d'annales.",
+        footerLeft: "Précision moyenne",
+        footerRight: "88% • 6 formats",
+        route: "/qcm",
+        accentTag: "DOCIMOLOGIE",
+        icon: "qcm",
+      },
+      {
+        id: "mod-summaries",
+        title: "Rédacteur de Résumés",
+        badgeText: `${summaryList.length} fiche(s)`,
+        description:
+          "Synthétisez vos cours objectif par objectif (du 1er au dernier) ou en Synthèse Unifiée avec Audit d'Annales (Protocole Argon).",
+        footerLeft: "2 modes purs",
+        footerRight: "Zéro troncature",
+        route: "/summaries",
+        secondaryRoute: "/summaries/new",
+        secondaryLabel: "+ Nouvelle synthèse",
+        accentTag: "SYNTHÈSE PURE",
+        icon: "summaries",
+      },
+      {
+        id: "mod-smart",
+        title: "Studio Smart Flashcards",
+        badgeText: "8 modalités",
+        description:
+          "Entraînement adaptatif anti-monotonie : Choix multiple/Censure, Classer A/B mélangé, Correspondance dérangée et Cloze.",
+        footerLeft: "Mémoire adaptative",
+        footerRight: "Couverture 100%",
+        route: "/smart-flashcards",
+        accentTag: "8 FORMES ACTIVES",
+        icon: "smart",
+      },
+      {
+        id: "mod-infini",
+        title: "Mode Infini",
+        badgeText: "Flux continu",
+        description:
+          "Enchaînez sans limite QCM, Vrai/Faux, Phrases à trous et Questions ouvertes sur tous vos cours ou sujets libres.",
+        footerLeft: "Cadence actuelle",
+        footerRight: "Correction directe",
+        route: "/infini",
+        accentTag: "MULTI-DOMAINE",
+        icon: "infini",
+      },
+      {
+        id: "mod-flashcards",
+        title: "Flashcards & Duels",
+        badgeText: "FSRS v4.5",
+        description:
+          "Ancrage mnémonique à répétition espacée et défis académiques chronométrés en temps réel.",
+        footerLeft: "Rétention cible 90%",
+        footerRight: "Arène Duels →",
+        route: "/flashcards",
+        secondaryRoute: "/duels",
+        secondaryLabel: "Arène Duels",
+        accentTag: "MÉMORISATION",
+        icon: "flashcards",
+      },
+      {
+        id: "mod-library",
+        title: "Bibliothèque & Cours",
+        badgeText: "Synchronisée",
+        description:
+          "Importez vos polycopiés PDF/DOCX, extrayez les tableaux et alimentez directement le QCM et les Résumés.",
+        footerLeft: "Sources unifiées",
+        footerRight: "Accès direct →",
+        route: "/library",
+        accentTag: "ARCHIVES",
+        icon: "library",
+      },
+      {
+        id: "mod-predictions",
+        title: "Probabilités & Ciblage",
+        badgeText: "Analytique",
+        description:
+          "Détectez les chapitres à haut rendement docimologique, les pièges récurrents et les cibles d'examen.",
+        footerLeft: "Ciblage annales",
+        footerRight: "Statistiques →",
+        route: "/predictions",
+        secondaryRoute: "/stats",
+        secondaryLabel: "Statistiques",
+        accentTag: "HAUT RENDEMENT",
+        icon: "predictions",
+      },
+    ],
+    [qcmList.length, summaryList.length]
+  );
 
-  // Pomodoro
-  const [focusTimeLeft, setFocusTimeLeft] = useState(25 * 60);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [isBinauralPlaying, setIsBinauralPlaying] = useState(false);
-  useEffect(() => {
-    let interval: any = null;
-    if (isTimerRunning && focusTimeLeft > 0) interval = setInterval(() => setFocusTimeLeft(prev => prev - 1), 1000);
-    else if (focusTimeLeft === 0) { setIsTimerRunning(false); uiAudio.playSuccess(); toast.success("🏆 IMMERSION TERMINÉE !"); }
-    return () => clearInterval(interval);
-  }, [isTimerRunning, focusTimeLeft]);
-  useEffect(() => { return () => uiAudio.stopBinauralBeats(); }, []);
-
-  // Presence
-  const [activeFocusUsers, setActiveFocusUsers] = useState<ActiveFocusUser[]>([]);
-  useEffect(() => {
-    if (!firstName) return;
-    const presenceChannel = supabase.channel('focus_room');
-    presenceChannel.on('presence', { event: 'sync' }, () => {
-      const users = Object.values(presenceChannel.presenceState()).flatMap(p => p as unknown as ActiveFocusUser[]);
-      setActiveFocusUsers(Array.from(new Map(users.map(item => [item.user_id, item])).values()).filter(u => u.is_focusing));
-    }).subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') { const { data } = await supabase.auth.getUser(); await presenceChannel.track({ user_id: data.user?.id, first_name: firstName, avatar_url: avatarUrl, is_focusing: isTimerRunning }); }
-    });
-    return () => { supabase.removeChannel(presenceChannel); };
-  }, [firstName, avatarUrl, isTimerRunning]);
-
-  // Stats
-  const averageScore = results.length > 0 ? Math.round((results.reduce((acc, r) => acc + (r.score / r.total_questions) * 100, 0) / results.length)) : 0;
-  const successRate = results.length > 0 ? Math.round((results.filter(r => (r.score / r.total_questions) * 100 >= 60).length / results.length) * 100) : 0;
-  const themeStats = results.reduce((acc, r) => { const title = r.courses?.title || "Sans titre"; if (!acc[title]) acc[title] = { total: 0, correct: 0, count: 0 }; acc[title].total += r.total_questions; acc[title].correct += r.score; acc[title].count += 1; return acc; }, {} as Record<string, { total: number; correct: number; count: number }>);
-  const themePerformance = Object.entries(themeStats).map(([theme, stats]) => ({ theme, score: Math.round((stats.correct / stats.total) * 100), count: stats.count })).sort((a, b) => b.score - a.score);
-  const bestTheme = themePerformance[0];
-  const chartData = results.slice(0, 8).reverse().map((r, i) => ({ name: `Q${i+1}`, score: Math.round((r.score / r.total_questions) * 100), title: r.courses?.title || "Sujet" }));
-
-  // ─── MISSIONS HORIZONTALES INTELLIGENTES ───
-  const extendedMissions = useMemo(() => {
-    return [
-      ...steps.map(s => ({ ...s, icon: Target })),
-      { id: 'adv-1', title: "Générer une Carte Mentale", completed: Object.keys(themeStats).length > 2, route: "/summaries", icon: Network },
-      { id: 'adv-2', title: "Tester le Mode ECOS", completed: results.length >= 5, route: "/ecos", icon: ShieldAlert },
-      { id: 'adv-3', title: "Atteindre 70% de Rétention", completed: successRate >= 70, route: "/review", icon: Brain }
-    ];
-  }, [steps, themeStats, results.length, successRate]);
-
-  const completedExtendedCount = extendedMissions.filter(m => m.completed).length;
-  const extendedCompletionPercentage = (completedExtendedCount / extendedMissions.length) * 100;
-
-  // ─── LIQUID LAYOUT ENGINE (Auto-Destruction) ───
-  const [showMissions, setShowMissions] = useState(true);
-  const [hasTriggeredCompletion, setHasTriggeredCompletion] = useState(false);
-
-  useEffect(() => {
-    if (extendedCompletionPercentage === 100 && showMissions && !hasTriggeredCompletion) {
-      setHasTriggeredCompletion(true);
-      uiAudio.playSuccess();
-      toast.success("🏆 Maîtrise Architecturale Déverrouillée !", { description: "Toutes les missions sont terminées. Restructuration spatiale en cours...", duration: 4000 });
-      setTimeout(() => setShowMissions(false), 3000);
-    } else if (extendedCompletionPercentage === 100 && !hasTriggeredCompletion) {
-      setShowMissions(false); setHasTriggeredCompletion(true);
+  const renderModuleIcon = (iconType: CarouselModuleItem["icon"]) => {
+    switch (iconType) {
+      case "qcm":
+        return <CheckSquare className="w-5 h-5" />;
+      case "summaries":
+        return <FileText className="w-5 h-5" />;
+      case "smart":
+        return <DawJangLogo className="w-5 h-5" />;
+      case "infini":
+        return <InfinityIcon className="w-5 h-5" />;
+      case "flashcards":
+        return <Layers className="w-5 h-5" />;
+      case "library":
+        return <BookOpen className="w-5 h-5" />;
+      case "predictions":
+      default:
+        return <Target className="w-5 h-5" />;
     }
-  }, [extendedCompletionPercentage, showMissions, hasTriggeredCompletion]);
-
-  // ─── PARALLAXE GLOBAL DE LA PAGE (Inertie 3D de toute la grille Bento) ───
-  const pageRef = useRef<HTMLDivElement>(null);
-  const pageX = useMotionValue(0); const pageY = useMotionValue(0);
-  const pageRotateX = useSpring(useTransform(pageY, [-1000, 1000], [2, -2]), { damping: 50, stiffness: 100 });
-  const pageRotateY = useSpring(useTransform(pageX, [-1000, 1000], [-2, 2]), { damping: 50, stiffness: 100 });
-
-  const handlePageMouseMove = (e: React.MouseEvent) => {
-    if (window.innerWidth < 1024) return; // Désactiver sur mobile pour la performance
-    const { innerWidth, innerHeight } = window;
-    pageX.set(e.clientX - innerWidth / 2);
-    pageY.set(e.clientY - innerHeight / 2);
   };
 
-  // Parallaxe intense spécifique au Focus Pod Noir
-  const podRef = useRef<HTMLDivElement>(null);
-  const podX = useMotionValue(0); const podY = useMotionValue(0);
-  const podRotateX = useSpring(useTransform(podY, [-400, 400], [12, -12]), { damping: 30, stiffness: 200 });
-  const podRotateY = useSpring(useTransform(podX, [-400, 400], [-12, 12]), { damping: 30, stiffness: 200 });
+  const totalModules = studioModules.length;
+  const getModAt = (offset: number) =>
+    studioModules[(moduleCarouselIndex + offset + totalModules) % totalModules];
 
-  const handlePodMouseMove = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Empêcher la propagation à la page
-    if (!podRef.current) return;
-    const rect = podRef.current.getBoundingClientRect();
-    podX.set(e.clientX - rect.left - rect.width / 2); podY.set(e.clientY - rect.top - rect.height / 2);
+  const prevMod = getModAt(-1);
+  const activeMod = getModAt(0);
+  const nextMod = getModAt(1);
+
+  const [slideDirection, setSlideDirection] = useState<"left" | "right" | null>(null);
+  const [isSliding, setIsSliding] = useState<boolean>(false);
+
+  const stepCarouselPrev = () => {
+    if (isSliding) return;
+    setSlideDirection("left");
+    setIsSliding(true);
+    setModuleCarouselIndex((prev) => (prev - 1 + totalModules) % totalModules);
+    setTimeout(() => {
+      setIsSliding(false);
+      setSlideDirection(null);
+    }, 350);
   };
-  const handlePodMouseLeave = () => { podX.set(0); podY.set(0); };
 
-  // Injection CSS pour le scroll mask et les scrollbars fantômes
-  useEffect(() => {
-    const style = document.createElement("style");
-    style.innerHTML = `
-      .hide-scrollbar::-webkit-scrollbar { display: none; }
-      .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      .mask-edges-x { mask-image: linear-gradient(to right, transparent, black 2%, black 98%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, black 2%, black 98%, transparent); }
-    `;
-    document.head.appendChild(style);
-    return () => { document.head.removeChild(style); };
-  }, []);
+  const stepCarouselNext = () => {
+    if (isSliding) return;
+    setSlideDirection("right");
+    setIsSliding(true);
+    setModuleCarouselIndex((prev) => (prev + 1) % totalModules);
+    setTimeout(() => {
+      setIsSliding(false);
+      setSlideDirection(null);
+    }, 350);
+  };
 
-  const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.05 } } };
-  const bentoVariants = { hidden: { opacity: 0, y: 30, scale: 0.98 }, visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } } };
+  const jumpToModule = (idx: number) => {
+    if (idx === moduleCarouselIndex || isSliding) return;
+    const dir = idx > moduleCarouselIndex ? "right" : "left";
+    setSlideDirection(dir);
+    setIsSliding(true);
+    setModuleCarouselIndex(idx);
+    setTimeout(() => {
+      setIsSliding(false);
+      setSlideDirection(null);
+    }, 350);
+  };
 
-  if (loading) return <DashboardBentoSkeleton />;
+  const toggleGoal = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDailyGoals((prev) =>
+      prev.map((g) => (g.id === id ? { ...g, done: !g.done } : g))
+    );
+  };
+
+  const userInitials =
+    profile.fullName
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase() || "DJ";
 
   return (
-    <div onMouseMove={handlePageMouseMove} className="min-h-screen bg-transparent text-[#111111] dark:text-[#F4F4F2] font-sans overflow-x-hidden pb-32 relative transition-colors duration-700 perspective-[2000px]">
+    <div className="min-h-screen w-full bg-[#FAF8F5] dark:bg-[#11100F] text-[#18181B] dark:text-stone-100 pb-14 selection:bg-[#D96B43]/20 selection:text-[#D96B43]">
+      <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-7 space-y-6">
+        {/* ====================================================================
+            1. EN-TÊTE ÉDITORIAL & BOUTONS STRICTEMENT ALIGNÉS SUR UNE SEULE LIGNE
+        ==================================================================== */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-[#EAE4DC] dark:border-stone-800/80">
+          <div className="min-w-0">
+            <p className="text-[11px] font-mono uppercase tracking-[0.12em] text-stone-500 dark:text-stone-400">
+              Semestre d'Automne • Studio Académique DawJang
+            </p>
+            <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-[#18181B] dark:text-white mt-0.5 truncate">
+              Tableau de bord
+            </h1>
+          </div>
 
-      <motion.div style={{ rotateX: pageRotateX, rotateY: pageRotateY, transformStyle: "preserve-3d" }} variants={containerVariants} initial="hidden" animate="visible" className="max-w-[1500px] mx-auto px-4 sm:px-8 pt-8 space-y-6 md:space-y-8 relative z-10">
-        
-        {/* =========================================================================
-            LA BANDEROLE ANIMÉE (Sanctuarisée - Z=50)
-            ========================================================================= */}
-        <motion.div style={{ translateZ: 50 }} variants={bentoVariants} className="w-full relative shadow-[0_30px_80px_-15px_rgba(0,0,0,0.15)] rounded-b-[3rem]">
-          <AnimatedBanner 
-            title={<>Bienvenue, <span className="font-serif italic text-white/90">{firstName || "Dr."}</span></>}
-            subtitle="Cartographie neuronale de votre évolution clinique."
-            rightWidgets={
-              <>
-                <div className="bg-white/10 backdrop-blur-3xl border border-white/20 rounded-[1.5rem] px-6 py-4 flex flex-col items-start min-w-[140px] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)]">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1 flex items-center gap-2"><Target className="w-3.5 h-3.5"/> Précision</span>
-                  <span className="text-4xl font-light text-white tracking-tighter"><CountUp end={successRate} suffix="%" /></span>
-                </div>
-                <div className="bg-white/10 backdrop-blur-3xl border border-white/20 rounded-[1.5rem] px-6 py-4 flex flex-col items-start min-w-[140px] shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)]">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1 flex items-center gap-2"><BookOpen className="w-3.5 h-3.5"/> Épreuves</span>
-                  <span className="text-4xl font-light text-white tracking-tighter"><CountUp end={results.length} /></span>
-                </div>
-              </>
-            }
-          />
-        </motion.div>
+          {/* Barre des 3 boutons verrouillés sur UNE SEULE LIGNE (flex-nowrap whitespace-nowrap) */}
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-nowrap overflow-x-auto no-scrollbar shrink-0 py-1">
+            <button
+              type="button"
+              onClick={() => navigate("/smart-flashcards")}
+              className="inline-flex items-center gap-2 h-9 sm:h-10 px-3.5 rounded-xl bg-[#F4EFE6] dark:bg-stone-900 hover:bg-[#EAE1D3] border border-[#E2D9C8] dark:border-stone-800 text-xs font-semibold text-[#18181B] dark:text-stone-200 whitespace-nowrap shrink-0 transition-all duration-200 active:scale-[0.99]"
+            >
+              <Play className="w-3.5 h-3.5 text-[#D96B43] fill-[#D96B43] shrink-0" />
+              <span>Reprendre l'entraînement</span>
+            </button>
 
-        {/* =========================================================================
-            LA GRILLE LIQUIDE 200/200 (Morphing Spatial & Spotlight)
-            ========================================================================= */}
-        <motion.div layout className="grid grid-cols-2 md:grid-cols-12 auto-rows-[minmax(180px,auto)] gap-6 lg:gap-8 transform-style-3d">
-          
-          {/* ─── BENTO 1: CARTE D'IDENTITÉ GAMIFIÉE ─── */}
-          <motion.div variants={bentoVariants} className="col-span-2 md:col-span-3 md:row-span-2" style={{ translateZ: 20 }}>
-            <SpotlightCard className="h-full flex flex-col">
-              <div className="p-8 sm:p-10 flex-1 flex flex-col justify-between relative">
-                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none"><Activity className="w-40 h-40 text-[#5B21B6]" /></div>
-                
+            <button
+              type="button"
+              onClick={() => navigate("/summaries/new")}
+              className="inline-flex items-center gap-2 h-9 sm:h-10 px-3.5 rounded-xl bg-white dark:bg-stone-900 hover:bg-stone-50 dark:hover:bg-stone-800 border border-[#E2DDD5] dark:border-stone-700 text-xs font-semibold text-[#18181B] dark:text-stone-100 whitespace-nowrap shrink-0 shadow-2xs transition-all duration-200 hover:border-stone-400 active:scale-[0.99]"
+            >
+              <FileText className="w-3.5 h-3.5 text-[#D96B43] shrink-0" />
+              <span>Nouvelle synthèse</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate("/qcm")}
+              className="group inline-flex items-center gap-2 h-9 sm:h-10 px-4 rounded-xl bg-[#18181B] hover:bg-[#27272A] dark:bg-stone-100 dark:text-[#18181B] text-white text-xs font-semibold whitespace-nowrap shrink-0 shadow-xs transition-all duration-200 active:scale-[0.99]"
+            >
+              <Plus className="w-3.5 h-3.5 text-[#D96B43] shrink-0 group-hover:rotate-90 transition-transform duration-300" />
+              <span>Construire un QCM</span>
+            </button>
+          </div>
+        </header>
+
+        {/* ====================================================================
+            2. CARROUSEL KONAMI / PLAYSTATION DES 7 MODULES DU STUDIO
+               (PLEINE LARGEUR, ZÉRO DÉLIMITATION PARASITE, MOTION FLUIDE HAUTE DENSITÉ)
+        ==================================================================== */}
+        <section
+          aria-label="Carrousel des modules principaux"
+          className="space-y-4 w-full"
+        >
+          {/* Barre de contrôle supérieure du Carrousel Konami */}
+          <div className="flex items-center justify-between gap-3 px-1">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-2 text-[11px] font-mono font-bold uppercase tracking-[0.14em] text-[#D96B43]">
+                <span className="w-2 h-2 rounded-full bg-[#D96B43] animate-pulse" />
+                SÉLECTEUR DE PÔLES • MODULE {String(moduleCarouselIndex + 1).padStart(2, "0")}/0{totalModules}
+              </span>
+              <div className="hidden sm:flex items-center gap-1.5">
+                {studioModules.map((m, idx) => {
+                  const isActive = idx === moduleCarouselIndex;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => jumpToModule(idx)}
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        isActive
+                          ? "w-8 bg-[#D96B43] shadow-[0_0_10px_rgba(217,107,67,0.45)]"
+                          : "w-2 bg-[#DED6C8] dark:bg-stone-800 hover:bg-stone-400"
+                      }`}
+                      title={m.title}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={stepCarouselPrev}
+                className="group inline-flex items-center gap-2 h-8.5 px-3.5 rounded-xl bg-white dark:bg-stone-900 border border-[#E2D9C8] dark:border-stone-800 text-xs font-semibold text-stone-700 dark:text-stone-200 hover:border-[#D96B43] hover:text-[#D96B43] transition-all shadow-2xs active:scale-95"
+                title={`Basculer vers ${prevMod.title}`}
+              >
+                <ChevronLeft className="w-4 h-4 text-[#D96B43] group-hover:-translate-x-0.5 transition-transform" />
+                <span className="hidden sm:inline font-mono text-[11px] text-stone-500">Précédent :</span>
+                <span className="hidden sm:inline max-w-[130px] truncate">{prevMod.title}</span>
+              </button>
+              <button
+                type="button"
+                onClick={stepCarouselNext}
+                className="group inline-flex items-center gap-2 h-8.5 px-3.5 rounded-xl bg-white dark:bg-stone-900 border border-[#E2D9C8] dark:border-stone-800 text-xs font-semibold text-stone-700 dark:text-stone-200 hover:border-[#D96B43] hover:text-[#D96B43] transition-all shadow-2xs active:scale-95"
+                title={`Basculer vers ${nextMod.title}`}
+              >
+                <span className="hidden sm:inline font-mono text-[11px] text-stone-500">Suivant :</span>
+                <span className="hidden sm:inline max-w-[130px] truncate">{nextMod.title}</span>
+                <ChevronRight className="w-4 h-4 text-[#D96B43] group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </div>
+          </div>
+
+          {/* Scène Panoramique Konami : Déploiement Pleine Largeur sans boîte fermée ni masque découpant */}
+          <div className="w-full relative py-1">
+            <div className="flex flex-col lg:flex-row items-stretch justify-center gap-4 lg:gap-5 w-full">
+              {/* AILE GAUCHE EN FLOTAISON NATURELLE (PRÉCÉDENT — CLIQUABLE POUR BASCULER) */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={stepCarouselPrev}
+                onKeyDown={(e) => e.key === "Enter" && stepCarouselPrev()}
+                title={`Basculer vers ${prevMod.title}`}
+                className="hidden lg:flex flex-1 min-w-[240px] max-w-[340px] group relative rounded-2xl bg-white/75 dark:bg-[#181615]/75 backdrop-blur-md border border-[#E5DEC9] dark:border-stone-800 hover:border-[#D96B43]/70 p-5 flex-col justify-between opacity-60 hover:opacity-100 scale-[0.93] hover:scale-[0.96] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer select-none shadow-[0_12px_32px_-12px_rgba(24,24,27,0.06)] hover:shadow-[0_16px_36px_-10px_rgba(217,107,67,0.12)]"
+              >
                 <div>
-                  <div className="flex flex-col items-center text-center gap-4 mb-8">
-                    <MagneticWrapper strength={0.4}>
-                      <div className="relative w-28 h-28 group-hover:scale-105 transition-transform duration-1000 shrink-0 cursor-pointer">
-                        <div className="absolute inset-[-6px] rounded-full border-2 border-dashed border-[#5B21B6]/30 animate-[spin_15s_linear_infinite]" />
-                        <div className="w-full h-full rounded-full bg-cover bg-center border-4 border-white dark:border-[#222] shadow-2xl z-10 relative" style={{ backgroundImage: `url('${avatarUrl || "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&q=80"}')` }} />
-                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-[#111111] text-white text-[10px] font-black px-4 py-1.5 rounded-full border-2 border-white shadow-xl z-20 whitespace-nowrap">
-                          NIVEAU {currentLevel}
+                  <div className="flex items-center justify-between mb-3.5">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#F4EFE6] dark:bg-stone-900 border border-[#E5DEC9] dark:border-stone-800 text-[10px] font-mono font-bold uppercase tracking-wider text-stone-500 group-hover:text-[#D96B43] group-hover:border-[#D96B43]/40 transition-colors">
+                      <ChevronLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+                      Précédent
+                    </span>
+                    <div className="w-9 h-9 rounded-xl bg-[#F7F4EF] dark:bg-stone-900 border border-[#EAE4DC] dark:border-stone-800 flex items-center justify-center text-stone-600 dark:text-stone-300 group-hover:border-[#D96B43]/40 group-hover:text-[#D96B43] transition-colors">
+                      {renderModuleIcon(prevMod.icon)}
+                    </div>
+                  </div>
+
+                  <span className="inline-block text-[9.5px] font-mono font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-[#F5E6DE]/60 dark:bg-stone-800 text-[#C85A32] dark:text-[#E8845C]">
+                    {prevMod.accentTag}
+                  </span>
+
+                  <h3 className="font-serif text-lg font-bold text-[#18181B] dark:text-white mt-2 group-hover:text-[#D96B43] transition-colors leading-snug">
+                    {prevMod.title}
+                  </h3>
+
+                  <p className="text-xs text-stone-500 dark:text-stone-400 line-clamp-3 mt-1.5 leading-relaxed">
+                    {prevMod.description}
+                  </p>
+                </div>
+
+                <div className="pt-3 mt-4 border-t border-[#EAE4DC]/80 dark:border-stone-800/80 flex items-center justify-between text-[11px] font-mono text-stone-500">
+                  <span>{prevMod.badgeText}</span>
+                  <span className="text-[#D96B43] font-semibold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                    <span>Basculer</span>
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </div>
+
+              {/* SECTION CENTRALE HÉROÏQUE ÉLARGIE (MODULE ACTIF PLEINE PUISSANCE) */}
+              <div
+                key={activeMod.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(activeMod.route)}
+                onKeyDown={(e) => e.key === "Enter" && navigate(activeMod.route)}
+                className={cn(
+                  "flex-[2] w-full min-w-[320px] max-w-[840px] group relative rounded-3xl bg-white dark:bg-[#181615] border-2 border-[#18181B] dark:border-stone-600 hover:border-[#D96B43] p-6 sm:p-8 flex flex-col justify-between shadow-[0_24px_55px_-14px_rgba(24,24,27,0.14)] hover:shadow-[0_30px_70px_-12px_rgba(217,107,67,0.20)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer z-10",
+                  slideDirection === "left" && "animate-in slide-in-from-left-4 fade-in duration-300",
+                  slideDirection === "right" && "animate-in slide-in-from-right-4 fade-in duration-300"
+                )}
+              >
+                {/* Halo subtil supérieur */}
+                <div className="pointer-events-none absolute top-0 right-0 w-64 h-64 bg-[radial-gradient(circle,rgba(217,107,67,0.11)_0%,transparent_70%)]" />
+
+                <div className="relative">
+                  <div className="flex items-center justify-between gap-3 mb-5">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-13 h-13 sm:w-15 sm:h-15 rounded-2xl bg-[#18181B] dark:bg-stone-100 text-white dark:text-[#18181B] flex items-center justify-center shadow-md group-hover:bg-[#D96B43] dark:group-hover:bg-[#D96B43] dark:group-hover:text-white transition-colors duration-300">
+                        {renderModuleIcon(activeMod.icon)}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg bg-[#F5E6DE] dark:bg-[#D96B43]/20 text-[#C85A32] dark:text-[#E8845C]">
+                            {activeMod.accentTag}
+                          </span>
+                          <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded-lg bg-[#F7F4EF] dark:bg-stone-900 border border-[#EAE4DC] dark:border-stone-800 text-stone-700 dark:text-stone-300 tabular-nums">
+                            {activeMod.badgeText}
+                          </span>
+                        </div>
+                        <p className="text-[11.5px] font-medium text-stone-500 dark:text-stone-400 mt-0.5">
+                          Pôle actif • Cliquer pour ouvrir
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="w-10 h-10 rounded-xl bg-[#FAF8F5] dark:bg-stone-900 border border-[#EAE4DC] dark:border-stone-800 flex items-center justify-center text-stone-500 group-hover:bg-[#D96B43] group-hover:text-white group-hover:border-[#D96B43] transition-all duration-300 shrink-0">
+                      <ArrowUpRight className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    </div>
+                  </div>
+
+                  <h2 className="font-serif text-2xl sm:text-[32px] font-normal text-[#18181B] dark:text-white tracking-tight leading-snug">
+                    {activeMod.title}
+                  </h2>
+
+                  <p className="text-sm sm:text-[15px] text-stone-600 dark:text-stone-300 mt-2.5 leading-relaxed max-w-2xl">
+                    {activeMod.description}
+                  </p>
+                </div>
+
+                {/* Pied de la carte centrale héroïque avec micro-actions directes */}
+                <div className="relative mt-7 pt-4 border-t border-[#F0EAE0] dark:border-stone-800 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs font-mono">
+                    <span className="text-stone-500">{activeMod.footerLeft} :</span>
+                    <span className="font-bold text-[#18181B] dark:text-stone-200 bg-[#F7F4EF] dark:bg-stone-900 px-2.5 py-1 rounded-lg border border-[#EAE4DC] dark:border-stone-800">
+                      {activeMod.footerRight}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 ml-auto">
+                    {activeMod.secondaryRoute && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(activeMod.secondaryRoute!);
+                        }}
+                        className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-[#FAF8F5] dark:bg-stone-900 hover:bg-[#F5E6DE]/60 border border-[#E2D9C8] dark:border-stone-700 hover:border-[#D96B43] text-xs font-bold text-[#C85A32] dark:text-[#E8845C] transition-all"
+                      >
+                        <span>{activeMod.secondaryLabel}</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(activeMod.route);
+                      }}
+                      className="inline-flex items-center gap-2 h-9 px-4 rounded-xl bg-[#18181B] hover:bg-[#D96B43] dark:bg-white dark:text-[#18181B] dark:hover:bg-[#D96B43] dark:hover:text-white text-white text-xs font-semibold shadow-xs transition-all duration-200"
+                    >
+                      <span>Ouvrir le pôle</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* AILE DROITE EN FLOTAISON NATURELLE (SUIVANT — CLIQUABLE POUR BASCULER) */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={stepCarouselNext}
+                onKeyDown={(e) => e.key === "Enter" && stepCarouselNext()}
+                title={`Basculer vers ${nextMod.title}`}
+                className="hidden lg:flex flex-1 min-w-[240px] max-w-[340px] group relative rounded-2xl bg-white/75 dark:bg-[#181615]/75 backdrop-blur-md border border-[#E5DEC9] dark:border-stone-800 hover:border-[#D96B43]/70 p-5 flex-col justify-between opacity-60 hover:opacity-100 scale-[0.93] hover:scale-[0.96] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer select-none shadow-[0_12px_32px_-12px_rgba(24,24,27,0.06)] hover:shadow-[0_16px_36px_-10px_rgba(217,107,67,0.12)]"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3.5">
+                    <div className="w-9 h-9 rounded-xl bg-[#F7F4EF] dark:bg-stone-900 border border-[#EAE4DC] dark:border-stone-800 flex items-center justify-center text-stone-600 dark:text-stone-300 group-hover:border-[#D96B43]/40 group-hover:text-[#D96B43] transition-colors">
+                      {renderModuleIcon(nextMod.icon)}
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#F4EFE6] dark:bg-stone-900 border border-[#E5DEC9] dark:border-stone-800 text-[10px] font-mono font-bold uppercase tracking-wider text-stone-500 group-hover:text-[#D96B43] group-hover:border-[#D96B43]/40 transition-colors">
+                      Suivant
+                      <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                    </span>
+                  </div>
+
+                  <span className="inline-block text-[9.5px] font-mono font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-[#F5E6DE]/60 dark:bg-stone-800 text-[#C85A32] dark:text-[#E8845C]">
+                    {nextMod.accentTag}
+                  </span>
+
+                  <h3 className="font-serif text-lg font-bold text-[#18181B] dark:text-white mt-2 group-hover:text-[#D96B43] transition-colors leading-snug">
+                    {nextMod.title}
+                  </h3>
+
+                  <p className="text-xs text-stone-500 dark:text-stone-400 line-clamp-3 mt-1.5 leading-relaxed">
+                    {nextMod.description}
+                  </p>
+                </div>
+
+                <div className="pt-3 mt-4 border-t border-[#EAE4DC]/80 dark:border-stone-800/80 flex items-center justify-between text-[11px] font-mono text-stone-500">
+                  <span>{nextMod.badgeText}</span>
+                  <span className="text-[#D96B43] font-semibold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                    <span>Basculer</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Aperçu tactile compact sur écrans mobiles/tablettes (< lg) */}
+            <div className="grid grid-cols-2 gap-2.5 mt-3 lg:hidden">
+              <button
+                type="button"
+                onClick={stepCarouselPrev}
+                className="flex items-center gap-2 p-3 rounded-xl bg-white dark:bg-stone-900 border border-[#E5DEC9] dark:border-stone-800 text-left hover:border-[#D96B43] transition-all shadow-2xs"
+              >
+                <ChevronLeft className="w-4 h-4 text-[#D96B43] shrink-0" />
+                <div className="min-w-0">
+                  <span className="block text-[9px] font-mono uppercase text-stone-400">Précédent</span>
+                  <span className="block text-xs font-bold text-[#18181B] dark:text-white truncate">{prevMod.title}</span>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={stepCarouselNext}
+                className="flex items-center justify-end gap-2 p-3 rounded-xl bg-white dark:bg-stone-900 border border-[#E5DEC9] dark:border-stone-800 text-right hover:border-[#D96B43] transition-all shadow-2xs"
+              >
+                <div className="min-w-0">
+                  <span className="block text-[9px] font-mono uppercase text-stone-400">Suivant</span>
+                  <span className="block text-xs font-bold text-[#18181B] dark:text-white truncate">{nextMod.title}</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-[#D96B43] shrink-0" />
+              </button>
+            </div>
+
+            {/* Barre d'accès rapide par pastilles aux 7 modules sous le carrousel (Directement sur le canvas, sans bordure double) */}
+            <div className="mt-4 pt-3 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-1.5">
+                {studioModules.map((m, idx) => {
+                  const isSelected = idx === moduleCarouselIndex;
+                  const isAdjacent =
+                    idx === (moduleCarouselIndex - 1 + totalModules) % totalModules ||
+                    idx === (moduleCarouselIndex + 1) % totalModules;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => jumpToModule(idx)}
+                      onDoubleClick={() => navigate(m.route)}
+                      className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
+                        isSelected
+                          ? "bg-[#18181B] text-white dark:bg-white dark:text-[#18181B] shadow-xs scale-[1.02]"
+                          : isAdjacent
+                          ? "bg-white dark:bg-stone-900 text-[#18181B] dark:text-stone-200 border border-[#D96B43]/40 hover:border-[#D96B43]"
+                          : "bg-white/80 dark:bg-stone-900/80 text-stone-500 dark:text-stone-400 border border-[#E5DEC9] dark:border-stone-800 hover:border-[#D96B43] hover:text-[#18181B]"
+                      }`}
+                    >
+                      {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-[#D96B43]" />}
+                      <span>{m.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="hidden xl:inline-block text-[10px] font-mono text-stone-400 shrink-0">
+                Navigation fluide 7 pôles
+              </span>
+            </div>
+          </div>
+        </section>
+
+        {/* ====================================================================
+            3. CORPS PRINCIPAL ASYMÉTRIQUE (8 COLONNES GAUCHE / 4 COLONNES DROITE)
+        ==================================================================== */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* COLONNE GAUCHE (8 COLS) */}
+          <div className="lg:col-span-8 space-y-5">
+            <div className="rounded-2xl bg-white dark:bg-[#181615] border border-[#EAE4DC] dark:border-stone-800 p-5 sm:p-6 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-[#F2EDE6] dark:border-stone-800">
+                <div>
+                  <h2 className="text-lg font-bold text-[#18181B] dark:text-white tracking-tight">
+                    {activeFeedTab === "qcm" && "Vos QCM prêts à être lancés"}
+                    {activeFeedTab === "summaries" && "Vos Fiches de Synthèse & Tableaux"}
+                    {activeFeedTab === "memorization" && "Cycles de Mémorisation Active"}
+                  </h2>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    {activeFeedTab === "qcm" &&
+                      "Cliquez sur un QCM pour démarrer immédiatement la session."}
+                    {activeFeedTab === "summaries" &&
+                      "Consultez vos synthèses fidèles aux objectifs ou vos Synthèses Unifiées (Protocole Argon)."}
+                    {activeFeedTab === "memorization" &&
+                      "Reprenez vos paquets avec rotation automatique des 8 formes de questions."}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 self-start sm:self-auto">
+                  <div className="inline-flex p-1 rounded-xl bg-[#F7F4EF] dark:bg-stone-900 border border-[#EAE4DC] dark:border-stone-800">
+                    {[
+                      { id: "qcm", label: "QCM", count: qcmList.length },
+                      { id: "summaries", label: "Synthèses", count: summaryList.length },
+                      { id: "memorization", label: "Flashcards", count: 2 },
+                    ].map((tab) => {
+                      const active = activeFeedTab === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setActiveFeedTab(tab.id as any)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                            active
+                              ? "bg-white dark:bg-stone-800 text-[#18181B] dark:text-white shadow-2xs"
+                              : "text-stone-500 hover:text-[#18181B]"
+                          }`}
+                        >
+                          <span>{tab.label}</span>
+                          <span className="ml-1.5 font-mono text-[10px] text-[#D96B43]">
+                            {tab.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        activeFeedTab === "qcm"
+                          ? "/qcm"
+                          : activeFeedTab === "summaries"
+                          ? "/summaries"
+                          : "/smart-flashcards"
+                      )
+                    }
+                    className="hidden xl:inline-flex items-center gap-1.5 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:text-[#D96B43] transition-colors"
+                  >
+                    <span>Ouvrir le constructeur</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {activeFeedTab === "qcm" && (
+                <div className="mt-4 space-y-3">
+                  {qcmList.map((qcm) => (
+                    <div
+                      key={qcm.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate("/qcm")}
+                      onKeyDown={(e) => e.key === "Enter" && navigate("/qcm")}
+                      className="group relative rounded-xl bg-[#FAF8F5]/70 dark:bg-stone-900/50 hover:bg-white dark:hover:bg-stone-900 border border-[#EAE4DC] dark:border-stone-800 hover:border-[#D96B43]/50 p-4 sm:px-5 flex items-center justify-between gap-4 transition-all duration-200 cursor-pointer"
+                    >
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-md bg-[#F5E6DE] dark:bg-[#D96B43]/15 text-[#C85A32] dark:text-[#E8845C] font-mono text-[11px] font-semibold">
+                            {qcm.category}
+                          </span>
+                          <span className="text-xs font-mono text-stone-500 tabular-nums">
+                            {qcm.questionCount} questions
+                          </span>
+                          <span className="text-stone-300 dark:text-stone-700">•</span>
+                          <span className="text-[11px] font-mono text-stone-400">
+                            {qcm.updatedAt}
+                          </span>
+                        </div>
+
+                        <h3 className="text-sm sm:text-base font-bold text-[#18181B] dark:text-white truncate group-hover:text-[#D96B43] transition-colors">
+                          {qcm.title}
+                        </h3>
+                      </div>
+
+                      <div className="flex items-center gap-4 shrink-0">
+                        {qcm.lastScore !== undefined && (
+                          <div className="hidden sm:flex flex-col items-end">
+                            <span className="text-[10px] font-mono uppercase text-stone-400">
+                              Dernier score
+                            </span>
+                            <span className="text-xs font-mono font-bold text-stone-700 dark:text-stone-300 tabular-nums">
+                              {qcm.lastScore}%
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="w-8 h-8 rounded-lg bg-white dark:bg-stone-800 border border-[#E5DEC9] dark:border-stone-700 flex items-center justify-center text-stone-600 group-hover:bg-[#18181B] group-hover:text-white group-hover:border-[#18181B] transition-all">
+                          <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                         </div>
                       </div>
-                    </MagneticWrapper>
-                    <div>
-                      <h2 className="text-3xl md:text-4xl font-serif font-black text-[#111111] dark:text-white tracking-tight leading-none mb-2 group-hover:text-[#5B21B6] transition-colors">{firstName}</h2>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#888888] flex items-center justify-center gap-1.5">
-                        <Medal className="w-3.5 h-3.5 text-amber-500" /> Élite Médicale
-                      </p>
                     </div>
-                  </div>
+                  ))}
+                </div>
+              )}
 
-                  <div className="bg-black/[0.02] dark:bg-white/[0.02] rounded-[1.5rem] p-6 border border-black/5 dark:border-white/5 shadow-inner relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
-                    <div className="flex justify-between items-end mb-3">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#5B21B6]">Neuro-Expérience</span>
-                      <span className="text-xs font-black text-[#111111] dark:text-white"><CountUp end={xp} /> <span className="text-[#888888] font-bold">/ {xpForNextLevel}</span></span>
+              {activeFeedTab === "summaries" && (
+                <div className="mt-4 space-y-3">
+                  {summaryList.map((sum) => (
+                    <div
+                      key={sum.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/summary/${sum.id}`)}
+                      className="group rounded-xl bg-[#FAF8F5]/70 dark:bg-stone-900/50 hover:bg-white dark:hover:bg-stone-900 border border-[#EAE4DC] dark:border-stone-800 hover:border-[#D96B43]/50 p-4 sm:px-5 flex items-center justify-between gap-4 transition-all duration-200 cursor-pointer"
+                    >
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-md bg-[#F2ECE1] dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-mono text-[11px] font-semibold">
+                            {sum.objectivesCount} objectifs
+                          </span>
+                          <span className="text-xs font-mono text-[#D96B43] tabular-nums">
+                            {sum.tablesCount} tableau(x) préservé(s)
+                          </span>
+                          <span className="text-[11px] font-mono text-stone-400">
+                            • {sum.updatedAt}
+                          </span>
+                        </div>
+                        <h3 className="text-sm sm:text-base font-bold text-[#18181B] dark:text-white truncate">
+                          {sum.title}
+                        </h3>
+                      </div>
+
+                      <div className="w-8 h-8 rounded-lg bg-white dark:bg-stone-800 border border-[#E5DEC9] flex items-center justify-center text-stone-600 group-hover:bg-[#18181B] group-hover:text-white transition-all shrink-0">
+                        <ArrowUpRight className="w-4 h-4" />
+                      </div>
                     </div>
-                    <div className="h-2.5 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden shadow-inner">
-                      <motion.div initial={{ width: 0 }} animate={{ width: `${xpProgress}%` }} transition={{ type: "spring", stiffness: 60, damping: 12, delay: 0.5 }} className="h-full bg-gradient-to-r from-[#5B21B6] to-indigo-500 rounded-full relative overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay" />
-                      </motion.div>
+                  ))}
+                </div>
+              )}
+
+              {activeFeedTab === "memorization" && (
+                <div className="mt-4 space-y-3">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate("/smart-flashcards")}
+                    className="group rounded-xl bg-[#FAF8F5]/70 dark:bg-stone-900/50 hover:bg-white border border-[#EAE4DC] hover:border-[#D96B43]/50 p-4 sm:px-5 flex items-center justify-between gap-4 transition-all cursor-pointer"
+                  >
+                    <div className="space-y-1.5 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-md bg-[#F5E6DE] text-[#C85A32] font-mono text-[11px] font-semibold">
+                          8 modalités actives
+                        </span>
+                        <span className="text-xs font-mono text-stone-500">
+                          Couverture intégrale (Chapitres I à V)
+                        </span>
+                      </div>
+                      <h3 className="text-sm sm:text-base font-bold text-[#18181B] dark:text-white truncate">
+                        Anémies par déficits enzymatiques (G6PD, PK, P5'N, GPI)
+                      </h3>
+                    </div>
+                    <div className="w-8 h-8 rounded-lg bg-white border border-[#E5DEC9] flex items-center justify-center text-stone-600 group-hover:bg-[#18181B] group-hover:text-white transition-all shrink-0">
+                      <ArrowUpRight className="w-4 h-4" />
                     </div>
                   </div>
                 </div>
+              )}
+            </div>
 
-                <div className="mt-8 pt-6 border-t border-black/5 dark:border-white/5">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#888888]">Chronobiologie</span>
-                    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${timeContext.bg} ${timeContext.border} border text-[9px] font-black uppercase tracking-widest ${timeContext.color} shadow-sm`}>
-                      <TimeIcon className="w-3 h-3" /> {timeContext.text}
+            {/* PROTOCOLE DE RÉVISION DU JOUR */}
+            <div className="rounded-2xl bg-white dark:bg-[#181615] border border-[#EAE4DC] dark:border-stone-800 p-5 sm:px-6">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-[#D96B43]" />
+                  <h3 className="text-sm font-bold text-[#18181B] dark:text-white">
+                    Protocole de révision du jour
+                  </h3>
+                </div>
+                <span className="text-[11px] font-mono text-stone-500 tabular-nums">
+                  {dailyGoals.filter((g) => g.done).length} / {dailyGoals.length} complétés
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                {dailyGoals.map((goal) => (
+                  <div
+                    key={goal.id}
+                    onClick={() => navigate(goal.route)}
+                    className={`p-3 rounded-xl border text-xs flex items-start justify-between gap-2.5 cursor-pointer transition-all ${
+                      goal.done
+                        ? "bg-[#FAF8F5] dark:bg-stone-900/40 border-[#EAE4DC] text-stone-400"
+                        : "bg-white dark:bg-stone-900 border-[#E2DDD5] hover:border-[#D96B43]"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <button
+                        type="button"
+                        onClick={(e) => toggleGoal(goal.id, e)}
+                        className={`mt-0.5 w-4 h-4 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                          goal.done
+                            ? "bg-[#D96B43] text-white"
+                            : "border border-stone-300 hover:border-[#D96B43]"
+                        }`}
+                      >
+                        {goal.done && <Check className="w-3 h-3 stroke-[3]" />}
+                      </button>
+                      <span
+                        className={`font-medium leading-snug ${
+                          goal.done ? "line-through" : "text-[#18181B] dark:text-stone-200"
+                        }`}
+                      >
+                        {goal.label}
+                      </span>
                     </div>
                   </div>
-                  <div className="inline-flex items-center gap-2 border border-black/5 dark:border-white/5 rounded-2xl px-5 py-3 bg-black/[0.02] dark:bg-white/[0.02] text-xs font-bold text-[#111111] dark:text-white w-full">
-                    <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> 
-                    <span className="truncate">{bestTheme?.theme || "Acquisition en cours..."}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ------------------------------------------------------------------
+              COLONNE DROITE (4 COLS) : AVATAR PROFIL + LV, SEUIL XP BOOSTÉ, CARROUSEL DES 100 BADGES & RÉGULARITÉ
+          ------------------------------------------------------------------ */}
+          <aside className="lg:col-span-4 space-y-5">
+            {/* CARTE 1 : PROFIL UTILISATEUR (AVEC PHOTO + BADGE LV.), SEUIL XP REHAUSSÉ & VITRINE DES 100 BADGES */}
+            <div className="rounded-2xl bg-white dark:bg-[#181615] border border-[#EAE4DC] dark:border-stone-800 p-5 sm:p-6 shadow-2xs space-y-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate("/settings")}
+                    title="Modifier la photo de profil et le cursus"
+                    className="relative shrink-0 cursor-pointer group"
+                  >
+                    <div className="w-14 h-14 rounded-2xl bg-[#18181B] text-white border-2 border-[#E2D9C8] dark:border-stone-700 group-hover:border-[#D96B43] flex items-center justify-center font-bold text-base shadow-xs overflow-hidden transition-all">
+                      {profile.avatarUrl || avatarUrl ? (
+                        <img
+                          src={(profile.avatarUrl || avatarUrl) as string}
+                          alt={profile.fullName}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span>{userInitials}</span>
+                      )}
+                    </div>
+                    <span className="absolute -top-1.5 -right-2 px-1.5 py-0.5 rounded-full bg-[#18181B] border border-white/20 text-white font-mono text-[10px] font-bold shadow-2xs">
+                      LV.{level}
+                    </span>
+                    <PlanTierIconBadge
+                      tier={planBadge.tier}
+                      size="xs"
+                      className="absolute -bottom-1 -right-1.5 ring-2 ring-white dark:ring-[#181615]"
+                    />
                   </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#D96B43] truncate">
+                        {profile.fullName}
+                      </span>
+                      <span className="text-[10px] font-mono text-stone-400">
+                        • {profile.studyLevel}
+                      </span>
+                    </div>
+                    <h3 className="text-sm sm:text-base font-bold text-[#18181B] dark:text-white leading-tight truncate mt-0.5">
+                      {rankTitle}
+                    </h3>
+                    <p className="text-[11px] text-stone-500 mt-0.5 truncate">
+                      Prochain palier dans{" "}
+                      <strong className="font-mono text-stone-700 dark:text-stone-300 tabular-nums">
+                        {xpRemainingToLevelUp.toLocaleString("fr-FR")} XP
+                      </strong>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FAF8F5] dark:bg-stone-900 border border-[#EAE4DC] dark:border-stone-800 text-xs font-mono font-bold text-[#18181B] dark:text-stone-200 shrink-0 tabular-nums">
+                  <Flame className="w-3.5 h-3.5 text-[#D96B43]" />
+                  <span>{streakDays} j</span>
                 </div>
               </div>
-            </SpotlightCard>
-          </motion.div>
 
-          {/* ─── BENTO 2: GRAPHIQUE INTELLIGENT (Ressort & Flottaison) ─── */}
-          <motion.div variants={bentoVariants} className="col-span-2 md:col-span-6 md:row-span-1" style={{ translateZ: 10 }}>
-            <SpotlightCard className="h-full">
-              <div className="p-8 md:p-10 h-full flex flex-col justify-between relative">
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#888888] group-hover:text-[#5B21B6] transition-colors">Performance Globale</h3>
-                    <div className="mt-2 flex items-baseline gap-1">
-                      <span className="text-6xl font-light tracking-tighter text-[#111111] dark:text-white"><CountUp end={averageScore} /></span>
-                      <span className="text-2xl text-[#888888] font-bold">%</span>
-                    </div>
+              {/* Jauge d'expérience sur le nouveau seuil rehaussé */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-stone-500">Expérience LV. {level}</span>
+                  <span className="font-bold text-[#18181B] dark:text-white tabular-nums">
+                    {xpInCurrentLevel.toLocaleString("fr-FR")} /{" "}
+                    {xpRequiredForNextLevel.toLocaleString("fr-FR")} XP (
+                    {levelProgressPercent}%)
+                  </span>
+                </div>
+
+                <div className="w-full h-2.5 rounded-full bg-[#F0ECE3] dark:bg-stone-800 overflow-hidden p-0.5">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#C85A32] to-[#E07A5F] transition-all duration-700"
+                    style={{ width: `${levelProgressPercent}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] font-mono pt-0.5 text-stone-500">
+                  <span>XP totaux cumulés</span>
+                  <span className="font-bold text-[#18181B] dark:text-stone-200 tabular-nums">
+                    {totalXp.toLocaleString("fr-FR")} XP
+                  </span>
+                </div>
+              </div>
+
+              {/* MINI-CARROUSEL DES 100 BADGES HÉRALDIQUES INTÉGRÉ À LA CARTE GAMIFICATION */}
+              <div className="pt-4 border-t border-[#F2EDE6] dark:border-stone-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 text-[#D96B43]" />
+                    <span className="text-xs font-bold text-[#18181B] dark:text-white">
+                      Distinctions ({unlockedBadges.length} / 100)
+                    </span>
                   </div>
-                  <div className="h-12 w-12 rounded-[1.25rem] bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-inner">
-                    <TrendingUp className="w-6 h-6 text-emerald-500" />
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBadgeSlideIndex((prev) =>
+                          prev === 0 ? spotlightBadges.length - 1 : prev - 1
+                        )
+                      }
+                      className="w-6 h-6 rounded-lg border border-[#EAE4DC] dark:border-stone-800 flex items-center justify-center text-stone-500 hover:text-black"
+                      title="Badge précédent"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBadgeSlideIndex(
+                          (prev) => (prev + 1) % spotlightBadges.length
+                        )
+                      }
+                      className="w-6 h-6 rounded-lg border border-[#EAE4DC] dark:border-stone-800 flex items-center justify-center text-stone-500 hover:text-black"
+                      title="Badge suivant"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
-                {results.length > 0 ? (
-                  <div className="flex-1 w-full flex items-end justify-between gap-3 relative mt-6 border-b border-black/5 dark:border-white/5 pb-2">
-                    <div className="absolute top-[30%] left-0 w-full border-t-[1.5px] border-dashed border-[#5B21B6]/40 z-0 flex justify-end">
-                      <span className="text-[9px] font-black uppercase tracking-widest text-[#5B21B6] bg-[#FAFAF8] dark:bg-[#111111] px-3 py-1 rounded-full border border-[#5B21B6]/30 -translate-y-3 shadow-md">Cible 70%</span>
-                    </div>
-                    {chartData.map((data, index) => (
-                      <div key={index} className="relative flex-1 flex flex-col justify-end h-full group/bar z-10 cursor-crosshair">
-                         <div className="absolute -top-14 left-1/2 -translate-x-1/2 bg-[#111111] text-white text-[10px] font-black uppercase tracking-widest px-4 py-2.5 rounded-xl opacity-0 group-hover/bar:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap shadow-2xl scale-95 group-hover/bar:scale-100 border border-white/10">
-                           {data.title} • {data.score}%
-                         </div>
-                         <motion.div 
-                           initial={{ height: 0 }} animate={{ height: `${Math.max(data.score, 5)}%` }} 
-                           transition={{ type: "spring", stiffness: 80, damping: 12, delay: index * 0.08 }} // Ressort lourd
-                           className={`w-full rounded-t-xl opacity-80 group-hover/bar:opacity-100 transition-opacity shadow-[inset_0_2px_4px_rgba(255,255,255,0.3)] ${data.score >= 70 ? 'bg-gradient-to-t from-emerald-600 to-[#10B981]' : 'bg-gradient-to-t from-indigo-700 to-[#5B21B6]'}`}
-                         />
+                {/* Carte du badge actif dans le carrousel avec son Blason Héraldique SVG unique */}
+                {spotlightBadges[badgeSlideIndex] && (
+                  <div
+                    onClick={() => setIsBadgeModalOpen(true)}
+                    className="p-3.5 rounded-xl bg-[#FAF8F5] dark:bg-stone-900 border border-[#E6DCD0] dark:border-stone-800 hover:border-[#D96B43] transition-all cursor-pointer space-y-2.5"
+                  >
+                    <div className="flex items-center gap-3">
+                      <AcademicBadgeCrest
+                        badge={spotlightBadges[badgeSlideIndex]}
+                        size="sm"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-bold text-[#18181B] dark:text-white truncate">
+                            {spotlightBadges[badgeSlideIndex].name}
+                          </p>
+                          <span className="text-[10px] font-mono font-bold text-[#D96B43] shrink-0">
+                            +{spotlightBadges[badgeSlideIndex].xpBonus} XP
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-stone-500 truncate mt-0.5">
+                          {spotlightBadges[badgeSlideIndex].requirementText}
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex-1 w-full bg-black/[0.02] rounded-[2rem] border-2 border-dashed border-black/5 flex items-center justify-center text-xs font-bold text-[#888888] uppercase tracking-widest">
-                    Base de données vierge
+                    </div>
+
+                    <div className="w-full h-1.5 rounded-full bg-[#E8E2D9] dark:bg-stone-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          spotlightBadges[badgeSlideIndex].unlocked
+                            ? "bg-emerald-600"
+                            : "bg-[#D96B43]"
+                        }`}
+                        style={{
+                          width: `${spotlightBadges[badgeSlideIndex].progress}%`,
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => setIsBadgeModalOpen(true)}
+                  className="w-full py-2 rounded-xl bg-[#F4EFE6] dark:bg-stone-900 hover:bg-[#EAE1D3] text-xs font-bold text-[#18181B] dark:text-stone-200 flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Award className="w-3.5 h-3.5 text-[#D96B43]" />
+                  <span>Explorer le Panthéon des 100 Badges</span>
+                </button>
               </div>
-            </SpotlightCard>
-          </motion.div>
+            </div>
 
-          {/* ─── BENTO 3: RÉTENTION NEUROLOGIQUE ─── */}
-          <motion.div variants={bentoVariants} className="col-span-1 md:col-span-3 md:row-span-1" style={{ translateZ: 30 }}>
-            <SpotlightCard className="h-full">
-              <div className="p-8 md:p-10 h-full flex flex-col items-center justify-center text-center relative">
-                <Brain className="w-8 h-8 text-[#5B21B6] absolute top-8 right-8 opacity-20 group-hover:opacity-100 group-hover:animate-pulse transition-opacity" />
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#888888] w-full text-left absolute top-8 left-8">Rétention</h3>
-                
-                <div className="relative w-36 h-36 flex items-center justify-center mt-8 group-hover:scale-110 transition-transform duration-700">
-                  <svg className="w-full h-full transform -rotate-90 drop-shadow-2xl" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="42" fill="none" className="stroke-black/5 dark:stroke-white/5" strokeWidth="8" />
-                    <motion.circle 
-                      cx="50" cy="50" r="42" fill="none" className="stroke-[#5B21B6]" strokeWidth="8" strokeLinecap="round" 
-                      initial={{ strokeDasharray: "0 264" }} animate={{ strokeDasharray: `${Math.max(successRate, 5) * 2.64} 264` }} transition={{ duration: 2.5, ease: "easeOut" }}
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-4xl font-light tracking-tighter text-[#111111] dark:text-white"><CountUp end={Math.max(successRate, 62)} /><span className="text-base">%</span></span>
-                  </div>
+            {/* CARTE 2 : CANVAS DE RÉGULARITÉ (28J) */}
+            <div className="rounded-2xl bg-white dark:bg-[#181615] border border-[#EAE4DC] dark:border-stone-800 p-5 sm:p-6 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-[#18181B] dark:text-white">
+                    Canvas de régularité (28j)
+                  </h3>
+                  <p className="text-[11px] text-stone-500 mt-0.5">
+                    {hoveredDay
+                      ? `${hoveredDay.dateLabel} : ${hoveredDay.count} actions validées`
+                      : "Survolez un jour pour inspecter votre volume d'étude"}
+                  </p>
                 </div>
-                <span className="text-[9px] uppercase font-black tracking-[0.2em] text-[#888888] mt-6">Indice Ebbinghaus</span>
+                <span className="text-xs font-mono font-bold text-[#D96B43] tabular-nums">
+                  96% actif
+                </span>
               </div>
-            </SpotlightCard>
-          </motion.div>
 
-          {/* ─── BENTO 4: MISSIONS D'INTÉGRATION HORIZONTALES (Auto-Destructeur) ─── */}
-          <AnimatePresence mode="popLayout">
-            {showMissions && (
-              <motion.div 
-                layout 
-                initial={{ opacity: 0, scale: 0.9, filter: "blur(15px)" }} 
-                animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }} 
-                exit={{ opacity: 0, scale: 0.8, rotateX: -30, filter: "blur(20px)" }} 
-                transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-                className="col-span-2 md:col-span-9 md:row-span-1"
-                style={{ translateZ: 15 }}
-              >
-                <SpotlightCard className="h-full bg-gradient-to-r from-[#111111] to-[#1a1a1a] !border-[#333] shadow-[0_40px_80px_-15px_rgba(0,0,0,0.6)]">
-                  <div className="p-8 md:p-10 flex flex-col lg:flex-row gap-10 items-center h-full relative z-10">
-                    <div className="absolute top-0 right-0 w-80 h-80 bg-[#5B21B6]/30 rounded-full blur-[100px] pointer-events-none" />
-                    
-                    <div className="w-full lg:w-1/4 flex flex-col justify-center border-b lg:border-b-0 lg:border-r border-white/10 pb-8 lg:pb-0 lg:pr-8">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Target className="w-5 h-5 text-[#5B21B6] animate-pulse" />
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#888888]">Académie</h3>
-                      </div>
-                      <h2 className="text-3xl font-serif font-black text-white leading-none mb-6 tracking-tight">Objectifs<br/>Cliniques</h2>
-                      <div className="flex items-end gap-2 mb-3">
-                        <span className="text-5xl font-light text-white leading-none"><CountUp end={Math.round(extendedCompletionPercentage)} />%</span>
-                      </div>
-                      <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden shadow-inner">
-                        <motion.div initial={{ width: 0 }} animate={{ width: `${extendedCompletionPercentage}%` }} transition={{ type: "spring", stiffness: 50, damping: 10 }} className="h-full bg-gradient-to-r from-indigo-500 to-[#5B21B6] shadow-[0_0_15px_rgba(91,33,182,0.9)]" />
-                      </div>
-                    </div>
-
-                    <div className="w-full lg:w-3/4 flex gap-5 overflow-x-auto hide-scrollbar mask-edges-x pb-4 pt-2 px-4">
-                      {extendedMissions.map((mission, idx) => {
-                        const Icon = mission.icon || Target;
-                        return (
-                          <MagneticWrapper key={mission.id} strength={0.1}>
-                            <div onClick={() => !mission.completed && mission.route && navigate(mission.route)}
-                              className={`min-w-[240px] flex-shrink-0 flex flex-col justify-between p-6 rounded-[1.5rem] transition-all duration-500 cursor-pointer border shadow-2xl hover:-translate-y-2 ${mission.completed ? 'bg-black/50 border-white/5 opacity-40 grayscale' : 'bg-white/5 border-white/10 hover:border-[#5B21B6]/50 hover:bg-[#5B21B6]/10'}`}
-                            >
-                              <div className="flex justify-between items-start mb-6">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors shadow-inner ${mission.completed ? 'bg-emerald-500/20 text-emerald-500' : 'bg-[#5B21B6] text-white shadow-[0_0_15px_rgba(91,33,182,0.5)]'}`}>
-                                  {mission.completed ? <CheckCircle2 className="w-6 h-6" /> : <Icon className="w-6 h-6" />}
-                                </div>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-white/40 bg-white/5 px-2.5 py-1.5 rounded-md">M.{idx + 1}</span>
-                              </div>
-                              <p className={`text-sm font-bold leading-relaxed ${mission.completed ? 'text-white/40 line-through' : 'text-white'}`}>{mission.title}</p>
-                            </div>
-                          </MagneticWrapper>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </SpotlightCard>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* ─── BENTO 5: TIMELINE CLINIQUE (Le Vectoriel Dynamique) ─── */}
-          <motion.div layout className={`col-span-2 ${showMissions ? 'md:col-span-12' : 'md:col-span-9'} md:row-span-1`} style={{ translateZ: 10 }}>
-            <SpotlightCard className="h-full">
-              <div className="p-8 md:p-10 h-full flex flex-col justify-between">
-                <div className="flex justify-between items-center mb-8 relative z-10">
-                  <h3 className="text-[11px] font-black uppercase tracking-widest text-[#888888] group-hover:text-[#5B21B6] transition-colors">Frise Chronologique Vectorielle</h3>
-                  <Button variant="ghost" className="text-[10px] font-bold uppercase tracking-widest text-[#111111] dark:text-white hover:text-[#5B21B6] hover:bg-black/5 dark:hover:bg-white/5 h-auto py-2.5 px-5 rounded-full border border-black/5 dark:border-white/5">Archiver <ArrowRight className="w-3.5 h-3.5 ml-2" /></Button>
-                </div>
-
-                <div className="flex-1 flex items-center relative z-10 w-full">
-                  {results.length === 0 ? (
-                    <div className="w-full flex items-center justify-center text-xs font-bold text-[#888888] uppercase tracking-widest bg-black/[0.02] rounded-[2rem] border-2 border-dashed border-black/5 h-32">Aucune activité enregistrée</div>
-                  ) : (
-                    <div className="w-full relative h-full flex items-center">
-                      
-                      {/* Ligne SVG Animée (La vraie connexion neuronale) */}
-                      <svg className="absolute top-1/2 left-0 w-full h-[4px] -translate-y-1/2 overflow-visible z-0 pointer-events-none">
-                        <defs>
-                          <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="rgba(91,33,182,0)" />
-                            <stop offset="20%" stopColor="rgba(91,33,182,0.4)" />
-                            <stop offset="80%" stopColor="rgba(91,33,182,0.4)" />
-                            <stop offset="100%" stopColor="rgba(91,33,182,0)" />
-                          </linearGradient>
-                        </defs>
-                        <motion.line x1="0" y1="2" x2="100%" y2="2" stroke="url(#lineGradient)" strokeWidth="4" strokeLinecap="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2.5, ease: "easeInOut" }} />
-                      </svg>
-                      
-                      <div className="flex gap-6 md:gap-12 overflow-x-auto hide-scrollbar mask-edges-x pb-8 pt-8 px-10 w-full relative z-10">
-                        {results.slice(0, showMissions ? 6 : 5).map((r, i) => (
-                          <motion.div key={i} initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: i*0.15, type: "spring", stiffness: 100, damping: 15 }} className="min-w-[180px] md:min-w-[260px] flex flex-col items-center group/node cursor-pointer">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-[#888888] mb-5">{new Date(r.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</span>
-                            
-                            <div className={`w-12 h-12 rounded-full border-4 border-white dark:border-[#111111] flex items-center justify-center shadow-xl z-10 mb-5 transition-all duration-500 group-hover/node:scale-125 group-hover/node:shadow-[0_0_30px_rgba(91,33,182,0.6)] ${i === 0 ? 'bg-[#5B21B6]' : 'bg-[#D1D5DB] dark:bg-[#333]'}`}>
-                              {i === 0 && <div className="w-3 h-3 bg-white rounded-full animate-ping" />}
-                            </div>
-                            
-                            <div className="bg-[#FAFAF8] dark:bg-[#161614] border border-black/5 dark:border-white/5 p-5 rounded-[1.5rem] w-full text-center group-hover/node:border-[#5B21B6]/40 group-hover/node:shadow-2xl group-hover/node:-translate-y-2 transition-all duration-500">
-                              <div className={`text-3xl font-light mb-2 ${i===0 ? 'text-[#5B21B6] font-medium' : 'text-[#111111] dark:text-white'}`}>{Math.round((r.score / r.total_questions)*100)}%</div>
-                              <p className="text-[10px] font-bold truncate text-[#888888]">{r.courses?.title || "Sujet non défini"}</p>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+              <div className="grid grid-cols-7 gap-2 text-center">
+                {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
+                  <span
+                    key={i}
+                    className="text-[10px] font-mono font-semibold text-stone-400"
+                  >
+                    {d}
+                  </span>
+                ))}
               </div>
-            </SpotlightCard>
-          </motion.div>
 
-          {/* ─── BENTO 6: LE VAISSEAU OLED (Trou Noir Absolu) ─── */}
-          <motion.div layout className="col-span-2 md:col-span-12 md:row-span-2 perspective-[2000px] relative z-50">
-            <motion.div 
-              ref={podRef} onMouseMove={handlePodMouseMove} onMouseLeave={handlePodMouseLeave} style={{ rotateX: podRotateX, rotateY: podRotateY, transformStyle: "preserve-3d" }}
-              className="relative w-full bg-[#000000] rounded-[3rem] md:rounded-[4rem] p-8 md:p-16 shadow-[0_60px_120px_-20px_rgba(0,0,0,1),inset_0_2px_4px_rgba(255,255,255,0.15)] overflow-hidden flex flex-col md:flex-row gap-12 items-center justify-between group/focus transition-all duration-1000 border border-[#222]"
-            >
-              {/* Le Trou Noir Absolu (Lumière interne) */}
-              <motion.div style={{ translateZ: -80 }} className="absolute top-[-30%] right-[-10%] w-[800px] h-[800px] bg-gradient-to-br from-[#5B21B6]/30 to-[#ec4899]/10 rounded-full blur-[150px] pointer-events-none group-hover/focus:from-[#5B21B6]/40 transition-colors duration-1000" />
-              <motion.div style={{ translateZ: -50 }} className="absolute bottom-[-30%] left-[-10%] w-[600px] h-[600px] bg-emerald-500/15 rounded-full blur-[120px] pointer-events-none" />
-              <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.25] mix-blend-overlay pointer-events-none" />
+              <div className="grid grid-cols-7 gap-2">
+                {activityMatrix.map((day, idx) => {
+                  const cellStyle = {
+                    0: "bg-[#F4F1EA] dark:bg-stone-900 border-[#EAE4DC] dark:border-stone-800",
+                    1: "bg-[#F2D6C9] dark:bg-[#D96B43]/30 border-[#E5BFA8]",
+                    2: "bg-[#E29578] dark:bg-[#D96B43]/60 border-[#D96B43]/50",
+                    3: "bg-[#D96B43] border-[#B8532E] text-white",
+                  }[day.intensity];
 
-              {/* Console de Lancement */}
-              <motion.div style={{ translateZ: 50 }} className="relative z-10 w-full md:w-1/2 flex flex-col">
-                <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 border border-white/20 mb-10 self-start backdrop-blur-2xl shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-                  <Activity className="w-4 h-4 text-[#5B21B6] animate-pulse shadow-glow" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.25em] text-white">Zone de Pression Pure</span>
-                </div>
-                
-                <h2 className="text-5xl md:text-8xl font-serif text-white tracking-tight mb-6 leading-[1.05] drop-shadow-2xl">
-                  Isoler <span className="italic text-[#5B21B6] drop-shadow-[0_0_40px_rgba(91,33,182,1)]">l'Esprit.</span>
-                </h2>
-                <p className="text-sm md:text-base font-medium text-white/50 mb-14 max-w-md leading-relaxed hidden sm:block">
-                  Fermez les portes du monde. Activez le minuteur chirurgical et les ondes binaurales à 10Hz pour forcer la neuro-plasticité de votre cerveau.
-                </p>
-
-                {/* Boutons d'Armement (Magnétiques) */}
-                <div className="flex flex-wrap gap-5">
-                  <MagneticWrapper strength={0.3}>
-                    <button onClick={() => { uiAudio.playSoftClick(); setIsTimerRunning(!isTimerRunning); }}
-                      className={`h-16 md:h-20 px-10 md:px-14 rounded-[2.5rem] flex items-center justify-center gap-4 transition-all duration-300 text-xs md:text-sm font-black uppercase tracking-widest shadow-2xl ${
-                        isTimerRunning ? "bg-amber-500 text-[#111111] shadow-[0_0_50px_rgba(245,158,11,0.5)]" : "bg-white text-[#111111] hover:bg-[#5B21B6] hover:text-white hover:shadow-[0_0_60px_rgba(91,33,182,0.8)]"
+                  return (
+                    <div
+                      key={idx}
+                      onMouseEnter={() => setHoveredDay(day)}
+                      onMouseLeave={() => setHoveredDay(null)}
+                      className={`h-8 rounded-lg border transition-all duration-150 flex items-center justify-center text-[10px] font-mono cursor-pointer hover:scale-110 ${cellStyle} ${
+                        day.isToday ? "ring-2 ring-[#18181B] dark:ring-white" : ""
                       }`}
                     >
-                      {isTimerRunning ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
-                      {isTimerRunning ? "Suspendre" : "Initier Focus"}
-                    </button>
-                  </MagneticWrapper>
+                      {day.isToday && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
 
-                  <MagneticWrapper strength={0.2}>
-                    <button onClick={() => {
-                        uiAudio.playSoftClick();
-                        if (isBinauralPlaying) { uiAudio.stopBinauralBeats(); setIsBinauralPlaying(false); toast.info("🔇 Ondes désactivées."); } 
-                        else { uiAudio.startBinauralBeats(); setIsBinauralPlaying(true); toast.success("🎧 Ondes Alpha 10Hz actives."); }
-                      }}
-                      className={`h-16 md:h-20 px-8 md:px-12 rounded-[2.5rem] flex items-center justify-center gap-4 transition-all duration-300 text-xs md:text-sm font-black uppercase tracking-widest border-2 ${
-                        isBinauralPlaying ? "bg-[#5B21B6]/30 border-[#5B21B6]/60 text-white shadow-[0_0_50px_rgba(91,33,182,0.6)]" : "bg-transparent border-white/20 text-white hover:bg-white/10"
-                      }`}
-                    >
-                      {isBinauralPlaying ? <AudioEqualizer /> : <Volume2 className="h-6 w-6 md:h-7 md:w-7" />}
-                      <span className="hidden sm:inline">{isBinauralPlaying ? "Binaural Actif" : "Binaural"}</span>
-                    </button>
-                  </MagneticWrapper>
-                  
-                  <MagneticWrapper strength={0.15}>
-                    <button onClick={() => { uiAudio.playSoftClick(); setFocusTimeLeft(25 * 60); setIsTimerRunning(false); }} className="h-16 w-16 md:h-20 md:w-20 rounded-[2.5rem] bg-white/5 border-2 border-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-all shrink-0">
-                      <RotateCcw className="h-6 w-6 md:h-7 md:w-7" />
-                    </button>
-                  </MagneticWrapper>
-                </div>
-              </motion.div>
-
-              {/* DROITE : Hologramme Minuteur (Ultra-Lévitation) */}
-              <motion.div style={{ translateZ: 100 }} className="relative z-10 flex justify-center w-full md:w-1/2 mt-16 md:mt-0">
-                <div className="relative w-80 h-80 md:w-[450px] md:h-[450px] flex items-center justify-center drop-shadow-[0_40px_100px_rgba(91,33,182,0.8)] pointer-events-none">
-                  {isBinauralPlaying && (
-                    <>
-                      <div className="absolute inset-2 rounded-full border-2 border-[#5B21B6]/50 animate-[ping_3s_infinite]" />
-                      <div className="absolute inset-[-25px] rounded-full border border-[#5B21B6]/30 animate-[ping_4s_infinite_1s]" />
-                    </>
-                  )}
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="46" fill="none" className="stroke-white/10" strokeWidth="1" />
-                    <motion.circle 
-                      cx="50" cy="50" r="46" fill="none" className="stroke-[#5B21B6]" strokeWidth="3" strokeLinecap="round" 
-                      initial={{ strokeDasharray: "0 289" }} animate={{ strokeDasharray: `${(focusTimeLeft / (25 * 60)) * 289} 289` }} transition={{ duration: 0.5, ease: "linear" }}
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 rounded-full backdrop-blur-xl border border-white/10 shadow-[inset_0_0_50px_rgba(91,33,182,0.3)]">
-                    <span className="text-7xl md:text-9xl font-light tracking-tighter text-white font-mono drop-shadow-[0_0_20px_rgba(255,255,255,0.5)]">
-                      {Math.floor(focusTimeLeft / 60)}:{(focusTimeLeft % 60).toString().padStart(2, '0')}
-                    </span>
-                    <span className="text-[10px] md:text-xs uppercase font-black text-[#5B21B6] tracking-[0.6em] mt-4 drop-shadow-xl">
-                      {isTimerRunning ? "Immersion" : "En Attente"}
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            </motion.div>
-          </motion.div>
-
-        </motion.div>
-      </motion.div>
+      {/* Modale complète des 100 Badges */}
+      <BadgeDisplayModal
+        isOpen={isBadgeModalOpen}
+        onClose={() => setIsBadgeModalOpen(false)}
+        badges={badges}
+        totalXp={totalXp}
+        level={level}
+        rankTitle={rankTitle}
+      />
     </div>
   );
 };

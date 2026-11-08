@@ -62,6 +62,7 @@ export const useOnboarding = () => {
 
       const savedState = localStorage.getItem(`${STORAGE_KEY}_${user.id}`);
       let parsedState: Partial<OnboardingState> = {};
+      // eslint-disable-next-line no-empty
       if (savedState) { try { parsedState = JSON.parse(savedState); } catch {} }
 
       const completedSteps: string[] = [...(parsedState.completedSteps || [])];

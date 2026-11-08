@@ -32,7 +32,7 @@ const DashboardShell: React.FC<DashboardShellProps> = ({ children, className = "
       
       {/* ─── FILIGRANES SUBTILS ─── */}
       <motion.div initial={{ opacity: 0, rotate: 10 }} animate={{ opacity: 0.1, rotate: 5 }} className="absolute top-[10%] left-[5%] text-6xl font-serif italic font-bold text-white select-none pointer-events-none z-0 mix-blend-overlay">
-        Hippocampus.
+        DawJang.
         <HighlightCircle className="absolute -inset-6 text-white/30 w-[150%] h-[150%]" />
       </motion.div>
       <DrawnArrow className="absolute bottom-[20%] right-[10%] w-32 h-32 text-white/10 -rotate-12 pointer-events-none z-0 mix-blend-overlay" />

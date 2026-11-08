@@ -11,13 +11,16 @@ export interface NormalizedDuelQuestion {
   explanation?: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function normalizeDuelQuestion(raw: any): NormalizedDuelQuestion | null {
   if (!raw || typeof raw !== "object") return null;
 
   const question = String(raw.question ?? raw.prompt ?? "").trim();
   const options: string[] = Array.isArray(raw.options)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? raw.options.map((o: any) => String(o))
     : Array.isArray(raw.choices)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? raw.choices.map((o: any) => String(o))
     : [];
 

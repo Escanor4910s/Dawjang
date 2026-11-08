@@ -100,6 +100,7 @@ export function useAdaptiveDifficulty() {
 
       for (const r of results) {
         const cid = r.course_id;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const title = (r as any).courses?.title || "Sans titre";
         if (!courseMap.has(cid)) {
           courseMap.set(cid, { title, scores: [], totalCorrect: 0, totalQuestions: 0, failedQuestions: new Map() });
@@ -111,6 +112,7 @@ export function useAdaptiveDifficulty() {
         entry.totalQuestions += r.total_questions;
 
         // Track weak questions
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const answers = r.answers as any[];
         if (Array.isArray(answers)) {
           for (const a of answers) {

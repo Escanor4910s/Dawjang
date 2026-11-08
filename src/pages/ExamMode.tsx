@@ -16,6 +16,7 @@ import { toast as sonnerToast } from "sonner";
 import { safeText, safeTextArray } from "@/lib/textUtils";
 import { useGamificationContext } from "@/components/gamification/GamificationProvider";
 import { shuffleQuiz } from "@/lib/quizShuffle";
+import { getSavedStudentProfile } from "@/pages/Settings";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Question {
@@ -63,27 +64,36 @@ const ExamMode = () => {
         return;
       }
 
+       
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const raw = (data.questions as any[]).map((q: any, i: number) => ({
         id: q.id || String(i),
         question: safeText(q.question, `Question ${i + 1}`),
         choices: safeTextArray(q.choices || [], ""),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         correct: Array.isArray(q.correct) ? q.correct.map((c: any) => typeof c === 'number' ? c : parseInt(String(c), 10) || 0) : [0],
         explanation: safeText(q.explanation, ""),
+        lockOrder: q.lockOrder,
+        lockChoices: q.lockChoices,
       }));
 
       // Fisher-Yates shuffle questions AND choices
-      const qs = shuffleQuiz(raw);
+      const isExamCloning = data.question_type === "clonage_examen" || data.metadata?.mode === "exam_clone";
+      const qs = shuffleQuiz(raw, isExamCloning);
       setQuestions(qs);
       setSessionTitle(data.title);
       setActualCourseId(data.course_id);
       // 2 minutes per question
-      const total = qs.length * 120;
+      const userProfile = getSavedStudentProfile();
+      const secondsPerQuestion = userProfile.defaultDuelTimer || 60;
+      const total = qs.length * secondsPerQuestion;
       setTimeLeft(total);
       setTotalTime(total);
       setTimePerQuestion(new Array(qs.length).fill(0));
       setLoading(false);
     };
     load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
   // Timer
@@ -100,6 +110,7 @@ const ExamMode = () => {
       });
     }, 1000);
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, showResults, isPaused]);
 
   // Track time per question
@@ -179,6 +190,7 @@ const ExamMode = () => {
           score: correct, total_questions: total, answers: answersData,
         });
 
+        // eslint-disable-next-line no-empty
         try { await recordQuizCompletion(correct, total); } catch {}
       }
     } catch (e) { console.error(e); }

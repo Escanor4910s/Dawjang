@@ -8,11 +8,15 @@ export function safeText(value: unknown, fallback: string = ""): string {
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   if (typeof value === 'object' && value !== null) {
     // Handle {type: "text", text: "..."} format from AI APIs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if ('text' in value && typeof (value as any).text === 'string') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return (value as any).text;
     }
     // Handle nested text object
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if ('text' in value && typeof (value as any).text === 'object') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return safeText((value as any).text, fallback);
     }
     // Fallback to JSON serialization

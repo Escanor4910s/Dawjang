@@ -1,0 +1,345 @@
+Anémies par déficits
+  enzymatiques
+
+       Pr Moussa Seck
+        FMPO/UCAD
+                        Objectifs
+1- Définir les anémies par déficits enzymatiques
+
+2- Décrire les signes cliniques du déficit en G6PD
+
+3 Citer les facteurs déclenchant l’hémolyse dans le déficit en
+  G6PD
+
+4- Décrire les signes cliniques du déficit en PK
+
+5- Enumérer les indications thérapeutiques des anémies par
+  déficit en G6PD ou en PK
+                      Plan
+I- Généralités
+
+II- Déficit en G6PD
+
+III- Déficit en Pyruvate kinase
+
+IV- Autres déficits enzymatiques
+
+V- Traitement
+
+Conclusion
+                I- Généralités
+ Définition :
+• Raccourcissement de la durée de vie des GR à
+  l’origine d’une diminution de la masse
+  hémoglobinique circulante secondaire à un déficit
+  congénital en enzymes du métabolisme
+  érythrocytaire → anémie hémolytique congénitale
+Intérêt:
+ Epidémiologie :
+• Fréquence :
+- Plusieurs dizaines de millions dans le monde
+- Paludisme: zones d’endémie paludisme (résistance de la
+  tare au paludisme)
+• Répartition géographique : Afrique, Pourtour
+  méditerranéen, moyen orient, extrême orient
+ Diagnostic : 2 formes cliniques
+• Déficit en G6PD (1956 race noire)
+• Déficit en Pyruvate kinase (1962 : Tanaka et coll)
+ Pronostic :
+• Court terme : Hémolyse aigue (pronostic vital en jeu)
+• Long terme : Suivi à vie
+Rappel (Métabolisme érythrocytaire)
+Rappel (Métabolisme érythrocytaire)
+
+                          Glycolyse
+
+         Anaérobie                      Aérobie
+(Voie Embden-Mayerhoff)               (Shunt des pentoses)
+
+
+
+        PK                                    G6PD
+   2,3 DPG
+                NADH                           NADPH
+
+        ATP (90%)                          ATP (10%)
+               II. Déficits en G6PD
+• 2 formes d’atteintes :
+- Une forme évoluant par crises hémolytiques
+- Une forme à hémolyse chronique (pourtour du bassin
+  méditerranéen) → splénomégalie dès l’enfance
+• Au cours des crises :
+- Stigmates d’hémolyse
+- Corps de Heinz
+- Tests spécialisés d’hémolyse → Hyperhémolyse
+• A distance des crises :
+- Stigmates d’hémolyse en cas de forme chronique
+- Corps de Heinz (en cas d’adjonction d’agents oxydants)
+ Rôle de la G6PD
+
+                     G6PD
+
+                    NADPH
+                            Cofacteur
+              Glutathion réductase
+                            Régénération
+                Glutathion réduit
+                            Détoxification GR
+                    Peroxydes (agents oxydants)
+Pathogénie (G6PD)
+                     ASP376AA
+• G6PD (B+)                               G6PD (A+)
+ (enzyme de référence)                (variante sujet noir)
+                                     (activité enzymatique
+                                       normale)
+
+                         VAL202MET
+• G6PD (A+)                                G6PD (A-)
+                                           (race noire,
+                                        Activité:10 à 20%)
+
+
+• G6PD (B+)                                 G6PD (B-)
+                                          (Race blanche,
+                                         Activité:0 à 10%)
+Pathogénie (G6PD)
+                            G6PD (B+)
+                         (enzyme de référence)
+ ASP376AA
+
+       G6PD (A+)                                 G6PD (B-)
+    (Afrique noire)                              (race blanche)
+    (Activité normale)
+
+AL202MET
+
+     G6PD (A-)
+     (Activité:10-20%)
+     Physiopathologie
+                                       G6PD
+
+                           Accumulation de toxiques GR
+                                              Précipitation
+                                 Corps de Heinz
+Facteurs déclenchants
+(médicaments,
+                                            Insertion membrane du GR
+infections, fèves)           Globules rouges (rigides)
+                                                       Séquestration
+           Activation du
+                                                       dans la rate
+           complément
+                   Hémolyse IV                 Hémolyse EV
+
+            Hémolyse aigue                    Hémolyse chronique
+                 Déficit en G6PD
+1- Forme aigue
+A. Circonstances de découverte
+ Début brutal :
+• 1 à 3 jours après la prise d’un médicament
+• souvent un antipaludéen (primaquine++)
+ Signes fonctionnels :
+• Syndrome anémique
+• Douleur lombaire ou abdominale
+ Complications :
+• Troubles de la conscience
+• Etat de choc
+• B. Phase d’état
+• Muqueuses pales, sub ictère
+• Fièvre (˃ 38°5)
+• TA normale parfois hypoTA
+• FC ˃100 bat/min (tachycardie régulière parfois associée à
+  des bruits de Gallop)
+• FR ˃20 cycles/min (Polypnée superﬁcielle)
+• Diurèse : parfois oligo-anurie, coloration rouge porto des
+  urines)
+• Conscience : confusion, obnubilation
+• Sueurs profuses
+• Risque : CIVD, Insuffisance rénale aigue
+C- Examens paracliniques
+ Hémogramme :
+• Anémie profonde (Hb˂6 g/dl), normochrome, normocytaire
+
+• Taux de réticulocytes   (˃120 G/l)
+
+• Présence de corps de Heinz (bosse au niveau de la membrane
+  du GR) : frottis sanguin ou des réticulocytes
+
+• Taux de plaquettes : souvent normal
+• Globules blancs : parfois hyperleucocytose avec une myélémie
+  discrète
+C. Examens paracliniques
+ Biochimie (Stigmates d’hémolyse)
+• Haptoglobine abaissée
+• Bilirubine libre
+• LDH
+• Fer sérique augmenté (parfois normal)
+• C. Examens paracliniques
+ Dosage de l’activité du G6PD
+Dosage spectrophotométrique en UV
+• Méthode diagnostique de certitude (interprétation en
+  fonction du taux des réticulocytes)
+• Activité :
+- 10 à 20% (forme sévère)
+- 75 à 85% (déficit partiel)
+ Spot test de Beutler :
+• basé sur la fluorescence UV du NADPH, Test non quantitatif
+
+ Biologie moléculaire :
+• Variant G6PD (A-) : mutation ponctuelle sur G6PD (A+) par
+  remplacement de la valine en position 202 par la
+  méthionine
+                        • A retenir :
+→ Déﬁcit en G6PD (forme aigue):
+
+Sur le plan clinique:
+• Début brutal
+• Facteur déclenchant : antipaludéen
+• Signes : Asthénie, douleur abdominale, état de choc, urines
+  foncées
+
+ Sur le plan paraclinique :
+• Anémie profonde normochrome normocytaire régénérative
+• Corps de Heinz
+• Baisse de l’activité enzymatique (spectrophotométrique)
+• Déficit de type G6PD (A-) ou G6PD (B-)
+                2- Formes chroniques
+Forme latente :
+• Fréquente
+• Découverte souvent fortuite ou au cours d’enquête familiale
+• Absence de signes cliniques, ni hématologique
+Anémie hémolytique chronique:
+• Manifestation rare du déficit en G6PD
+• Déficit en G6PD (B-)
+• Triade de Chauffard
+• Evolution : Accentuation de l’hémolyse au cours de maladies fébriles ou
+  lors de prise de certains médicaments
+Ictère hémolytique néonatal:
+• Fréquent dans tous les types de déficit
+• Anémie hémolytique aigue néonatale sans incompatibilité materno-
+  fœtale Rh ou ABO
+• Risque d’ictère nucléaire
+              Déficit en G6PD
+Classification OMS des variants du déficit en G6PD
+    III. Déficit en pyruvate kinase
+ Définition
+• Anémie hémolytique chronique secondaire à un
+  déficit en pyruvate kinase
+Physiopathologie
+                    Pyruvate kinase
+
+                            ATP
+
+
+                 Altération des fonctions
+                     membranaires
+
+
+ Modifications       Perte des lipides        déformabilité
+ des échanges                               du GR
+ ioniques
+
+
+                 Séquestration splénique
+
+                    Hémolyse chronique
+      III. Déficit en pyruvate kinase
+CDD :
+• Fortuite :
+- Hémogramme systématique
+- Bilan d’une splénomégalie
+- Enquête familiale
+• Complications :
+- Crise de déglobulisation (anémie aigue)
+- Complications chroniques : ulcère de jambe,
+  lithiase biliaire…
+       III- Déficit en pyruvate kinase
+ Clinique : Triade de Chauffard
+
+ Paraclinique:
+• Anémie variable NN parfois macrocytaire régénérative
+• FS : Anisopoikylocytose
+• Auto hémolyse des GR après 48h à 37°C : et corrigé par l’ATP
+  et non par le glucose
+• Activité enzymatique : (˂ 30%)
+
+ Evolution :
+• Crises de déglobulisation (déclenchées par infections)
+• Complications chroniques: lithiase biliaire, ulcère de jambe,
+  déformations osseuses
+      IV. Autres déficits enzymatiques
+ Déficit en pyrimidine 5’ nucléotidase
+• Déficit fréquent, se révèle chez l’enfant et adolescent
+
+• Clinique :
+- Anémie hémolytique chronique permanente (Triade de Chauffard)
+- Complications : lithiase vésiculaire, hémosidérose tardive, crises
+  érythroblastopéniques
+
+• Paraclinique :
+- Anémie modérée (8 à 10 g/dl)
+- Auto hémolyse à l’étuve corrigée par le glucose
+- Frottis sanguin: Hématies à ponctuations basophiles
+- Activité : ≤ 10%
+   IV. Autres déficits enzymatiques
+ Déficit en phospho-hexose isomérase (ou GPI : glucose
+  phosphate isomérase)
+• Relativement fréquent
+
+• Clinique :
+- Hémolyse chronique
+- Splénomégalie constante
+
+• Paraclinique :
+- Anémie variable, macrocytaire
+- Frottis sanguin : microsphérocytes, hématies à spicules
+- Activité enzymatique : 10 – 30%
+                  V. Traitement
+ Buts
+• Eviter les facteurs déclenchants
+• Prévenir les complications
+• Améliorer la qualité de vie des patients
+
+ Moyens
+Mesures générales
+• Education du patient et/ou de son entourage
+• Etablir une liste des médicaments à éviter (à remettre
+  au patient)
+                 V. Traitement
+Moyens
+ Moyens médicaux:
+• Hospitalisation
+• Acide folique 5 mg: 5 à 10 mg/j
+• Transfusion sanguine (Concentrés de globules rouges
+  compatibilisés)
+• Exsanguinotransfusion
+
+ Moyens chirurgicaux:
+• Splénectomie
+                  V. Traitement
+Indications
+• Hémolyse aigue : G6PD (A-), G6PD (B-):
+- Hospitalisation
+- Arrêt du facteur déclenchant
+- Transfusion de CGR
+- Réanimation hydro-électrolytique
+
+• Hémolyse chronique : PK, autres
+- Acfol
+- Splénectomie
+
+• Anémie hémolytique néonatale :
+- Exsanguinotransfusion
+                     Conclusion
+• Affections rares
+
+• Deux tableaux cliniques : Anémie hémolytique
+  chronique et Anémie hémolytique aigue
+
+• Evolution marquée par le risque de survenue de crise
+  hémolytique aigue pouvant mettre en jeu le pronostic
+  vital
+
+• Leur prise en charge nécessite un suivi régulier avec
+  une bonne connaissance des facteurs déclenchants
+

@@ -47,6 +47,7 @@
     "@react-pdf/renderer": "^4.5.1",
     "@supabase/supabase-js": "^2.56.1",
     "@tanstack/react-query": "^5.83.0",
+    "@types/showdown": "^2.0.6",
     "@xyflow/react": "^12.10.2",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
@@ -72,9 +73,15 @@
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.61.1",
     "react-i18next": "^16.5.4",
+    "react-markdown": "^10.1.0",
+    "react-mde": "^11.5.0",
     "react-resizable-panels": "^2.1.9",
     "react-router-dom": "^6.30.1",
     "recharts": "^2.15.4",
+    "remark": "^15.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-html": "^16.0.1",
+    "showdown": "^2.1.0",
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
@@ -102,5 +109,8 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.19"
+  },
+  "optionalDependencies": {
+    "puppeteer": "^25.16.0"
   }
 }

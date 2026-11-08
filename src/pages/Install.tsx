@@ -103,7 +103,7 @@ const Install = () => {
             📱 Application Mobile
           </Badge>
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            Installez Hippocampus
+            Installez DawJang
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             Révisez n'importe où, même sans connexion internet. 
@@ -127,7 +127,7 @@ const Install = () => {
                 <div className="text-left">
                   <h3 className="text-xl font-semibold text-emerald-500">App installée !</h3>
                   <p className="text-muted-foreground">
-                    Hippocampus est disponible sur votre écran d'accueil
+                    DawJang est disponible sur votre écran d'accueil
                   </p>
                 </div>
               </CardContent>
@@ -196,7 +196,7 @@ const Install = () => {
                   </div>
                   <h3 className="text-2xl font-bold mb-2">Prêt à installer</h3>
                   <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                    Installez Hippocampus sur votre appareil pour un accès rapide et le mode hors-ligne
+                    Installez DawJang sur votre appareil pour un accès rapide et le mode hors-ligne
                   </p>
                   <Button 
                     size="lg" 

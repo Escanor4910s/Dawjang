@@ -18,7 +18,7 @@ export const AnimatedBanner = ({ title, subtitle, rightWidgets }: AnimatedBanner
       <div className="absolute inset-0 bg-thermal-wave opacity-95"></div>
       
       {/* Texture par-dessus pour l'effet premium */}
-      <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20 mix-blend-overlay pointer-events-none"></div>
+      <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"></div>
 
       {/* Contenu de la banderole */}
       <div className="relative z-10 px-8 py-10 md:px-12 md:py-12 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">

@@ -1,0 +1,417 @@
+/* src/styles/editorBureautique.css */
+
+/* ============================================================================
+   TYPOGRAPHIE ÉDITORIALE MÉDICALE HAUTE PRÉCISION (CLAUDE & THEME NATIF)
+============================================================================ */
+
+.synthesis-document-sheet {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.7;
+  color: hsl(var(--foreground));
+  background: hsl(var(--card));
+  padding: 2.5rem 3rem;
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.dark .synthesis-document-sheet {
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 640px) {
+  .synthesis-document-sheet {
+    padding: 1.5rem 1.25rem;
+  }
+}
+
+/* ============================================================================
+   CONTENEUR DU RENDU MARKDOWN (.summary-prose-content)
+============================================================================ */
+
+.summary-prose-content {
+  color: hsl(var(--foreground));
+  font-size: 0.9375rem; /* 15px */
+  line-height: 1.75;
+}
+
+/* Titres d'objectifs (H2) */
+.summary-prose-content h2,
+.doc-h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  margin-top: 2rem;
+  margin-bottom: 0.85rem;
+  padding: 0.65rem 1rem;
+  background-color: hsl(var(--primary) / 0.08);
+  border-left: 4px solid hsl(var(--primary));
+  border-radius: 0 0.65rem 0.65rem 0;
+  letter-spacing: -0.01em;
+}
+
+/* Sous-titres (H3) */
+.summary-prose-content h3,
+.doc-h3 {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: hsl(var(--primary));
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Paragraphes */
+.summary-prose-content p {
+  margin-bottom: 0.85rem;
+  color: hsl(var(--foreground) / 0.92);
+}
+
+/* Listes */
+.summary-prose-content ul {
+  list-style-type: disc;
+  padding-left: 1.35rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.summary-prose-content ol {
+  list-style-type: decimal;
+  padding-left: 1.35rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.summary-prose-content li {
+  margin-bottom: 0.35rem;
+  line-height: 1.65;
+}
+
+.summary-prose-content strong {
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.summary-prose-content em {
+  font-style: italic;
+  color: hsl(var(--foreground) / 0.9);
+}
+
+/* Séparateurs */
+.summary-prose-content hr {
+  margin: 1.75rem 0;
+  border: 0;
+  border-top: 1px solid hsl(var(--border));
+}
+
+/* Citations & Notes */
+.summary-prose-content blockquote {
+  margin: 1rem 0;
+  padding: 0.6rem 1rem;
+  border-left: 3px solid hsl(var(--primary) / 0.4);
+  background: hsl(var(--muted) / 0.4);
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-style: italic;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ============================================================================
+   TABLEAUX MÉDICAUX COMPARATIFS
+============================================================================ */
+
+.summary-prose-content table,
+.doc-table {
+  width: 100%;
+  margin: 1.25rem 0;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+
+.summary-prose-content th {
+  background-color: hsl(var(--muted) / 0.8);
+  color: hsl(var(--foreground));
+  font-weight: 700;
+  text-align: left;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid hsl(var(--border));
+  border-right: 1px solid hsl(var(--border));
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.summary-prose-content th:last-child {
+  border-right: none;
+}
+
+.summary-prose-content td {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid hsl(var(--border));
+  border-right: 1px solid hsl(var(--border));
+  vertical-align: top;
+  color: hsl(var(--foreground) / 0.9);
+}
+
+.summary-prose-content td:last-child {
+  border-right: none;
+}
+
+.summary-prose-content tr:last-child td {
+  border-bottom: none;
+}
+
+.summary-prose-content tr:hover td {
+  background-color: hsl(var(--muted) / 0.3);
+}
+
+/* ============================================================================
+   ENCADRÉS SPÉCIAUX (RÈGLES D'OR, PIÈGES, ACTIONS)
+============================================================================ */
+
+.doc-callout-gold {
+  margin: 0.65rem 0;
+  padding: 0.65rem 0.85rem;
+  background-color: hsl(var(--primary) / 0.1);
+  border: 1px solid hsl(var(--primary) / 0.25);
+  border-radius: 0.65rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.doc-callout-warning {
+  margin: 0.65rem 0;
+  padding: 0.65rem 0.85rem;
+  background-color: hsl(var(--destructive) / 0.1);
+  border: 1px solid hsl(var(--destructive) / 0.25);
+  border-radius: 0.65rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: hsl(var(--destructive));
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.doc-callout-action {
+  margin: 0.5rem 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid #f59e0b;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #d97706;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.dark .doc-callout-action {
+  color: #fbbf24;
+}
+
+/* Marqueurs sémantiques au clic */
+.hl-primary {
+  color: hsl(var(--primary));
+  background-color: hsl(var(--primary) / 0.15);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  font-weight: 600;
+}
+
+.hl-destructive {
+  color: hsl(var(--destructive));
+  background-color: hsl(var(--destructive) / 0.15);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  font-weight: 700;
+  border: 1px solid hsl(var(--destructive) / 0.25);
+}
+
+.hl-emerald {
+  color: #059669;
+  background-color: rgba(16, 185, 129, 0.15);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  font-weight: 600;
+}
+
+.dark .hl-emerald {
+  color: #34d399;
+  background-color: rgba(5, 150, 105, 0.25);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.hl-amber {
+  color: #d97706;
+  background-color: rgba(245, 158, 11, 0.15);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  font-weight: 600;
+}
+
+.dark .hl-amber {
+  color: #fbbf24;
+  background-color: rgba(180, 83, 9, 0.25);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Compatibilité classe .prose */
+.prose li {
+  margin: 0.25rem 0;
+  padding-left: 0.5rem;
+  list-style-type: disc;
+}
+
+.prose strong {
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.prose em {
+  font-style: italic;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ============================================================================
+   REACT-MDE THEME INTEGRATION (CLAUDE & THEME NATIF)
+============================================================================ */
+.react-mde {
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.75rem !important;
+  overflow: hidden !important;
+  background-color: hsl(var(--card)) !important;
+}
+
+.react-mde .mde-header {
+  background-color: hsl(var(--muted) / 0.5) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+}
+
+.react-mde .mde-header .mde-tabs button {
+  color: hsl(var(--muted-foreground)) !important;
+  border-radius: 0.5rem 0.5rem 0 0 !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+}
+
+.react-mde .mde-header .mde-tabs button.selected {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+.react-mde .mde-header ul.mde-header-group li.mde-header-item button {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.react-mde .mde-header ul.mde-header-group li.mde-header-item button:hover {
+  color: hsl(var(--foreground)) !important;
+  background-color: hsl(var(--muted)) !important;
+}
+
+.react-mde textarea.mde-text {
+  background-color: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 0.875rem !important;
+  line-height: 1.65 !important;
+  padding: 1rem !important;
+}
+
+.react-mde .mde-preview {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  padding: 1.5rem !important;
+}
+
+/* ============================================================================
+   PAGINATION, CONTENEUR A4 & ANTI-COUPURE DE TEXTE (PAGE BREAKS)
+============================================================================ */
+
+.container-page {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 2.5rem 3rem;
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 1rem;
+  box-shadow: 0 4px 15px -2px rgba(0, 0, 0, 0.05);
+}
+
+.doctrine-prose-content {
+  color: hsl(var(--foreground));
+  line-height: 1.75;
+}
+
+/* ============================================================================
+   SECTIONS DOCTRINE ARVA (HAUTE FIDÉLITÉ)
+============================================================================ */
+
+.arva-section {
+  margin-bottom: 2rem;
+  padding: 1.25rem 1.5rem;
+  border-left: 6px solid #2563eb;
+  background-color: hsl(var(--muted) / 0.35);
+  border-radius: 0 0.75rem 0.75rem 0;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.arva-section.active-recall {
+  border-left-color: #4f46e5;
+  background-color: #eef2ff;
+}
+.dark .arva-section.active-recall {
+  background-color: rgba(79, 70, 229, 0.12);
+}
+
+.arva-section.scripts-cliniques {
+  border-left-color: #0284c7;
+  background-color: #f0f9ff;
+}
+.dark .arva-section.scripts-cliniques {
+  background-color: rgba(2, 132, 199, 0.12);
+}
+
+.arva-section.vignette {
+  border-left-color: #f59e0b;
+  background-color: #fffbeb;
+}
+.dark .arva-section.vignette {
+  background-color: rgba(245, 158, 11, 0.12);
+}
+
+.arva-section.visas {
+  border-left-color: #059669;
+  background-color: #ecfdf5;
+}
+.dark .arva-section.visas {
+  background-color: rgba(5, 150, 105, 0.12);
+}
+
+@media print {
+  .doc-h2, p, ul, ol, blockquote, .note, table, thead, tbody, tr, th, td, .arva-section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  
+  .container-page {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    page-break-after: always;
+  }
+}
+
+
+

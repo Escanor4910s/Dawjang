@@ -1,36 +1,36 @@
-import { motion } from "framer-motion";
-import { Sun, Moon } from "lucide-react";
+import React from "react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
+import { cn } from "@/lib/utils";
 
-export const ThemeToggle = () => {
+export function ThemeToggle({ className }: { className?: string }) {
   const { theme, setTheme } = useTheme();
 
-  // Resolve the effective dark state, accounting for "system" mode
-  const isDark = theme === "dark" || 
-    (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const isDark =
+    theme === "dark" ||
+    (theme === "system" &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   const toggleTheme = () => {
     setTheme(isDark ? "light" : "dark");
   };
 
   return (
-    <button 
+    <button
+      type="button"
       onClick={toggleTheme}
-      className="relative w-14 h-8 rounded-full bg-black/50 border border-white/10 flex items-center px-1 transition-all outline-none"
-      aria-label="Changer de thème"
+      aria-label="Basculer le thème"
+      title="Basculer le thème (Clair / Sombre)"
+      className={cn(
+        "group relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-transparent hover:border-[#D5C9B3]/80 bg-transparent hover:bg-[#D5C9B3] dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 hover:text-[#D96B43] transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        className
+      )}
     >
-      <div className="absolute inset-0 flex justify-between items-center px-2 pointer-events-none opacity-40">
-        <Sun className="h-3.5 w-3.5 text-white" />
-        <Moon className="h-3.5 w-3.5 text-white" />
-      </div>
-      <motion.div 
-        layout 
-        className="h-6 w-6 rounded-full bg-white shadow-md z-10 flex items-center justify-center"
-        animate={{ x: isDark ? 24 : 0 }}
-        transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      >
-        {isDark ? <Moon className="h-3 w-3 text-[#111111]" /> : <Sun className="h-3 w-3 text-[#111111]" />}
-      </motion.div>
+      <Sun className="h-3.5 w-3.5 rotate-0 scale-100 transition-all duration-200 dark:-rotate-90 dark:scale-0" />
+      <Moon className="absolute h-3.5 w-3.5 rotate-90 scale-0 transition-all duration-200 dark:rotate-0 dark:scale-100" />
     </button>
   );
-};
+}
+
+export default ThemeToggle;

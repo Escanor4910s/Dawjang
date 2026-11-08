@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.1";
 import { z } from "https://deno.land/x/zod@v3.23.8/mod.ts";
 import { checkUserPlan } from "../_shared/plan-utils.ts";
 import { extractCompletionText, logDiagnostic } from "../_shared/ai-utils.ts";
+import { callAI, hasAiKey } from "../_shared/llm.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -112,9 +113,8 @@ serve(async (req) => {
       return planCheck.errorResponse;
     }
 
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-    if (!lovableApiKey) {
-      console.error('LOVABLE_API_KEY is not configured');
+    if (!hasAiKey()) {
+      console.error('OPENROUTER_API_KEY is not configured');
       throw new Error('AI service not configured');
     }
 
@@ -209,23 +209,15 @@ serve(async (req) => {
       });
     }
 
-    // Call Lovable AI Gateway with Gemini Flash for faster responses
-    console.log('Calling Lovable AI Gateway with Gemini Flash...');
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: contextPrompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 1500,
-      }),
+    // Gemini 2.5 Flash via OpenRouter (couche commune _shared/llm.ts)
+    console.log('Calling Gemini 2.5 Flash...');
+    const response = await callAI({
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: contextPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 1500,
     });
 
     if (!response.ok) {

@@ -32,7 +32,7 @@ export function extractCompletionText(data: any): string {
 }
 
 /**
- * Best-effort diagnostic logger — never throws.
+ * Best-effort diagnostic logger — never throws, light-weight (avoids DB quota bloat).
  */
 export async function logDiagnostic(entry: {
   function_name: string;
@@ -47,14 +47,32 @@ export async function logDiagnostic(entry: {
     const url = Deno.env.get("SUPABASE_URL");
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!url || !key) return;
+
+    // Ne journaliser en base que si une erreur survient pour préserver le quota gratuit de 500 Mo
+    if (!entry.error && entry.status && entry.status < 400) {
+      return;
+    }
+
     const supabase = createClient(url, key);
+
+    // Tronquer les payloads pour ne jamais dépasser quelques centaines d'octets
+    const sanitizePayload = (payload: unknown) => {
+      if (!payload) return null;
+      try {
+        const str = JSON.stringify(payload);
+        return str.length > 500 ? { summary: str.substring(0, 500) + "... [tronqué pour économie de quota]" } : payload;
+      } catch {
+        return null;
+      }
+    };
+
     await supabase.from("edge_diagnostics").insert({
       function_name: entry.function_name,
       user_id: entry.user_id ?? null,
       status: entry.status ?? null,
-      request_payload: entry.request_payload ?? null,
-      response_payload: entry.response_payload ?? null,
-      error: entry.error ?? null,
+      request_payload: sanitizePayload(entry.request_payload),
+      response_payload: sanitizePayload(entry.response_payload),
+      error: entry.error ? String(entry.error).substring(0, 1000) : null,
       duration_ms: entry.duration_ms ?? null,
     });
   } catch (e) {

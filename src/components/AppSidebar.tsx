@@ -1,275 +1,717 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+// src/components/AppSidebar.tsx
+import React, { useState } from "react";
+import { NavLink, Link, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, BookOpen, Layers, RotateCcw,
-  Calendar, CheckSquare, Activity, Crown, LogOut,
-  Sparkles, User, BarChart3, Swords, Menu, PanelLeftClose, PanelLeftOpen, Shield, Zap
+  LayoutGrid,
+  BookOpen,
+  FileText,
+  CheckSquare,
+  Infinity as InfinityIcon,
+  Layers,
+  Target,
+  Swords,
+  MessageSquare,
+  Search,
+  Flame,
+  Award,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  Calendar,
+  BarChart3,
+  FileCheck2,
+  Settings,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarFooter,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { GlobalSearch } from "@/components/GlobalSearch";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserAvatar } from "@/components/UserAvatar";
+import {
+  DawJangDragonIcon,
+  DawJangWordmark,
+} from "@/components/landing/HippocampusLogo";
+import { useGamification } from "@/hooks/useGamification";
+import {
+  BadgeDisplayModal,
+  AcademicBadgeCrest,
+} from "@/components/gamification/BadgeDisplay";
 import { cn } from "@/lib/utils";
-import { useUserRole } from "@/hooks/useUserRole";
-import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "./ThemeToggle";
 
-interface AppSidebarProps {
-  user: any;
-  isCollapsed?: boolean;
-  onToggle?: () => void;
+interface NavDeck {
+  id: string;
+  label: string;
+  shortLabel: string;
+  items: {
+    title: string;
+    subtitle?: string;
+    url: string;
+    icon: React.ElementType;
+  }[];
 }
 
-const navGroups = [
+const NAVIGATION_DECKS: NavDeck[] = [
   {
-    title: "Général",
+    id: "workspace",
+    label: "ESPACE DE TRAVAIL",
+    shortLabel: "1. Atelier & Cours",
     items: [
-      { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-      { name: "Statistiques", path: "/statistics", icon: BarChart3 },
-      { name: "Mon Plan", path: "/my-plan", icon: Crown }, // NOTE: fixed path to match App.tsx
-    ]
+      {
+        title: "Tableau de bord",
+        url: "/dashboard",
+        icon: LayoutGrid,
+      },
+      {
+        title: "Bibliothèque & Cours",
+        url: "/library",
+        icon: BookOpen,
+      },
+      {
+        title: "Rédacteur de Résumés",
+        url: "/summaries",
+        icon: FileText,
+      },
+      {
+        title: "Constructeur de QCM",
+        url: "/qcm",
+        icon: CheckSquare,
+      },
+      {
+        title: "Mode Infini",
+        url: "/infini",
+        icon: InfinityIcon,
+      },
+      {
+        title: "Paramètres",
+        url: "/settings",
+        icon: Settings,
+      },
+    ],
   },
   {
-    title: "Apprentissage",
+    id: "memorization",
+    label: "MÉMORISATION & DÉFIS",
+    shortLabel: "2. Mémorisation",
     items: [
-      { name: "Mes Résumés", path: "/summaries", icon: BookOpen },
-      { name: "Mes QCM", path: "/quiz-library", icon: CheckSquare },
-      { name: "Flashcards", path: "/flashcards", icon: Layers },
-    ]
+      {
+        title: "Smart Flashcards",
+        url: "/smart-flashcards",
+        icon: Sparkles,
+      },
+      {
+        title: "Flashcards",
+        url: "/flashcards",
+        icon: Layers,
+      },
+      {
+        title: "Probabilités & Ciblage",
+        url: "/predictions",
+        icon: Target,
+      },
+      {
+        title: "Duels Académiques",
+        url: "/duels",
+        icon: Swords,
+      },
+      {
+        title: "Planification",
+        url: "/planning",
+        icon: Calendar,
+      },
+      {
+        title: "Statistiques",
+        url: "/stats",
+        icon: BarChart3,
+      },
+      {
+        title: "Examens Blancs",
+        url: "/exams",
+        icon: FileCheck2,
+      },
+      {
+        title: "Communauté",
+        url: "/community",
+        icon: MessageSquare,
+      },
+    ],
   },
-  {
-    title: "Entraînement Clinique",
-    items: [
-      { name: "Révision", path: "/review", icon: RotateCcw },
-      { name: "Planificateur", path: "/review-planner", icon: Calendar },
-      { name: "Mode Duel", path: "/duel", icon: Swords },
-      { name: "Simulateur ECOS", path: "/ecos", icon: Activity },
-    ]
-  }
 ];
 
-const AppSidebar = ({ user, isCollapsed = false, onToggle }: AppSidebarProps) => {
+export function AppSidebar() {
+  const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
+  const collapsed = state === "collapsed" && !isMobile;
   const location = useLocation();
-  const navigate = useNavigate();
-  const { isAdmin } = useUserRole();
+  const {
+    level,
+    rankTitle,
+    totalXp,
+    xpInCurrentLevel,
+    xpRequiredForNextLevel,
+    levelProgressPercent,
+    streakDays,
+    badges,
+    unlockedBadges,
+  } = useGamification();
 
-  const [profile, setProfile] = useState<any>(null);
+  // État du Carrousel des Pôles de Navigation (0 = Atelier & Cours, 1 = Mémorisation & Défis)
+  const [activeNavSlide, setActiveNavSlide] = useState<number>(() => {
+    const isMemRoute = [
+      "/flashcards",
+      "/smart-flashcards",
+      "/predictions",
+      "/stats",
+      "/duels",
+      "/planning",
+      "/exams",
+      "/community",
+    ].some((p) => location.pathname.startsWith(p));
+    return isMemRoute ? 1 : 0;
+  });
 
-  useEffect(() => {
-    if (user?.id) {
-      supabase.from("profiles").select("*").eq("id", user.id).single().then(({ data }) => {
-        if (data) setProfile(data);
-      });
+  // Synchronisation automatique du pôle actif lors des navigations SPA
+  React.useEffect(() => {
+    const isMemRoute = [
+      "/flashcards",
+      "/smart-flashcards",
+      "/predictions",
+      "/stats",
+      "/duels",
+      "/planning",
+      "/exams",
+      "/community",
+    ].some((p) => location.pathname.startsWith(p));
+    setActiveNavSlide(isMemRoute ? 1 : 0);
+  }, [location.pathname]);
+
+  // État du Carrousel Tactile de Pied de Sidebar (0 = Cadence 7j, 1 = Grade & XP, 2 = Objectif 100 Badges)
+  const [activeFooterSlide, setActiveFooterSlide] = useState<number>(0);
+  const [isBadgeVaultOpen, setIsBadgeVaultOpen] = useState<boolean>(false);
+
+  const currentDeck = NAVIGATION_DECKS[activeNavSlide];
+
+  const handleMobileNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
     }
-  }, [user?.id]);
+  };
 
-  const activeNavGroups = [...navGroups];
-  if (isAdmin) {
-    activeNavGroups.push({
-      title: "Supervision",
-      items: [
-        { name: "Administration", path: "/admin", icon: Shield }
-      ]
-    });
-  }
-
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      toast.success("Déconnexion réussie");
-      navigate("/auth");
-    } catch (error) {
-      toast.error("Erreur lors de la déconnexion");
-    }
+  const triggerQuickSearch = () => {
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "k",
+        metaKey: true,
+        ctrlKey: true,
+        bubbles: true,
+      })
+    );
   };
 
   return (
     <>
-      {/* Mobile toggle button */}
-      <Button
-        variant="outline"
-        size="icon"
-        className="fixed top-4 left-4 z-50 lg:hidden bg-white/80 dark:bg-[#161614]/80 backdrop-blur-md border-black/5 dark:border-white/5 shadow-sm rounded-xl"
-        onClick={onToggle}
+      <Sidebar
+        collapsible="icon"
+        style={
+          {
+            "--sidebar-width": "17.25rem",
+            "--sidebar-width-icon": "3.75rem",
+          } as React.CSSProperties
+        }
+        className="border-r border-[#DFD8CA] dark:border-stone-800/80 bg-[#F2EDE4] dark:bg-[#151413] backdrop-blur-md select-none transition-all duration-300 shadow-[2px_0_20px_-8px_rgba(24,24,27,0.06)]"
       >
-        <Menu className="h-5 w-5 text-[#111111] dark:text-white" />
-      </Button>
+        <div className={cn(collapsed ? "sr-only" : "hidden")}>
+          <GlobalSearch />
+        </div>
 
-      {/* Sidebar background overlay for mobile */}
-      {!isCollapsed && (
-        <div 
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden transition-opacity" 
-          onClick={onToggle} 
-        />
-      )}
-
-      {/* ─── INJECTION DU MOTEUR D'ANIMATION CSS ─── */}
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes sidebar-wave {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-        .bg-hippo-wave {
-          background: linear-gradient(135deg, #050505 0%, #1e1b4b 25%, #4c1d95 50%, #831843 75%, #050505 100%);
-          background-size: 300% 300%;
-          animation: sidebar-wave 18s ease-in-out infinite;
-        }
-        .sidebar-scroll::-webkit-scrollbar { width: 0px; }
-      `}} />
-
-      {/* Main Sidebar */}
-      <aside className={cn(
-        "flex flex-col bg-hippo-wave border border-white/10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] z-50 overflow-hidden transition-all duration-300 ease-in-out group/sidebar relative",
-        // Mobile positioning
-        "fixed top-0 left-0 h-full",
-        // Desktop positioning
-        "lg:static lg:h-[calc(100vh-32px)] lg:my-4 lg:ml-4",
-        // Mobile rounding
-        "rounded-r-[2rem] lg:rounded-[2.5rem]",
-        // Width and mobile slide animation
-        isCollapsed ? "-translate-x-full lg:translate-x-0 w-[280px] lg:w-[80px]" : "translate-x-0 w-[280px] lg:w-[320px]"
-      )}>
-        
-        {/* Le Verre Fumé : Réduit l'intensité des couleurs pour une lisibilité absolue */}
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[40px] pointer-events-none z-0" />
-        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay z-0" />
-
-        {/* ─── EN-TÊTE : LOGO DE LA LANDING PAGE ─── */}
-        <Link 
-          to="/" 
-          className={cn("relative z-10 p-10 pb-6 flex items-center gap-3 group outline-none", isCollapsed ? "lg:p-6 lg:justify-center" : "")}
+        {/* ==================================================================
+            1. EN-TÊTE : IDENTITÉ DAWJANG VERROUILLÉE & RECHERCHE RAPIDE
+        ================================================================== */}
+        <SidebarHeader
+          className={cn(
+            "shrink-0 pt-3 pb-2 transition-all",
+            collapsed ? "px-1.5 items-center space-y-1.5" : "px-3.5 space-y-2.5"
+          )}
         >
-          <img src="/favicon.png" alt="Hippocampus Logo" className={cn("shrink-0 object-contain transition-transform duration-500 group-hover:rotate-12", isCollapsed ? "w-8 h-8" : "w-7 h-7")} />
-          <span className={cn("font-serif font-bold tracking-tight text-white transition-all duration-300 whitespace-nowrap", isCollapsed ? "lg:hidden lg:opacity-0 lg:w-0 text-lg" : "opacity-100 w-auto text-2xl")}>
-            Hippocampus
-          </span>
-        </Link>
+          {!collapsed ? (
+            <>
+              <div className="flex items-center justify-between px-0.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      to="/"
+                      onClick={handleMobileNavClick}
+                      className="group/brand flex items-center gap-2.5 focus:outline-none"
+                    >
+                      {/* Dragon noir pur sans boîte ni contour blanc (Version Verrouillée) */}
+                      <DawJangDragonIcon className="h-8 w-8 text-foreground transition-transform duration-300 group-hover/brand:scale-105" />
+                      <div className="flex flex-col items-center">
+                        <DawJangWordmark size="md" />
+                        <span className="text-[10px] font-sans font-medium text-muted-foreground leading-none mt-0.5">
+                          Studio Académique
+                        </span>
+                      </div>
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-[11.5px]">
+                    Retourner à la page d'accueil
+                  </TooltipContent>
+                </Tooltip>
 
-        {/* Toggle button has been moved to the Affichage section below */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={toggleSidebar}
+                      aria-label="Replier le menu latéral"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary/80 hover:text-foreground transition-colors"
+                    >
+                      <PanelLeftClose className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="text-[12px]">
+                    {isMobile ? "Fermer le menu" : "Replier le menu (⌘B)"}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
 
-        {/* ─── NAVIGATION (Typographie Affirmée et Espacée) ─── */}
-        <div className="relative z-10 flex-1 overflow-y-auto sidebar-scroll px-6 pb-6 mt-4 overflow-x-hidden">
-          <div className="space-y-10">
-            {activeNavGroups.map((group, groupIndex) => (
-              <div key={group.title} className="space-y-4">
-                <h3 className={cn("px-4 text-xs font-black uppercase tracking-[0.2em] text-white/40 transition-all", isCollapsed ? "lg:opacity-0 lg:h-0 lg:mb-0 lg:overflow-hidden" : "opacity-100 mb-4")}>
-                  {group.title}
-                </h3>
-                <ul className="space-y-2">
-                  {group.items.map((item) => {
-                    const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+              <div className="w-full [&>*]:w-full">
+                <GlobalSearch />
+              </div>
+            </>
+          ) : (
+            /* RAIL COMPRESSÉ : PROPORTIONS UNIFORMES 32x32px (h-8 w-8) */
+            <div className="flex flex-col items-center gap-1.5 w-full">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link
+                    to="/"
+                    aria-label="Page d'accueil DawJang"
+                    className="group/logo flex h-8 w-8 items-center justify-center rounded-lg transition-transform duration-200 hover:scale-105"
+                  >
+                    <DawJangDragonIcon className="h-7 w-7 text-foreground" />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-[12px] font-medium">
+                  Page d'accueil DawJang
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={toggleSidebar}
+                    aria-label="Déployer le menu latéral"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                  >
+                    <PanelLeftOpen className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-[12px]">
+                  Déployer le menu (⌘B)
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={triggerQuickSearch}
+                    aria-label="Recherche rapide (⌘K)"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 bg-card text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
+                  >
+                    <Search className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-[12px]">
+                  Recherche rapide (⌘K)
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+        </SidebarHeader>
+
+        {/* ==================================================================
+            2. CORPS : CARROUSEL DE NAVIGATION PAR PÔLES (100% RESPONSIVE MOBILE & DESKTOP)
+        ================================================================== */}
+        <SidebarContent
+          className={cn(
+            "py-1.5 flex-1 min-h-0 flex flex-col overflow-hidden",
+            collapsed ? "px-1" : "px-3"
+          )}
+        >
+          {!collapsed ? (
+            <div className="flex flex-col flex-1 min-h-0 gap-2">
+              {/* Sélecteur de Carrousel de Pôles (Glissière Horizontale Épinglée en Haut) */}
+              <div className="shrink-0 p-1 rounded-xl bg-[#E7E0D3]/85 dark:bg-stone-900 border border-[#DCD4C4] dark:border-stone-800 flex items-center justify-between gap-1 shadow-2xs">
+                {NAVIGATION_DECKS.map((deck, idx) => {
+                  const isSelected = activeNavSlide === idx;
+                  return (
+                    <button
+                      key={deck.id}
+                      type="button"
+                      onClick={() => setActiveNavSlide(idx)}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-semibold transition-all duration-200 truncate ${
+                        isSelected
+                          ? "bg-white dark:bg-stone-800 text-[#18181B] dark:text-white font-bold shadow-[0_2px_8px_-2px_rgba(24,24,27,0.08)]"
+                          : "text-[#52525B] dark:text-stone-400 hover:text-[#18181B] dark:hover:text-white hover:bg-white/60 dark:hover:bg-stone-800/60"
+                      }`}
+                    >
+                      {deck.shortLabel}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* En-tête du Pôle actif avec contrôles de glissement < > (Épinglé) */}
+              <div className="shrink-0 flex items-center justify-between px-2 pt-0.5">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#71717A] dark:text-stone-400">
+                  {currentDeck.label} ({currentDeck.items.length})
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveNavSlide((prev) =>
+                        prev === 0 ? NAVIGATION_DECKS.length - 1 : prev - 1
+                      )
+                    }
+                    className="w-5 h-5 rounded-md hover:bg-[#EAE4DC] dark:hover:bg-stone-800 flex items-center justify-center text-[#71717A] dark:text-stone-400 hover:text-[#18181B] dark:hover:text-white transition-all active:scale-95"
+                    title="Pôle précédent"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveNavSlide(
+                        (prev) => (prev + 1) % NAVIGATION_DECKS.length
+                      )
+                    }
+                    className="w-5 h-5 rounded-md hover:bg-[#EAE4DC] dark:hover:bg-stone-800 flex items-center justify-center text-[#71717A] dark:text-stone-400 hover:text-[#18181B] dark:hover:text-white transition-all active:scale-95"
+                    title="Pôle suivant"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Liste défilable fluide des entrées du Pôle actif — zéro coupure sur mobile */}
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-0.5">
+                <SidebarMenu className="space-y-0.5 sm:space-y-1 transition-all duration-300">
+                  {currentDeck.items.map((item) => {
                     const Icon = item.icon;
+                    const isActive =
+                      location.pathname === item.url ||
+                      location.pathname.startsWith(`${item.url}/`);
 
                     return (
-                      <li key={item.path}>
-                        <Link
-                          to={item.path}
-                          title={isCollapsed ? item.name : undefined}
-                          onClick={() => { if (window.innerWidth < 1024) onToggle?.() }}
-                          className={cn(
-                            "group relative flex items-center gap-5 py-4 rounded-2xl transition-all duration-300 outline-none",
-                            isCollapsed ? "px-0 lg:justify-center" : "px-5",
-                            isActive 
-                              ? "bg-white/10 text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)]" 
-                              : "text-white/60 hover:text-white hover:bg-white/5"
-                          )}
-                        >
-                          {/* Indicateur actif lumineux */}
-                          {isActive && !isCollapsed && (
-                            <motion.div layoutId="sidebar-active" className="absolute left-0 top-1/4 bottom-1/4 w-1.5 bg-pink-500 rounded-r-full shadow-[0_0_15px_rgba(236,72,153,0.6)]" />
-                          )}
-                          {isActive && isCollapsed && (
-                            <motion.div layoutId="sidebar-active-col" className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-pink-500 rounded-r-full shadow-[0_0_15px_rgba(236,72,153,0.6)]" />
-                          )}
-                          
-                          <Icon className={cn("shrink-0 transition-transform duration-300", 
-                            isActive ? "h-6 w-6 text-pink-400" : "h-6 w-6 group-hover:scale-110",
-                            isCollapsed ? "lg:mx-auto" : ""
-                          )} />
-                          
-                          <span className={cn("text-base font-bold tracking-wide whitespace-nowrap transition-all duration-300", isCollapsed ? "lg:hidden lg:opacity-0 lg:w-0" : "opacity-100 w-auto")}>
-                            {item.name}
-                          </span>
-                        </Link>
-                      </li>
+                      <SidebarMenuItem key={item.url}>
+                        <SidebarMenuButton asChild isActive={isActive}>
+                          <NavLink
+                            to={item.url}
+                            onClick={handleMobileNavClick}
+                            className={`group relative flex items-center justify-between px-3 py-1.5 rounded-xl text-[12.5px] transition-all duration-200 ${
+                              isActive
+                                ? "bg-white dark:bg-stone-800/95 text-[#18181B] dark:text-white font-bold shadow-[0_4px_12px_-4px_rgba(24,24,27,0.08)] border border-[#E5DEC9]/90 dark:border-stone-700 before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-[#D96B43]"
+                                : "text-[#52525B] dark:text-stone-300 hover:bg-white/75 dark:hover:bg-stone-800/70 hover:text-[#18181B] dark:hover:text-white font-medium hover:translate-x-0.5"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <Icon
+                                className={`w-4 h-4 shrink-0 transition-all duration-200 ${
+                                  isActive
+                                    ? "text-[#D96B43] scale-105"
+                                    : "text-[#71717A] group-hover:text-[#D96B43] group-hover:scale-110"
+                                }`}
+                              />
+                              <span className="truncate">{item.title}</span>
+                            </div>
+                            {isActive && (
+                              <ChevronRight className="w-3.5 h-3.5 text-[#D96B43] shrink-0 group-hover:translate-x-0.5 transition-transform duration-200" />
+                            )}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
                     );
                   })}
-                </ul>
+                </SidebarMenu>
               </div>
-            ))}
-          </div>
-        </div>
 
-        {/* ─── PIED DE SIDEBAR : PROFIL & RÉGLAGES ─── */}
-        <div className="relative z-10 p-6 mt-auto border-t border-white/10 bg-black/20 flex flex-col gap-4">
-          
-          {/* Section Affichage & Réduction (Desktop) */}
-          <div className={cn("flex items-center justify-between rounded-2xl bg-white/5 border border-white/5 transition-all overflow-hidden", isCollapsed ? "lg:p-2 lg:flex-col lg:gap-4 lg:bg-transparent lg:border-transparent" : "px-5 py-4")}>
-            <span className={cn("text-sm font-bold text-white/60 uppercase tracking-widest whitespace-nowrap transition-all", isCollapsed ? "hidden lg:hidden" : "block")}>Affichage</span>
-            
-            <div className={cn("flex items-center gap-3", isCollapsed ? "flex-col" : "flex-row")}>
-              {/* Le bouton pour réduire/agrandir la sidebar */}
-              <button 
-                onClick={onToggle}
-                className="hidden lg:flex h-8 w-8 rounded-full bg-black/50 border border-white/10 items-center justify-center text-white/60 hover:text-white hover:bg-black/70 transition-all outline-none shrink-0"
-                title={isCollapsed ? "Agrandir" : "Réduire"}
-              >
-                {isCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-              </button>
-
-              <ThemeToggle />
+              {/* Points de pagination du Carrousel de Pôles (Épinglés en bas du corps) */}
+              <div className="shrink-0 flex items-center justify-center gap-1.5 pt-0.5">
+                {NAVIGATION_DECKS.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setActiveNavSlide(i)}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      activeNavSlide === i
+                        ? "w-5 bg-[#D96B43]"
+                        : "w-1.5 bg-[#DFD8CA] dark:bg-stone-700"
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            /* RAIL COMPRESSÉ : ICÔNES DIRECTES */
+            <SidebarMenu className="items-center space-y-1 overflow-y-auto">
+              {NAVIGATION_DECKS.flatMap((d) => d.items).map((item) => {
+                const Icon = item.icon;
+                const isActive =
+                  location.pathname === item.url ||
+                  location.pathname.startsWith(`${item.url}/`);
+                return (
+                  <SidebarMenuItem
+                    key={item.url}
+                    className="flex w-full justify-center"
+                  >
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <NavLink
+                          to={item.url}
+                          className={cn(
+                            "group/rail relative flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200",
+                            isActive
+                              ? "bg-card text-[#D96B43] border border-border/90 shadow-2xs"
+                              : "text-muted-foreground hover:text-foreground hover:bg-secondary/75"
+                          )}
+                        >
+                          {isActive && (
+                            <span className="absolute -left-[6px] top-1.5 bottom-1.5 w-[2.5px] rounded-r-full bg-[#D96B43]" />
+                          )}
+                          <Icon
+                            className="h-4 w-4 shrink-0"
+                            strokeWidth={isActive ? 2.1 : 1.8}
+                          />
+                        </NavLink>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="right"
+                        sideOffset={8}
+                        className="text-[12px] font-medium"
+                      >
+                        {item.title}
+                      </TooltipContent>
+                    </Tooltip>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          )}
+        </SidebarContent>
 
-          <div className={cn("flex flex-col gap-2 transition-all", isCollapsed ? "lg:bg-transparent lg:border-transparent lg:p-0" : "")}>
-            {/* Carte Profil Utilisateur */}
-            <div className={cn("flex items-center gap-4 rounded-2xl hover:bg-white/10 transition-colors group", isCollapsed ? "lg:justify-center p-2" : "p-4")}>
-              <Link 
-                to="/settings" 
-                title={isCollapsed ? (profile?.first_name || profile?.name || "Profil") : undefined}
-                className="flex items-center justify-center shrink-0 outline-none"
-              >
-                <div className="relative h-12 w-12 rounded-full bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 flex items-center justify-center text-white border-2 border-white/20 shadow-md group-hover:scale-105 transition-transform overflow-hidden">
-                  {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-lg font-bold">{profile?.first_name?.charAt(0)?.toUpperCase() || profile?.name?.charAt(0)?.toUpperCase() || <User className="h-6 w-6" />}</span>
-                  )}
+        {/* ==================================================================
+            3. PIED DE SIDEBAR : CARROUSEL TACTILE 3-EN-1 + PROFIL UTILISATEUR
+        ================================================================== */}
+        <SidebarFooter
+          className={cn(
+            "shrink-0 border-t border-[#EAE4DC] dark:border-stone-800/80 transition-all",
+            collapsed ? "p-1.5 items-center space-y-1.5" : "p-2.5 sm:p-3 space-y-2"
+          )}
+        >
+          {!collapsed ? (
+            <>
+              {/* CARROUSEL DE PROGRESSION (CADENCE 7J / PALIER XP / 100 BADGES) */}
+              <div className="rounded-2xl bg-white/90 dark:bg-stone-900 border border-[#E5DEC9]/90 dark:border-stone-800 p-2.5 sm:p-3 shadow-[0_2px_10px_-4px_rgba(24,24,27,0.05)] space-y-2 hover:border-[#D96B43]/40 transition-colors">
+                {/* Barre de contrôle supérieure du mini-carrousel */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    {[0, 1, 2].map((idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setActiveFooterSlide(idx)}
+                        className={`h-1.5 rounded-full transition-all duration-300 ${
+                          activeFooterSlide === idx
+                            ? "w-4 bg-[#D96B43]"
+                            : "w-1.5 bg-[#DFD8CA] dark:bg-stone-700"
+                        }`}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveFooterSlide((s) => (s === 0 ? 2 : s - 1))
+                      }
+                      className="w-5 h-5 rounded-md hover:bg-[#FAF8F5] dark:hover:bg-stone-800 flex items-center justify-center text-[#71717A] hover:text-[#18181B] dark:hover:text-white transition-all active:scale-95"
+                    >
+                      <ChevronLeft className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveFooterSlide((s) => (s + 1) % 3)}
+                      className="w-5 h-5 rounded-md hover:bg-[#FAF8F5] dark:hover:bg-stone-800 flex items-center justify-center text-[#71717A] hover:text-[#18181B] dark:hover:text-white transition-all active:scale-95"
+                    >
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
-              </Link>
-              <Link 
-                to="/settings"
-                className={cn("flex-1 min-w-0 transition-all outline-none", isCollapsed ? "lg:hidden lg:opacity-0 lg:w-0" : "opacity-100 w-auto")}
-              >
-                <p className="text-base font-bold text-white truncate">{profile?.first_name || profile?.name || "Étudiant"}</p>
-                <p className="text-xs font-medium text-emerald-400 flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
-                  {profile?.plan === 'excellence' ? <Crown className="h-3.5 w-3.5 text-amber-400" /> : profile?.plan === 'premium' ? <Zap className="h-3.5 w-3.5 text-emerald-400" /> : <Sparkles className="h-3.5 w-3.5 text-emerald-400" />} 
-                  <span className={profile?.plan === 'excellence' ? "text-amber-400" : ""}>
-                    {profile?.plan ? profile.plan.charAt(0).toUpperCase() + profile.plan.slice(1) : "Gratuit"}
-                  </span>
-                </p>
-              </Link>
-              {!isCollapsed && (
-                <button onClick={handleLogout} className="shrink-0 outline-none" title="Déconnexion">
-                  <LogOut className="h-5 w-5 text-white/40 hover:text-rose-400 transition-colors" />
-                </button>
-              )}
+
+                {/* SLIDE 0 : Cadence d'étude & Série */}
+                {activeFooterSlide === 0 && (
+                  <div className="space-y-2 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-[#27272A] dark:text-stone-200">
+                        <Flame className="w-3.5 h-3.5 text-[#D96B43]" />
+                        Cadence d'étude
+                      </span>
+                      <span className="font-mono text-xs font-bold text-[#18181B] dark:text-white tabular-nums">
+                        {streakDays} j
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 pt-0.5">
+                      {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
+                        <div
+                          key={i}
+                          className="flex flex-col items-center gap-1"
+                        >
+                          <span
+                            className={`w-full h-1.5 rounded-full ${
+                              i < 6 ? "bg-[#D96B43]" : "bg-[#D96B43]/25"
+                            }`}
+                          />
+                          <span className="text-[9px] font-mono text-[#71717A]">
+                            {d}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* SLIDE 1 : Grade & Seuil XP Boosté */}
+                {activeFooterSlide === 1 && (
+                  <div className="space-y-1.5 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-[#18181B] dark:text-white truncate">
+                        LV.{level} • {rankTitle}
+                      </span>
+                      <span className="font-mono text-[11px] font-bold text-[#D96B43] tabular-nums">
+                        {levelProgressPercent}%
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-[#EFECE4] dark:bg-stone-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-[#D96B43]"
+                        style={{ width: `${levelProgressPercent}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] font-mono text-[#71717A] flex justify-between tabular-nums">
+                      <span>Palier rehaussé</span>
+                      <span>
+                        {xpInCurrentLevel.toLocaleString("fr-FR")} /{" "}
+                        {xpRequiredForNextLevel.toLocaleString("fr-FR")} XP
+                      </span>
+                    </p>
+                  </div>
+                )}
+
+                {/* SLIDE 2 : Panthéon des 100 Badges (Ouvre la galerie au clic) */}
+                {activeFooterSlide === 2 && (
+                  <div
+                    onClick={() => setIsBadgeVaultOpen(true)}
+                    className="space-y-2 cursor-pointer group animate-in fade-in duration-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-xs font-bold text-[#18181B] dark:text-white group-hover:text-[#D96B43] transition-colors">
+                        <Award className="w-3.5 h-3.5 text-[#D96B43]" />
+                        Distinctions
+                      </span>
+                      <span className="font-mono text-[11px] font-bold text-[#D96B43] tabular-nums">
+                        {unlockedBadges.length} / 100
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 overflow-hidden py-0.5">
+                      {unlockedBadges.slice(-4).map((b) => (
+                        <AcademicBadgeCrest key={b.id} badge={b} size="sm" />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Carte Profil Utilisateur + Panthéon + Thème — Sans aucun débordement */}
+              <div className="flex items-center justify-between rounded-2xl bg-white/90 dark:bg-stone-900 border border-[#E5DEC9]/90 dark:border-stone-800 px-2 py-1 shadow-[0_2px_10px_-4px_rgba(24,24,27,0.05)] w-full overflow-hidden hover:border-[#D96B43]/40 transition-colors">
+                <UserAvatar
+                  collapsed={false}
+                  extraActions={
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setIsBadgeVaultOpen(true)}
+                        className="w-7 h-7 rounded-lg hover:bg-[#FAF8F5] dark:hover:bg-stone-800 flex items-center justify-center text-[#52525B] dark:text-stone-300 hover:text-[#D96B43] transition-colors shrink-0"
+                        title="Ouvrir le Panthéon des 100 Badges"
+                      >
+                        <Award className="w-3.5 h-3.5" />
+                      </button>
+                      <ThemeToggle />
+                    </>
+                  }
+                />
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-1.5 w-full">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setIsBadgeVaultOpen(true)}
+                    className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 bg-card text-[#D96B43] hover:border-[#D96B43]/50 transition-colors"
+                  >
+                    <Award className="h-3.5 w-3.5" />
+                    <span className="absolute -top-1 -right-1 rounded-full bg-secondary border border-border px-1 font-mono text-[8px] font-bold text-foreground">
+                      {unlockedBadges.length}
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-[12px]">
+                  Panthéon : {unlockedBadges.length}/100 badges • {streakDays}j
+                </TooltipContent>
+              </Tooltip>
+
+              <UserAvatar collapsed={true} />
+
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 bg-card/70">
+                <ThemeToggle />
+              </div>
             </div>
-            
-            {isCollapsed && (
-              <button 
-                onClick={handleLogout}
-                className="hidden lg:flex items-center justify-center p-4 rounded-2xl hover:bg-[#DC2626] hover:text-white transition-all duration-200 text-white/40 group mx-auto outline-none"
-                title="Déconnexion"
-              >
-                <LogOut className="h-6 w-6 group-hover:scale-110 transition-transform" />
-              </button>
-            )}
-          </div>
-        </div>
-      </aside>
+          )}
+        </SidebarFooter>
+      </Sidebar>
+
+      {/* Modale des 100 Badges accessible depuis la Sidebar */}
+      <BadgeDisplayModal
+        isOpen={isBadgeVaultOpen}
+        onClose={() => setIsBadgeVaultOpen(false)}
+        badges={badges}
+        totalXp={totalXp}
+        level={level}
+        rankTitle={rankTitle}
+      />
     </>
   );
-};
+}
 
 export default AppSidebar;
+
+

@@ -32,6 +32,7 @@ const formatMarkdown = (text: string): string => {
   return text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    // eslint-disable-next-line no-useless-escape
     .replace(/^[•\-]\s/gm, '→ ')
     .replace(/\n/g, '<br/>');
 };
@@ -49,6 +50,7 @@ const AskMor = ({ embedded = false, initialMessage }: AskMorProps) => {
 
   useEffect(() => {
     checkAuthAndLoadCourses();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -139,6 +141,7 @@ const AskMor = ({ embedded = false, initialMessage }: AskMorProps) => {
 
       const answerContent = safeText(answer, "Réponse non disponible");
       const safeSources = Array.isArray(sources) 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ? sources.map((s: any) => {
             if (typeof s === "string") return safeText(s, "");
             return safeText(s.text || s.name || s, "");
@@ -152,6 +155,7 @@ const AskMor = ({ embedded = false, initialMessage }: AskMorProps) => {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error("Error asking Mor:", error);
       

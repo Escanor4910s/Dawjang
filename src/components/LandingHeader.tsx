@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Menu, X, LogIn, LayoutDashboard, LogOut, ArrowRight, Brain, Sparkles } from "lucide-react";
-import HippocampusLogo from "./HippocampusLogo";
+import HippocampusLogo from "./landing/HippocampusLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
@@ -16,12 +16,12 @@ const navLinks = [
 ];
 
 // --- ANIMATIONS CONFIGURATION ---
-const menuVariants = {
+const menuVariants: Variants = {
   closed: { opacity: 0, y: "-100%", transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
   open: { opacity: 1, y: "0%", transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1], staggerChildren: 0.1, delayChildren: 0.2 } }
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   closed: { opacity: 0, y: 20 },
   open: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
 };

@@ -35,6 +35,75 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_cases: {
+        Row: {
+          id: string
+          date_for: string
+          title: string
+          content: string
+          questions: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          date_for: string
+          title: string
+          content: string
+          questions: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          date_for?: string
+          title?: string
+          content?: string
+          questions?: Json
+          created_at?: string
+        }
+        Relationships: []
+      }
+      daily_case_results: {
+        Row: {
+          id: string
+          user_id: string
+          case_id: string
+          score: number
+          time_taken_seconds: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          case_id: string
+          score: number
+          time_taken_seconds: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          case_id?: string
+          score?: number
+          time_taken_seconds?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_case_results_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_case_results_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "daily_cases"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       courses: {
         Row: {
           content: string
@@ -276,6 +345,57 @@ export type Database = {
         }
         Relationships: []
       }
+      sessions_qcm: {
+        Row: {
+          created_at: string
+          id: string
+          parameters: Json
+          qcm_base_id: string
+          questions: Json
+          score: number | null
+          session_ended: string | null
+          session_started: string
+          status: string
+          time_elapsed: number | null
+          unique_hash: string
+          updated_at: string
+          user_answers: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          parameters?: Json
+          qcm_base_id: string
+          questions: Json
+          score?: number | null
+          session_ended?: string | null
+          session_started?: string
+          status?: string
+          time_elapsed?: number | null
+          unique_hash: string
+          updated_at?: string
+          user_answers?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          parameters?: Json
+          qcm_base_id?: string
+          questions?: Json
+          score?: number | null
+          session_ended?: string | null
+          session_started?: string
+          status?: string
+          time_elapsed?: number | null
+          unique_hash?: string
+          updated_at?: string
+          user_answers?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       qcm_sessions: {
         Row: {
           ai_model: string | null
@@ -513,6 +633,36 @@ export type Database = {
           badge_id?: string
           earned_at?: string
           id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_exams: {
+        Row: {
+          color: string | null
+          created_at: string
+          exam_date: string
+          id: string
+          target_score: number | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          exam_date: string
+          id?: string
+          target_score?: number | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          exam_date?: string
+          id?: string
+          target_score?: number | null
+          title?: string
           user_id?: string
         }
         Relationships: []

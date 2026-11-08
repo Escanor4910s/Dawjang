@@ -12,7 +12,9 @@ interface DiagnosticRow {
   function_name: string;
   user_id: string | null;
   status: number | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   request_payload: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   response_payload: any;
   error: string | null;
   duration_ms: number | null;
@@ -25,6 +27,7 @@ interface DuelRow {
   status: string;
   current_question_index: number;
   question_count: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   questions: any;
   creator_score: number;
   opponent_score: number;
@@ -41,7 +44,9 @@ const Diagnostics = () => {
   const fetchData = async () => {
     setLoading(true);
     const [diag, du] = await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (supabase as any).from("edge_diagnostics").select("*").order("created_at", { ascending: false }).limit(50),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (supabase as any).from("duels").select("*").order("created_at", { ascending: false }).limit(20),
     ]);
     setDiagnostics(diag.data || []);

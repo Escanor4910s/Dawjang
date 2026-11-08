@@ -5,13 +5,23 @@ import { Button } from "@/components/ui/button";
 import {
   Brain, Calendar, ChevronLeft, RotateCw,
   CheckCircle2, XCircle, ThumbsUp, ThumbsDown, Zap,
-  BookOpen, TrendingUp, Target, Bell, BellRing, Timer, Activity
+  BookOpen, TrendingUp, Target, Bell, BellRing, Timer, Activity, Plus
 } from "lucide-react";
 import { useSpacedRepetition, type ReviewCard } from "@/hooks/useSpacedRepetition";
 import { toast } from "sonner";
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, type Variants } from "framer-motion";
 import { AnimatedBanner } from "@/components/AnimatedBanner";
 import { uiAudio } from "@/utils/audio";
+import { supabase } from "@/integrations/supabase/client";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+
+interface UserExam {
+  id: string;
+  title: string;
+  exam_date: string;
+  color: string | null;
+}
 
 // ─── INGÉNIERIE GRAPHIQUE (Composants Cinétiques) ───
 
@@ -62,6 +72,65 @@ const ReviewPlanner = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
 
+  // Exams State
+  const [exams, setExams] = useState<UserExam[]>([]);
+  const [newExamTitle, setNewExamTitle] = useState("");
+  const [newExamDate, setNewExamDate] = useState("");
+  const [newExamColor, setNewExamColor] = useState("rose");
+  const [isAddExamOpen, setIsAddExamOpen] = useState(false);
+
+  // Fetch Exams
+  const fetchExams = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data, error } = await supabase
+        .from('user_exams')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('exam_date', { ascending: true });
+        
+      if (error) throw error;
+      setExams(data || []);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchExams();
+  }, [fetchExams]);
+
+  const handleAddExam = async () => {
+    if (!newExamTitle || !newExamDate) return toast.error("Veuillez remplir le titre et la date.");
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { error } = await supabase.from('user_exams').insert({
+        user_id: user.id,
+        title: newExamTitle,
+        exam_date: newExamDate,
+        color: newExamColor
+      });
+      
+      if (error) throw error;
+      toast.success("Examen ajouté à l'Agenda !");
+      setIsAddExamOpen(false);
+      setNewExamTitle("");
+      setNewExamDate("");
+      fetchExams();
+    } catch (e) {
+      toast.error("Échec de l'ajout de l'examen.");
+    }
+  };
+
+  const calculateDaysLeft = (examDate: string) => {
+    const diffTime = Math.abs(new Date(examDate).getTime() - new Date().getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
   // Chronomètre de session
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -69,15 +138,20 @@ const ReviewPlanner = () => {
     return () => clearInterval(interval);
   }, [isReviewing]);
 
-  useEffect(() => { if ("Notification" in window) setNotificationsEnabled(Notification.permission === "granted"); }, []);
+  useEffect(() => {
+    if ("Notification" in window) {
+      setNotificationsEnabled(Notification.permission === "granted" || localStorage.getItem("hippo_notifications_enabled") === "true");
+    }
+  }, []);
 
   const enableNotifications = async () => {
     if (!("Notification" in window)) return toast.error("Navigateur incompatible.");
     const permission = await Notification.requestPermission();
     if (permission === "granted") {
       setNotificationsEnabled(true);
+      localStorage.setItem("hippo_notifications_enabled", "true");
       toast.success("Rappels cognitifs activés.");
-      new Notification("Hippocampus", { body: "L'algorithme SM-2 optimisera votre rétention.", icon: "/vite.svg" });
+      new Notification("Hippocampus", { body: "L'algorithme SM-2 optimisera votre rétention.", icon: "/pwa-192x192.png" });
     } else toast.error("Permission refusée.");
   };
 
@@ -164,7 +238,7 @@ const ReviewPlanner = () => {
           </div>
 
           {/* Moteur 3D de la Flashcard */}
-          <div className="perspective-[2500px] w-full flex-1 flex flex-col justify-center pb-24">
+          <div className="perspective-[2500px] w-full flex-1 flex flex-col justify-center pb-8">
             <div className="flex items-center justify-between w-full px-4 mb-6">
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground bg-card border border-border px-4 py-2 rounded-full">
                 Fiche {currentIndex + 1}
@@ -177,7 +251,7 @@ const ReviewPlanner = () => {
             <motion.div
               ref={cardRef} onMouseMove={handleCardMouseMove} onMouseLeave={handleCardMouseLeave}
               style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-              className="min-h-[450px] sm:min-h-[550px] w-full cursor-pointer relative group"
+              className="flex-1 h-[45vh] min-h-[300px] max-h-[500px] w-full cursor-pointer relative group"
               animate={{ rotateY: isFlipped ? 180 : 0 }}
               transition={{ type: "spring", stiffness: 120, damping: 20 }}
               onClick={() => { if (!isFlipped) { uiAudio.playSoftClick(); setIsFlipped(true); } }}
@@ -239,8 +313,8 @@ const ReviewPlanner = () => {
   // ============================================================================
   
   // Animation d'entrée échelonnée pour les cartes Bento
-  const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
-  const itemVariants = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100 } } };
+  const containerVariants: Variants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+  const itemVariants: Variants = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100 } } };
 
   return (
     <div className="min-h-screen bg-transparent text-foreground font-sans px-4 pt-8 pb-16 sm:px-8 relative transition-colors duration-500">
@@ -372,6 +446,117 @@ const ReviewPlanner = () => {
               })}
             </div>
           </motion.div>
+        </motion.div>
+
+        {/* ─── AGENDA MÉDICAL INTELLIGENT (Item 4) ─── */}
+        <motion.div variants={containerVariants} initial="hidden" animate="visible" className="mt-8 flex flex-col gap-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <Calendar className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-serif text-foreground leading-tight">Agenda Médical</h2>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Planificateur d'Échéances</p>
+              </div>
+            </div>
+            <Dialog open={isAddExamOpen} onOpenChange={setIsAddExamOpen}>
+              <DialogTrigger asChild>
+                <Button className="rounded-full gap-2 shadow-lg shadow-primary/20 transition-all hover:-translate-y-1">
+                  <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Ajouter un Examen</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md bg-card/90 backdrop-blur-xl border-border rounded-[2rem] shadow-2xl">
+                <DialogHeader>
+                  <DialogTitle className="text-2xl font-serif">Nouvel Examen</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col gap-4 py-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Titre de l'examen</label>
+                    <Input placeholder="ex: ECNi 2026, Partiel Cardio..." value={newExamTitle} onChange={e => setNewExamTitle(e.target.value)} className="rounded-xl h-12 bg-background/50 border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Date prévue</label>
+                    <Input type="date" value={newExamDate} onChange={e => setNewExamDate(e.target.value)} className="rounded-xl h-12 bg-background/50 border-border" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Spécialité (Couleur)</label>
+                    <div className="flex gap-3">
+                      {['rose', 'amber', 'emerald', 'violet', 'blue'].map(c => {
+                        const bgMap: Record<string, string> = {
+                          rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500", violet: "bg-violet-500", blue: "bg-blue-500"
+                        };
+                        return (
+                          <button 
+                            key={c} 
+                            onClick={() => setNewExamColor(c)} 
+                            className={`w-8 h-8 rounded-full ${bgMap[c]} transition-all duration-300 ${newExamColor === c ? 'ring-2 ring-offset-2 ring-offset-background ring-foreground scale-110' : 'opacity-40 hover:opacity-80'}`} 
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <Button onClick={handleAddExam} className="mt-4 h-12 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg">Sauvegarder l'Échéance</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {exams.length === 0 ? (
+            <div className="bg-card/40 backdrop-blur-xl rounded-[2rem] p-10 border border-border border-dashed text-center flex flex-col items-center justify-center min-h-[250px] shadow-inner">
+              <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-6">
+                <Target className="w-8 h-8 text-muted-foreground opacity-50" />
+              </div>
+              <h3 className="text-xl font-serif text-foreground mb-2">Aucun objectif défini.</h3>
+              <p className="text-muted-foreground text-sm max-w-md mb-6 leading-relaxed">
+                L'algorithme SM-2 navigue à l'aveugle. Ajoutez vos dates d'examens pour que l'IA rétro-planifie automatiquement vos pics de révision.
+              </p>
+              <Button variant="outline" onClick={() => setIsAddExamOpen(true)} className="rounded-full font-bold uppercase tracking-widest text-[10px] h-10 px-6">
+                Configurer mon premier objectif
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+              {exams.map(exam => {
+                const daysLeft = calculateDaysLeft(exam.exam_date);
+                const colorMap: Record<string, string> = {
+                  rose: "from-rose-500/20 to-transparent border-rose-500/30 text-rose-500",
+                  amber: "from-amber-500/20 to-transparent border-amber-500/30 text-amber-500",
+                  emerald: "from-emerald-500/20 to-transparent border-emerald-500/30 text-emerald-500",
+                  violet: "from-violet-500/20 to-transparent border-violet-500/30 text-violet-500",
+                  blue: "from-blue-500/20 to-transparent border-blue-500/30 text-blue-500"
+                };
+                const textMap: Record<string, string> = {
+                  rose: "text-rose-600 dark:text-rose-400",
+                  amber: "text-amber-600 dark:text-amber-400",
+                  emerald: "text-emerald-600 dark:text-emerald-400",
+                  violet: "text-violet-600 dark:text-violet-400",
+                  blue: "text-blue-600 dark:text-blue-400"
+                };
+                const theme = colorMap[exam.color || 'blue'];
+                const textColor = textMap[exam.color || 'blue'];
+                
+                return (
+                  <motion.div key={exam.id} variants={itemVariants} className={`p-8 rounded-[2rem] border bg-gradient-to-b backdrop-blur-xl flex flex-col justify-between shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 group ${theme}`}>
+                    <div className="flex justify-between items-start mb-6">
+                      <h3 className={`font-serif text-2xl font-bold leading-tight ${textColor}`}>{exam.title}</h3>
+                      <div className="w-10 h-10 rounded-full bg-background/50 flex items-center justify-center backdrop-blur-md">
+                        <Calendar className={`w-4 h-4 ${textColor} opacity-80 group-hover:scale-110 transition-transform`} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-baseline gap-2 mb-2">
+                        <div className={`text-5xl font-black tracking-tighter ${textColor}`}>J-{daysLeft}</div>
+                      </div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-foreground/60 bg-background/40 inline-block px-3 py-1.5 rounded-lg backdrop-blur-md">
+                        {new Date(exam.exam_date).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                      </p>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
         </motion.div>
       </div>
     </div>

@@ -1,49 +1,28 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Loader2, Lock } from "lucide-react";
-import { useUserRole } from "@/hooks/useUserRole";
-import { toast } from "sonner";
+import React from "react";
+import { UpgradePrompt } from "./UpgradePrompt";
 
-interface PlanGuardProps {
-  requiredPlan: "premium" | "pro";
-  featureName: string;
+export interface PlanGuardProps {
   children: React.ReactNode;
+  requiredPlan?: "free" | "pro" | "premium";
+  featureName?: string;
+  allowBypass?: boolean;
 }
 
-export const PlanGuard = ({ requiredPlan, featureName, children }: PlanGuardProps) => {
-  const { hasAccess, isAdmin, loading } = useUserRole();
-  const navigate = useNavigate();
-  const allowed = isAdmin || hasAccess(requiredPlan);
-
-  useEffect(() => {
-    if (!loading && !allowed) {
-      toast.error(`${featureName} est réservé aux abonnés ${requiredPlan === "pro" ? "Pro" : "Premium / Pro"}`);
-      const t = setTimeout(() => navigate("/subscription"), 800);
-      return () => clearTimeout(t);
-    }
-  }, [loading, allowed, navigate, requiredPlan, featureName]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
+export function PlanGuard({
+  children,
+  featureName,
+  allowBypass = true,
+}: PlanGuardProps) {
+  // Ne bloque jamais l'accès à vos outils (QCM, Résumés, Infini) par défaut
+  if (allowBypass) {
+    return <>{children}</>;
   }
-  if (!allowed) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="text-center space-y-3 max-w-sm">
-          <div className="h-14 w-14 mx-auto rounded-full bg-muted flex items-center justify-center">
-            <Lock className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <h2 className="text-xl font-bold text-foreground">Accès restreint</h2>
-          <p className="text-sm text-muted-foreground">
-            <strong>{featureName}</strong> est réservé aux abonnés {requiredPlan === "pro" ? "Pro" : "Premium / Pro"}. Redirection vers les abonnements…
-          </p>
-        </div>
-      </div>
-    );
-  }
-  return <>{children}</>;
-};
+
+  return (
+    <div className="py-8 max-w-xl mx-auto">
+      <UpgradePrompt feature={featureName} />
+    </div>
+  );
+}
+
+export default PlanGuard;

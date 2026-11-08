@@ -104,6 +104,7 @@ export function useSpacedRepetition() {
 
       if (dueError) throw dueError;
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cards: ReviewCard[] = (dueData || []).map((c: any) => ({
         id: c.id,
         question: c.question,

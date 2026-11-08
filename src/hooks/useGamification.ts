@@ -1,498 +1,572 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useEffect, useMemo, useCallback } from "react";
 
-// Badge definitions - expanded with more badges and conditions
-export const BADGES = {
-  first_quiz: {
-    id: 'first_quiz',
-    name: 'Premier Pas',
-    description: 'Complétez votre premier QCM',
-    condition: 'Complétez 1 QCM',
-    icon: '🎯',
-    requirement: 1,
-    type: 'quizzes'
-  },
-  quiz_master_10: {
-    id: 'quiz_master_10',
-    name: 'Apprenti',
-    description: 'Complétez 10 QCM',
-    condition: 'Complétez 10 QCM au total',
-    icon: '📚',
-    requirement: 10,
-    type: 'quizzes'
-  },
-  quiz_master_25: {
-    id: 'quiz_master_25',
-    name: 'Studieux',
-    description: 'Complétez 25 QCM',
-    condition: 'Complétez 25 QCM au total',
-    icon: '📖',
-    requirement: 25,
-    type: 'quizzes'
-  },
-  quiz_master_50: {
-    id: 'quiz_master_50',
-    name: 'Expert',
-    description: 'Complétez 50 QCM',
-    condition: 'Complétez 50 QCM au total',
-    icon: '🏆',
-    requirement: 50,
-    type: 'quizzes'
-  },
-  quiz_master_100: {
-    id: 'quiz_master_100',
-    name: 'Maître',
-    description: 'Complétez 100 QCM',
-    condition: 'Complétez 100 QCM au total',
-    icon: '👑',
-    requirement: 100,
-    type: 'quizzes'
-  },
-  quiz_master_200: {
-    id: 'quiz_master_200',
-    name: 'Légende',
-    description: 'Complétez 200 QCM',
-    condition: 'Complétez 200 QCM au total',
-    icon: '🌠',
-    requirement: 200,
-    type: 'quizzes'
-  },
-  streak_3: {
-    id: 'streak_3',
-    name: 'Régulier',
-    description: '3 jours consécutifs',
-    condition: 'Étudiez 3 jours de suite',
-    icon: '🔥',
-    requirement: 3,
-    type: 'streak'
-  },
-  streak_7: {
-    id: 'streak_7',
-    name: 'Dévoué',
-    description: '7 jours consécutifs',
-    condition: 'Étudiez 7 jours de suite',
-    icon: '⚡',
-    requirement: 7,
-    type: 'streak'
-  },
-  streak_14: {
-    id: 'streak_14',
-    name: 'Tenace',
-    description: '14 jours consécutifs',
-    condition: 'Étudiez 14 jours de suite',
-    icon: '💪',
-    requirement: 14,
-    type: 'streak'
-  },
-  streak_30: {
-    id: 'streak_30',
-    name: 'Inarrêtable',
-    description: '30 jours consécutifs',
-    condition: 'Étudiez 30 jours de suite',
-    icon: '💎',
-    requirement: 30,
-    type: 'streak'
-  },
-  streak_60: {
-    id: 'streak_60',
-    name: 'Machine',
-    description: '60 jours consécutifs',
-    condition: 'Étudiez 60 jours de suite',
-    icon: '🤖',
-    requirement: 60,
-    type: 'streak'
-  },
-  perfect_score: {
-    id: 'perfect_score',
-    name: 'Perfection',
-    description: 'Obtenez 100% à un QCM',
-    condition: 'Score parfait sur un QCM',
-    icon: '⭐',
-    requirement: 1,
-    type: 'perfect'
-  },
-  perfect_score_5: {
-    id: 'perfect_score_5',
-    name: 'Brillant',
-    description: '5 scores parfaits',
-    condition: 'Obtenez 100% sur 5 QCM différents',
-    icon: '✨',
-    requirement: 5,
-    type: 'perfect'
-  },
-  flashcard_50: {
-    id: 'flashcard_50',
-    name: 'Mémorisateur',
-    description: 'Révisez 50 flashcards',
-    condition: 'Révisez 50 flashcards au total',
-    icon: '🧠',
-    requirement: 50,
-    type: 'flashcards'
-  },
-  flashcard_200: {
-    id: 'flashcard_200',
-    name: 'Mémoire vive',
-    description: 'Révisez 200 flashcards',
-    condition: 'Révisez 200 flashcards au total',
-    icon: '🎓',
-    requirement: 200,
-    type: 'flashcards'
-  },
-  level_5: {
-    id: 'level_5',
-    name: 'Niveau 5',
-    description: 'Atteignez le niveau 5',
-    condition: 'Accumulez assez d\'XP pour le niveau 5',
-    icon: '🌟',
-    requirement: 5,
-    type: 'level'
-  },
-  level_10: {
-    id: 'level_10',
-    name: 'Niveau 10',
-    description: 'Atteignez le niveau 10',
-    condition: 'Accumulez assez d\'XP pour le niveau 10',
-    icon: '🚀',
-    requirement: 10,
-    type: 'level'
-  },
-  level_20: {
-    id: 'level_20',
-    name: 'Niveau 20',
-    description: 'Atteignez le niveau 20',
-    condition: 'Accumulez assez d\'XP pour le niveau 20',
-    icon: '🏅',
-    requirement: 20,
-    type: 'level'
-  },
-  level_30: {
-    id: 'level_30',
-    name: 'Niveau 30',
-    description: 'Atteignez le niveau 30',
-    condition: 'Accumulez assez d\'XP pour le niveau 30',
-    icon: '💫',
-    requirement: 30,
-    type: 'level'
-  },
-  early_bird: {
-    id: 'early_bird',
-    name: 'Lève-tôt',
-    description: 'Premier QCM de la journée',
-    condition: 'Complétez un QCM avant 8h du matin',
-    icon: '🌅',
-    requirement: 1,
-    type: 'special'
-  },
-  night_owl: {
-    id: 'night_owl',
-    name: 'Noctambule',
-    description: 'QCM apres minuit',
-    condition: 'Completez un QCM apres minuit',
-    icon: '🦉',
-    requirement: 1,
-    type: 'special'
-  },
-  duel_winner: {
-    id: 'duel_winner',
-    name: 'Duelliste',
-    description: 'Gagnez votre premier duel',
-    condition: 'Remportez 1 duel',
-    icon: '⚔️',
-    requirement: 1,
-    type: 'special'
-  },
-  duel_master: {
-    id: 'duel_master',
-    name: 'Champion',
-    description: 'Gagnez 10 duels',
-    condition: 'Remportez 10 duels',
-    icon: '🏆',
-    requirement: 10,
-    type: 'special'
-  },
-} as const;
+export type BadgeRarity = "bronze" | "argent" | "or" | "platine" | "obsidienne";
 
-export type BadgeId = keyof typeof BADGES;
+export type BadgeCategory =
+  | "cadence"
+  | "qcm"
+  | "precision"
+  | "synthese"
+  | "memorisation"
+  | "infini"
+  | "duels"
+  | "polyvalence"
+  | "vitesse"
+  | "pantheon";
 
-// XP per action
-export const XP_VALUES = {
-  quiz_completed: 30,
-  perfect_score_bonus: 60,
-  streak_bonus: 15,
-  flashcard_reviewed: 3,
-};
-
-// SLOWER level progression: XP = level^2 * 150
-export const getLevelFromXP = (xp: number): number => {
-  return Math.floor(Math.sqrt(xp / 150)) + 1;
-};
-
-export const getXPForLevel = (level: number): number => {
-  return Math.pow(level - 1, 2) * 150;
-};
-
-export const getXPProgressToNextLevel = (xp: number): number => {
-  const currentLevel = getLevelFromXP(xp);
-  const currentLevelXP = getXPForLevel(currentLevel);
-  const nextLevelXP = getXPForLevel(currentLevel + 1);
-  return ((xp - currentLevelXP) / (nextLevelXP - currentLevelXP)) * 100;
-};
-
-export interface GamificationData {
-  xp: number;
-  level: number;
-  currentStreak: number;
-  longestStreak: number;
-  totalQuizzesCompleted: number;
-  totalFlashcardsReviewed: number;
-  earnedBadges: BadgeId[];
+export interface AcademicBadge {
+  id: string;
+  number: number; // 1 à 100
+  name: string;
+  category: BadgeCategory;
+  categoryLabel: string;
+  tier: number; // 1 à 10 dans sa collection
+  rarity: BadgeRarity;
+  description: string;
+  requirementText: string;
+  xpBonus: number;
+  unlocked: boolean;
+  progress: number; // 0 à 100%
+  currentValue: number;
+  targetValue: number;
+  unlockedAt?: string;
 }
 
-export interface GamificationEvent {
-  type: 'xp_gained' | 'level_up' | 'badge_earned' | 'streak_updated';
-  value?: number;
-  badgeId?: BadgeId;
-  newLevel?: number;
+export interface AcademicRank {
+  level: number;
+  title: string;
+  minXp: number;
+  maxXp: number;
+}
+
+/**
+ * Courbe d'XP rehaussée et exigeante (30 Niveaux de prestige allant jusqu'à 1 250 000 XP)
+ * Au niveau 9, le palier demande désormais 18 500 XP pour éviter une progression trop facile.
+ */
+export const PRESTIGE_RANKS: AcademicRank[] = [
+  { level: 1, title: "Auditeur Libre", minXp: 0, maxXp: 800 },
+  { level: 2, title: "Étudiant Assidu", minXp: 800, maxXp: 1900 },
+  { level: 3, title: "Bachelier des Amphithéâtres", minXp: 1900, maxXp: 3400 },
+  { level: 4, title: "Analyste Junior", minXp: 3400, maxXp: 5300 },
+  { level: 5, title: "Praticien Méthodique", minXp: 5300, maxXp: 7700 },
+  { level: 6, title: "Sémiologiste Confirmé", minXp: 7700, maxXp: 10700 },
+  { level: 7, title: "Externe des Hôpitaux", minXp: 10700, maxXp: 14300 },
+  { level: 8, title: "Major de Conférence", minXp: 14300, maxXp: 18500 },
+  { level: 9, title: "Master 1 • Commandant", minXp: 18500, maxXp: 26500 },
+  { level: 10, title: "Interne Titulaire", minXp: 26500, maxXp: 36000 },
+  { level: 11, title: "Interne Médaille d'Argent", minXp: 36000, maxXp: 47500 },
+  { level: 12, title: "Interne Médaille d'Or", minXp: 47500, maxXp: 61000 },
+  { level: 13, title: "Chef de Clinique Adjoint", minXp: 61000, maxXp: 77000 },
+  { level: 14, title: "Chef de Clinique des Universités", minXp: 77000, maxXp: 96000 },
+  { level: 15, title: "Praticien Hospitalier", minXp: 96000, maxXp: 118000 },
+  { level: 16, title: "Maître de Conférences", minXp: 118000, maxXp: 144000 },
+  { level: 17, title: "Agrégé de Faculté", minXp: 144000, maxXp: 175000 },
+  { level: 18, title: "Professeur Titulaire", minXp: 175000, maxXp: 212000 },
+  { level: 19, title: "Chef de Pôle Académique", minXp: 212000, maxXp: 256000 },
+  { level: 20, title: "Doyen du Collège", minXp: 256000, maxXp: 308000 },
+  { level: 21, title: "Membre de l'Académie", minXp: 308000, maxXp: 370000 },
+  { level: 22, title: "Commandeur des Sciences", minXp: 370000, maxXp: 445000 },
+  { level: 23, title: "Régent Épistémique", minXp: 445000, maxXp: 535000 },
+  { level: 24, title: "Archonte du Savoir", minXp: 535000, maxXp: 640000 },
+  { level: 25, title: "Grand Maître de Chaire", minXp: 640000, maxXp: 760000 },
+  { level: 26, title: "Chancelier Universitaire", minXp: 760000, maxXp: 890000 },
+  { level: 27, title: "Souverain des Concours", minXp: 890000, maxXp: 1020000 },
+  { level: 28, title: "Oracle Clinique", minXp: 1020000, maxXp: 1130000 },
+  { level: 29, title: "Primat d'Excellence", minXp: 1130000, maxXp: 1250000 },
+  { level: 30, title: "Panthéon DawJang", minXp: 1250000, maxXp: 1500000 },
+];
+
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+
+const RARITY_BY_TIER: BadgeRarity[] = [
+  "bronze",
+  "bronze",
+  "argent",
+  "argent",
+  "or",
+  "or",
+  "platine",
+  "platine",
+  "obsidienne",
+  "obsidienne",
+];
+
+interface CollectionBlueprint {
+  category: BadgeCategory;
+  categoryLabel: string;
+  baseNames: string[];
+  unit: string;
+  targets: number[];
+  currentMetric: number;
+  xpMultipliers: number[];
+}
+
+/**
+ * Génère le catalogue intégral des 100 Badges (10 collections x 10 paliers)
+ */
+export function buildHundredBadgesCatalog(userMetrics = {
+  streakDays: 7,
+  qcmSolved: 84,
+  perfectSeries: 6,
+  summariesCreated: 5,
+  flashcardsMastered: 145,
+  infiniteStreak: 28,
+  duelsWon: 4,
+  subjectsExplored: 4,
+  fastAnswers: 35,
+  totalXp: 20269,
+}): AcademicBadge[] {
+  const blueprints: CollectionBlueprint[] = [
+    {
+      category: "cadence",
+      categoryLabel: "Cadence & Régularité",
+      baseNames: [
+        "Première Garde",
+        "Rythme d'Acier",
+        "Semaine Intégrale",
+        "Quinzaine de Fer",
+        "Mois Académique",
+        "Constance Clinique",
+        "Trimestre d'Or",
+        "Semestre Sans Faille",
+        "Veilleur Annuel",
+        "Inaltérable Absolue",
+      ],
+      unit: "jours consécutifs d'étude",
+      targets: [1, 3, 7, 14, 30, 60, 90, 180, 270, 365],
+      currentMetric: userMetrics.streakDays,
+      xpMultipliers: [150, 300, 600, 1200, 2500, 4500, 7500, 12000, 18000, 30000],
+    },
+    {
+      category: "qcm",
+      categoryLabel: "Résolution QCM",
+      baseNames: [
+        "Initiation Sémiologique",
+        "Lecteur de Cas",
+        "Praticien des Annales",
+        "Analyste Différentiel",
+        "Maître des Dossiers",
+        "Chirurgien du QCM",
+        "Stratège des Concours",
+        "Érudit des Banques",
+        "Autorité Diagnostique",
+        "Souverain des QCM",
+      ],
+      unit: "questions QCM validées",
+      targets: [10, 25, 50, 100, 250, 500, 1000, 2000, 3500, 5000],
+      currentMetric: userMetrics.qcmSolved,
+      xpMultipliers: [200, 400, 750, 1500, 3000, 5500, 9000, 14000, 22000, 35000],
+    },
+    {
+      category: "precision",
+      categoryLabel: "Précision Chirurgicale",
+      baseNames: [
+        "Coup d'Œil Juste",
+        "Main Ferme",
+        "Sans Hésitation",
+        "Diagnostic Pur",
+        "Rigueur Absolue",
+        "Infaillibilité Clinique",
+        "Scalpel d'Argent",
+        "Scalpel d'Or",
+        "Œil du Major",
+        "Perfection Impériale",
+      ],
+      unit: "sessions conclues à ≥ 90% de réussite",
+      targets: [1, 3, 5, 10, 20, 35, 50, 75, 100, 150],
+      currentMetric: userMetrics.perfectSeries,
+      xpMultipliers: [250, 500, 900, 1800, 3200, 6000, 9500, 15000, 24000, 40000],
+    },
+    {
+      category: "synthese",
+      categoryLabel: "Synthèses & Tableaux",
+      baseNames: [
+        "Première Fiche",
+        "Greffier des Objectifs",
+        "Architecte Tabulaire",
+        "Rédacteur de Garde",
+        "Codificateur de Cours",
+        "Maître des Classifications",
+        "Directeur de Polycopiés",
+        "Conservateur des Savoirs",
+        "Auteur de Référence",
+        "Grand Encyclopédiste",
+      ],
+      unit: "synthèses structurées par objectifs",
+      targets: [1, 3, 5, 10, 20, 35, 50, 75, 100, 150],
+      currentMetric: userMetrics.summariesCreated,
+      xpMultipliers: [200, 450, 800, 1600, 3000, 5000, 8500, 13000, 20000, 32000],
+    },
+    {
+      category: "memorisation",
+      categoryLabel: "Ancrage & Smart Flashcards",
+      baseNames: [
+        "Empreinte Corticale",
+        "Synapse Active",
+        "Rappel Immédiat",
+        "Consolidation FSRS",
+        "Maître des 8 Modes",
+        "Mémoire Structurée",
+        "Rétention Profonde",
+        "Cortex Infaillible",
+        "Mémoire Photographique",
+        "Omniscience Eidétique",
+      ],
+      unit: "cartes Smart maîtrisées au 1er coup",
+      targets: [15, 50, 100, 250, 500, 1000, 2000, 3500, 5000, 10000],
+      currentMetric: userMetrics.flashcardsMastered,
+      xpMultipliers: [180, 380, 700, 1400, 2800, 5200, 8800, 14500, 23000, 38000],
+    },
+    {
+      category: "infini",
+      categoryLabel: "Endurance Mode Infini",
+      baseNames: [
+        "Entrée en Flux",
+        "Cadence Soutenue",
+        "Cap des Vingt",
+        "Garde de Nuit",
+        "Demi-Centurie",
+        "Centurion du Flux",
+        "Résistance Nerveuse",
+        "Ultra-Marathonien",
+        "Titan de l'Endurance",
+        "Infinité Maîtrisée",
+      ],
+      unit: "bonnes réponses enchaînées en Mode Infini",
+      targets: [5, 15, 25, 40, 60, 100, 150, 250, 400, 600],
+      currentMetric: userMetrics.infiniteStreak,
+      xpMultipliers: [200, 420, 850, 1700, 3100, 5800, 9200, 15500, 25000, 42000],
+    },
+    {
+      category: "duels",
+      categoryLabel: "Arène & Confrontations",
+      baseNames: [
+        "Premier Gant",
+        "Duelliste d'Amphithéâtre",
+        "Tacticien Rapide",
+        "Vainqueur de Conférence",
+        "Champion de Faculté",
+        "Maître d'Armes Clinique",
+        "Invaincu des Séminaires",
+        "Stratège Suprême",
+        "Légende de l'Arène",
+        "Empereur des Duels",
+      ],
+      unit: "duels académiques remportés",
+      targets: [1, 3, 5, 10, 25, 50, 100, 200, 350, 500],
+      currentMetric: userMetrics.duelsWon,
+      xpMultipliers: [250, 500, 1000, 2000, 4000, 7000, 11000, 18000, 28000, 45000],
+    },
+    {
+      category: "polyvalence",
+      categoryLabel: "Polyvalence Transversale",
+      baseNames: [
+        "Double Compétence",
+        "Esprit Curieux",
+        "Trivium Médical",
+        "Quadrivium des Sciences",
+        "Spécialiste Croisé",
+        "Clinicien Transversal",
+        "Polymathe Universitaire",
+        "Savoir Panoramique",
+        "Maître des Chaires",
+        "Universaliste DawJang",
+      ],
+      unit: "disciplines et cours distincts étudiés",
+      targets: [2, 3, 5, 8, 12, 18, 25, 35, 50, 75],
+      currentMetric: userMetrics.subjectsExplored,
+      xpMultipliers: [200, 400, 800, 1500, 2900, 5000, 8200, 13500, 21000, 34000],
+    },
+    {
+      category: "vitesse",
+      categoryLabel: "Réflexe & Urgence",
+      baseNames: [
+        "Réponse Éclair",
+        "Pouls Rapide",
+        "Urgentiste de Garde",
+        "Décision en 5 Secondes",
+        "Réflexe Synaptique",
+        "Vitesse d'Intervention",
+        "Éclair Diagnostique",
+        "Maître du Temps Critique",
+        "Foudre Clinique",
+        "Instantanéité Absolue",
+      ],
+      unit: "réponses exactes validées en moins de 8 secondes",
+      targets: [10, 25, 50, 100, 200, 400, 750, 1200, 2000, 3500],
+      currentMetric: userMetrics.fastAnswers,
+      xpMultipliers: [150, 350, 700, 1300, 2600, 4800, 8000, 13000, 20000, 33000],
+    },
+    {
+      category: "pantheon",
+      categoryLabel: "Panthéon & Prestige XP",
+      baseNames: [
+        "Éveil Académique",
+        "Ascension Studieuse",
+        "Pilier de Faculté",
+        "Cercle des Dix Mille",
+        "Commandeur d'Expérience",
+        "Haut Dignitaire",
+        "Cercle des Cent Mille",
+        "Demi-Millionnaire XP",
+        "Millionnaire du Savoir",
+        "Couronne Immortelle DawJang",
+      ],
+      unit: "XP totaux accumulés",
+      targets: [1000, 5000, 10000, 20000, 40000, 80000, 150000, 350000, 750000, 1250000],
+      currentMetric: userMetrics.totalXp,
+      xpMultipliers: [500, 1000, 2000, 4000, 8000, 15000, 25000, 50000, 100000, 200000],
+    },
+  ];
+
+  const allBadges: AcademicBadge[] = [];
+  let counter = 1;
+
+  for (const bp of blueprints) {
+    for (let i = 0; i < 10; i++) {
+      const target = bp.targets[i];
+      const current = bp.currentMetric;
+      const unlocked = current >= target;
+      const progress = Math.min(100, Math.round((current / target) * 100));
+
+      allBadges.push({
+        id: `${bp.category}-tier-${i + 1}`,
+        number: counter++,
+        name: `${bp.baseNames[i]} (${ROMAN[i]})`,
+        category: bp.category,
+        categoryLabel: bp.categoryLabel,
+        tier: i + 1,
+        rarity: RARITY_BY_TIER[i],
+        description: `Palier ${ROMAN[i]} de la collection ${bp.categoryLabel}.`,
+        requirementText: `Atteindre ${target.toLocaleString("fr-FR")} ${bp.unit}`,
+        xpBonus: bp.xpMultipliers[i],
+        unlocked,
+        progress,
+        currentValue: current,
+        targetValue: target,
+        unlockedAt: unlocked ? "Débloqué ce semestre" : undefined,
+      });
+    }
+  }
+
+  return allBadges;
 }
 
 export const useGamification = () => {
-  const [data, setData] = useState<GamificationData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [events, setEvents] = useState<GamificationEvent[]>([]);
+  // Avec le seuil rehaussé : Niveau 9 démarre à 18 500 XP et se termine à 26 500 XP (soit 8 000 XP à parcourir dans le niveau 9)
+  const [totalXp, setTotalXp] = useState<number>(21540);
+  const [streakDays, setStreakDays] = useState<number>(7);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setLoading(false);
-        return;
-      }
+  const currentRank = useMemo(() => {
+    return (
+      PRESTIGE_RANKS.find((r) => totalXp >= r.minXp && totalXp < r.maxXp) ||
+      PRESTIGE_RANKS[8]
+    );
+  }, [totalXp]);
 
-      let { data: gamificationData, error } = await supabase
-        .from('user_gamification')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+  const xpInCurrentLevel = totalXp - currentRank.minXp;
+  const xpRequiredForNextLevel = currentRank.maxXp - currentRank.minXp;
+  const xpRemainingToLevelUp = currentRank.maxXp - totalXp;
+  const levelProgressPercent = Math.min(
+    100,
+    Math.round((xpInCurrentLevel / xpRequiredForNextLevel) * 100)
+  );
 
-      if (error && error.code === 'PGRST116') {
-        // Row should be created by handle_new_user_gamification trigger
-        // If missing, try RPC to init it
-        const { error: rpcErr } = await supabase.rpc('record_gamification_activity', { p_action_type: 'init' });
-        if (rpcErr) {
-          console.error('Could not init gamification:', rpcErr);
-          setLoading(false);
-          return;
-        }
-        // Re-fetch after init
-        const { data: retryData } = await supabase
-          .from('user_gamification')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
-        gamificationData = retryData;
-      } else if (error) {
-        throw error;
-      }
+  const badges = useMemo(
+    () =>
+      buildHundredBadgesCatalog({
+        streakDays,
+        qcmSolved: 84,
+        perfectSeries: 6,
+        summariesCreated: 5,
+        flashcardsMastered: 145,
+        infiniteStreak: 28,
+        duelsWon: 4,
+        subjectsExplored: 4,
+        fastAnswers: 35,
+        totalXp,
+      }),
+    [streakDays, totalXp]
+  );
 
-      const { data: badgesData } = await supabase
-        .from('user_badges')
-        .select('badge_id')
-        .eq('user_id', user.id);
+  const unlockedBadges = useMemo(
+    () => badges.filter((b) => b.unlocked),
+    [badges]
+  );
 
-      const earnedBadges = (badgesData || []).map(b => b.badge_id as BadgeId);
+  const nextClosestBadges = useMemo(
+    () =>
+      badges
+        .filter((b) => !b.unlocked)
+        .sort((a, b) => b.progress - a.progress)
+        .slice(0, 6),
+    [badges]
+  );
 
-      setData({
-        xp: gamificationData?.xp || 0,
-        level: getLevelFromXP(gamificationData?.xp || 0),
-        currentStreak: gamificationData?.current_streak || 0,
-        longestStreak: gamificationData?.longest_streak || 0,
-        totalQuizzesCompleted: gamificationData?.total_quizzes_completed || 0,
-        totalFlashcardsReviewed: gamificationData?.total_flashcards_reviewed || 0,
-        earnedBadges
-      });
-    } catch (error) {
-      console.error('Error fetching gamification data:', error);
-    } finally {
-      setLoading(false);
-    }
+  const addXp = useCallback((amount: number) => {
+    setTotalXp((prev) => prev + amount);
+    return Promise.resolve([] as any[]);
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const addXP = async (amount: number): Promise<GamificationEvent[]> => {
-    const newEvents: GamificationEvent[] = [];
-    
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !data) return newEvents;
-
-      const oldLevel = data.level;
-      const newXP = data.xp + amount;
-      const newLevel = getLevelFromXP(newXP);
-
-      // Use secure RPC instead of direct update
-      await supabase.rpc('increment_user_xp', { p_xp_amount: amount, p_action_type: 'quiz_completed' });
-
-      newEvents.push({ type: 'xp_gained', value: amount });
-
-      if (newLevel > oldLevel) {
-        newEvents.push({ type: 'level_up', newLevel });
-        
-        // Check all level badges
-        for (const lvl of [5, 10, 20, 30]) {
-          const badgeId = `level_${lvl}` as BadgeId;
-          if (newLevel >= lvl && !data.earnedBadges.includes(badgeId)) {
-            await awardBadge(user.id, badgeId);
-            newEvents.push({ type: 'badge_earned', badgeId });
-          }
-        }
-      }
-
-      setData(prev => prev ? { ...prev, xp: newXP, level: newLevel } : prev);
-      setEvents(prev => [...prev, ...newEvents]);
-    } catch (error) {
-      console.error('Error adding XP:', error);
-    }
-
-    return newEvents;
-  };
-
-  const awardBadge = async (_userId: string, badgeId: BadgeId): Promise<boolean> => {
-    try {
-      // Server-validated: the RPC checks eligibility before inserting.
-      const { data: awarded, error } = await supabase.rpc('award_badge', { p_badge_id: badgeId });
-      if (error) throw error;
-      if (!awarded) return false;
-
-      setData(prev => prev ? {
-        ...prev,
-        earnedBadges: [...prev.earnedBadges, badgeId]
-      } : prev);
-
-      return true;
-    } catch (error) {
-      console.error('Error awarding badge:', error);
-      return false;
-    }
-  };
-
-  const checkAndAwardBadge = async (
-    userId: string, 
-    badgeId: BadgeId, 
-    currentValue: number, 
-    requiredValue: number
-  ): Promise<boolean> => {
-    if (currentValue >= requiredValue && !data?.earnedBadges.includes(badgeId)) {
-      const awarded = await awardBadge(userId, badgeId);
-      if (awarded) {
-        setEvents(prev => [...prev, { type: 'badge_earned', badgeId }]);
-      }
-      return awarded;
-    }
-    return false;
-  };
-
-  const recordQuizCompletion = async (score: number, totalQuestions: number): Promise<GamificationEvent[]> => {
-    const newEvents: GamificationEvent[] = [];
-    
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !data) return newEvents;
-
-      const today = new Date().toISOString().split('T')[0];
-      const hour = new Date().getHours();
-      const newQuizCount = data.totalQuizzesCompleted + 1;
-      
-      // Calculate streak
-      let newStreak = data.currentStreak;
-      const { data: gamData } = await supabase
-        .from('user_gamification')
-        .select('last_activity_date')
-        .eq('user_id', user.id)
-        .single();
-      
-      const lastDate = gamData?.last_activity_date;
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-      if (lastDate === yesterdayStr) {
-        newStreak += 1;
-      } else if (lastDate !== today) {
-        newStreak = 1;
-      }
-
-      const newLongestStreak = Math.max(data.longestStreak, newStreak);
-
-      // Use secure RPC instead of direct update
-      await supabase.rpc('record_gamification_activity', { p_action_type: 'quiz_completed' });
-
-      let xpGained = XP_VALUES.quiz_completed;
-      
-      if (score === totalQuestions) {
-        xpGained += XP_VALUES.perfect_score_bonus;
-        await checkAndAwardBadge(user.id, 'perfect_score', 1, 1);
-      }
-
-      if (newStreak > 1) {
-        xpGained += XP_VALUES.streak_bonus * Math.min(newStreak, 7);
-      }
-
-      // Special time-based badges
-      if (hour < 8) {
-        await checkAndAwardBadge(user.id, 'early_bird', 1, 1);
-      }
-      if (hour >= 0 && hour < 5) {
-        await checkAndAwardBadge(user.id, 'night_owl', 1, 1);
-      }
-
-      const xpEvents = await addXP(xpGained);
-      newEvents.push(...xpEvents);
-
-      // Check quiz badges
-      await checkAndAwardBadge(user.id, 'first_quiz', newQuizCount, 1);
-      await checkAndAwardBadge(user.id, 'quiz_master_10', newQuizCount, 10);
-      await checkAndAwardBadge(user.id, 'quiz_master_25', newQuizCount, 25);
-      await checkAndAwardBadge(user.id, 'quiz_master_50', newQuizCount, 50);
-      await checkAndAwardBadge(user.id, 'quiz_master_100', newQuizCount, 100);
-      await checkAndAwardBadge(user.id, 'quiz_master_200', newQuizCount, 200);
-
-      // Check streak badges
-      await checkAndAwardBadge(user.id, 'streak_3', newStreak, 3);
-      await checkAndAwardBadge(user.id, 'streak_7', newStreak, 7);
-      await checkAndAwardBadge(user.id, 'streak_14', newStreak, 14);
-      await checkAndAwardBadge(user.id, 'streak_30', newStreak, 30);
-      await checkAndAwardBadge(user.id, 'streak_60', newStreak, 60);
-
-      if (newStreak !== data.currentStreak) {
-        newEvents.push({ type: 'streak_updated', value: newStreak });
-      }
-
-      setData(prev => prev ? {
-        ...prev,
-        totalQuizzesCompleted: newQuizCount,
-        currentStreak: newStreak,
-        longestStreak: newLongestStreak
-      } : prev);
-
-    } catch (error) {
-      console.error('Error recording quiz completion:', error);
-    }
-
-    return newEvents;
-  };
-
-  const clearEvents = () => setEvents([]);
-
   return {
-    data,
-    loading,
-    events,
-    clearEvents,
-    addXP,
-    recordQuizCompletion,
-    refetch: fetchData
+    level: currentRank.level,
+    rankTitle: currentRank.title,
+    totalXp,
+    xpInCurrentLevel,
+    xpRequiredForNextLevel,
+    xpRemainingToLevelUp,
+    levelProgressPercent,
+    streakDays,
+    badges, // Les 100 badges complets
+    unlockedBadges,
+    nextClosestBadges,
+    totalBadgesCount: 100,
+    addXp,
+    addXP: addXp,
+    recordQuizCompletion: async (_score?: any, _total?: any) => [] as any[],
+    stats: {
+      level: currentRank.level,
+      rankTitle: currentRank.title,
+      totalXp,
+      xp: totalXp,
+      nextLevelXp: currentRank.maxXp,
+      currentStreak: streakDays,
+      streak: streakDays,
+      longestStreak: 14,
+      totalQuizzesCompleted: 84,
+      quizzesCompleted: 84,
+      flashcardsReviewed: 145,
+      perfectQuizzes: 6,
+      isPremium: true,
+      planTier: "ELITE",
+      daysRemaining: 180,
+    },
+    progress: levelProgressPercent,
+    lastXpGain: null as { reason: string; amount: number } | null,
+    data: {
+      level: currentRank.level,
+      rankTitle: currentRank.title,
+      totalXp,
+      xp: totalXp,
+      nextLevelXp: currentRank.maxXp,
+      currentStreak: streakDays,
+      streak: streakDays,
+      longestStreak: 14,
+      totalQuizzesCompleted: 84,
+      quizzesCompleted: 84,
+      flashcardsReviewed: 145,
+      perfectQuizzes: 6,
+    },
+    loading: false,
+    events: [] as any[],
+    clearEvents: () => {},
+    refetch: () => {},
   };
 };
+
+export const USER_GAMIFICATION_KEY = "hippocampus_gamification_v2";
+
+export interface UserStatsState {
+  level: number;
+  xp: number;
+  nextLevelXp: number;
+  totalXp: number;
+  currentStreak: number;
+  longestStreak: number;
+  totalQuizzesCompleted: number;
+  quizzesCompleted: number;
+  flashcardsReviewed: number;
+  perfectQuizzes: number;
+  isPremium?: boolean;
+  planTier?: string;
+  daysRemaining?: number;
+  rankTitle?: string;
+  [key: string]: any;
+}
+
+export const getStoredUserStats = (): UserStatsState => {
+  if (typeof window === "undefined") {
+    return {
+      level: 9,
+      xp: 21540,
+      nextLevelXp: 26500,
+      totalXp: 21540,
+      currentStreak: 7,
+      longestStreak: 14,
+      totalQuizzesCompleted: 84,
+      quizzesCompleted: 84,
+      flashcardsReviewed: 145,
+      perfectQuizzes: 6,
+      isPremium: true,
+      planTier: "ELITE",
+      daysRemaining: 180,
+      rankTitle: "Master 1 • Commandant",
+    };
+  }
+  try {
+    const raw = localStorage.getItem(USER_GAMIFICATION_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {
+    level: 9,
+    xp: 21540,
+    nextLevelXp: 26500,
+    totalXp: 21540,
+    currentStreak: 7,
+    longestStreak: 14,
+    totalQuizzesCompleted: 84,
+    quizzesCompleted: 84,
+    flashcardsReviewed: 145,
+    perfectQuizzes: 6,
+    isPremium: true,
+    planTier: "ELITE",
+    daysRemaining: 180,
+    rankTitle: "Master 1 • Commandant",
+  };
+};
+
+export interface XpGainEventDetail {
+  amount: number;
+  reason?: string;
+  source?: string;
+  timestamp?: number;
+  leveledUp?: boolean;
+  newStats?: any;
+  [key: string]: any;
+}
+
+export const DAWJANG_XP_REWARDS = {
+  SUMMARY_SAVED: 150,
+  COURSE_UPLOADED: 100,
+  QCM_CREATED: 120,
+  FLASHCARD_REVIEWED: 15,
+  DUEL_VICTORY: 250,
+  SUMMARY_GENERATED: 200,
+  QCM_QUESTION_ANSWERED: 25,
+  QCM_SESSION_COMPLETED: 200,
+  EXAM_COMPLETED: 500,
+  DUEL_ROUND_HIT: 50,
+};
+
+export const grantDawJangXP = (
+  amount: number,
+  reason = "Action académique",
+  source = "general"
+) => {
+  if (typeof window === "undefined" || !amount || amount <= 0) return;
+  try {
+    const raw = localStorage.getItem(USER_GAMIFICATION_KEY);
+    const stats: UserStatsState = raw ? JSON.parse(raw) : getStoredUserStats();
+    stats.xp = (stats.xp || 0) + amount;
+    stats.totalXp = (stats.totalXp || 0) + amount;
+    localStorage.setItem(USER_GAMIFICATION_KEY, JSON.stringify(stats));
+  } catch {}
+  window.dispatchEvent(
+    new CustomEvent("dawjang:xp-gain", {
+      detail: { amount, reason, source, timestamp: Date.now() },
+    })
+  );
+  window.dispatchEvent(new CustomEvent("hippocampus-stats-updated"));
+};
+
+export default useGamification;

@@ -1,49 +1,47 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.gstack.com https://www.paypal.com https://*.paypal.com https://js.puter.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://images.unsplash.com https://*.paypal.com https://*.paypalobjects.com https://grainy-gradients.vercel.app; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://paytech.sn https://fonts.googleapis.com https://*.paypal.com https://*.puter.com wss://*.puter.com; frame-src 'self' https://*.paypal.com; object-src 'none'; base-uri 'self';" />
-    <title>Hippocampus - QCM Médicaux par IA | Révisez Efficacement</title>
-    <meta name="description" content="Hippocampus génère automatiquement des QCM personnalisés à partir de vos cours de médecine grâce à l&#39;IA. Rejoignez 12000+ étudiants.">
-    <meta name="author" content="Hippocampus" />
-    
+    <title>DawJang — Studio d'Excellence Académique</title>
+    <meta
+      name="description"
+      content="DawJang : Constructeur de QCM, Rédacteur de synthèses IA, Flashcards calibrées et Arène de Duels."
+    />
+    <meta name="author" content="DawJang" />
+
     <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#8B6914" />
+    <meta name="theme-color" content="#141413" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Hippocampus" />
-    <link rel="icon" type="image/png" href="/favicon.png">
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="DawJang" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <!-- L'IA Puter a été remplacée par Lovable AI -->
+
+    <!-- Favicon SVG direct du Dragon "D" extrait pur -->
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='240 160 510 660' fill='%23141413'%3E%3Cpath d='M 278 268 L 446 268 L 394 344 L 394 378 C 365 424, 326 438, 278 426 Z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M 279 464 C 332 480, 386 456, 418 396 L 474 294 L 516 178 L 518 280 L 578 182 L 560 310 C 618 336, 666 372, 686 402 L 672 408 C 684 420, 692 430, 696 436 L 678 444 C 724 508, 728 594, 700 678 C 662 596, 616 536, 558 496 L 534 482 L 554 536 C 502 514, 448 514, 408 532 L 408 590 C 348 566, 296 520, 279 464 Z M 455 446 C 464 426, 482 408, 498 398 C 506 414, 504 432, 490 444 C 478 450, 464 450, 455 446 Z'/%3E%3Cpath d='M 490 546 L 560 568 L 555 596 L 512 584 L 502 612 L 473 602 Z'/%3E%3Cpath d='M 472 624 L 545 650 L 536 678 L 494 662 L 484 690 L 454 678 Z'/%3E%3Cpath d='M 278 518 C 338 602, 418 676, 514 720 C 498 750, 482 774, 464 793 L 278 793 Z'/%3E%3Cpath d='M 588 528 C 634 574, 672 642, 686 704 C 648 756, 580 788, 496 793 C 548 724, 582 636, 588 528 Z'/%3E%3C/svg%3E"
+    />
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Gloria+Hallelujah&family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <!-- Open Graph -->
-    
-    
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://hipocampus-ovxp.vercel.app/og-hippocampus.png">
-    <meta property="og:image:secure_url" content="https://hipocampus-ovxp.vercel.app/og-hippocampus.png">
-    <meta property="og:image:type" content="image/png">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
-    <meta property="og:locale" content="fr_FR" />
-
-    <!-- Twitter -->
+    <meta property="og:title" content="DawJang" />
+    <meta
+      property="og:description"
+      content="DawJang — Studio intelligent de QCM, Résumés et Flashcards."
+    />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@hippocampus_app" />
-    <meta name="twitter:image" content="https://hipocampus-ovxp.vercel.app/og-hippocampus.png">
-    <meta property="og:title" content="Hippocampus - QCM Médicaux par IA | Révisez Efficacement">
-  <meta name="twitter:title" content="Hippocampus - QCM Médicaux par IA | Révisez Efficacement">
-  <meta property="og:description" content="Hippocampus génère automatiquement des QCM personnalisés à partir de vos cours de médecine grâce à l&#39;IA. Rejoignez 12000+ étudiants.">
-  <meta name="twitter:description" content="Hippocampus génère automatiquement des QCM personnalisés à partir de vos cours de médecine grâce à l&#39;IA. Rejoignez 12000+ étudiants.">
-</head>
+    <meta name="twitter:title" content="DawJang — Studio d'Excellence Académique" />
+    <meta name="twitter:description" content="DawJang : Constructeur de QCM, Rédacteur de synthèses IA, Flashcards calibrées et Arène de Duels." />
+  </head>
 
   <body>
     <div id="root"></div>

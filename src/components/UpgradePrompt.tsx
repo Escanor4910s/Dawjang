@@ -1,107 +1,177 @@
+// src/components/UpgradePrompt.tsx
+import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Zap, Crown, X } from "lucide-react";
+import { Sparkles, Check, ArrowRight } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { PremiumBadge } from "./PremiumBadge";
+import { DawJangDragonIcon, DawJangWordmark } from "@/components/landing/HippocampusLogo";
+import { cn } from "@/lib/utils";
 
-interface UpgradePromptProps {
-  isOpen: boolean;
-  onClose: () => void;
-  requiredPlan: "premium" | "pro";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+
+export interface UpgradePromptProps {
+  title?: string;
+  description?: string;
+  feature?: string;
+  compact?: boolean;
+  className?: string;
+  onUpgrade?: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
+  requiredPlan?: string;
   featureName?: string;
 }
 
-export const UpgradePrompt = ({ 
-  isOpen, 
-  onClose, 
-  requiredPlan, 
-  featureName 
-}: UpgradePromptProps) => {
+export function UpgradePrompt({
+  title = "Passez à l'édition DawJang Pro",
+  description = "Débloquez la génération illimitée de QCM par IA, le Rédacteur de résumés et le calibrage complet de vos Flashcards.",
+  feature,
+  compact = false,
+  className,
+  onUpgrade,
+  isOpen,
+  onClose,
+  requiredPlan,
+  featureName,
+}: UpgradePromptProps) {
   const navigate = useNavigate();
-  const isPro = requiredPlan === "pro";
 
-  const handleUpgrade = () => {
-    onClose();
-    navigate("/subscription");
+  if (isOpen !== undefined && !isOpen) {
+    return null;
+  }
+
+  const effectiveTitle = featureName ? `Débloquez : ${featureName}` : title;
+  const effectiveDescription = requiredPlan ? `Cette fonctionnalité est réservée aux abonnés ${requiredPlan === "pro" ? "DawJang Pro" : "Premium"}.` : description;
+
+  const handleAction = () => {
+    if (onClose) onClose();
+    if (onUpgrade) {
+      onUpgrade();
+    } else {
+      navigate("/subscription");
+    }
   };
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${
-            isPro ? "bg-violet-100 dark:bg-violet-900/30" : "bg-amber-100 dark:bg-amber-900/30"
-          }`}>
-            {isPro ? (
-              <Crown className="h-8 w-8 text-violet-600 dark:text-violet-400" />
-            ) : (
-              <Zap className="h-8 w-8 text-amber-600 dark:text-amber-400" />
-            )}
+  const cardContent = (
+    <Card className={cn("overflow-hidden border-0 shadow-none", className)}>
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <DawJangDragonIcon className="h-7 w-7 text-foreground" />
+            <DawJangWordmark size="sm" />
           </div>
-          <DialogTitle className="text-center text-xl">
-            Fonctionnalité {isPro ? "Pro" : "Premium"}
-          </DialogTitle>
-          <DialogDescription className="text-center">
-            {featureName ? (
-              <>
-                <strong>{featureName}</strong> est réservé aux abonnés {isPro ? "Pro" : "Premium"}.
-              </>
-            ) : (
-              <>Cette fonctionnalité est réservée aux abonnés {isPro ? "Pro" : "Premium"}.</>
-            )}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-4">
-          <div className={`p-4 rounded-xl border-2 ${
-            isPro ? "border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20" : "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20"
-          }`}>
-            <h4 className="font-semibold mb-2">
-              {isPro ? "🚀 Plan Pro" : "⚡ Plan Premium"}
-            </h4>
-            <ul className="text-sm space-y-1 text-muted-foreground">
-              {isPro ? (
-                <>
-                  <li>✓ Tout Premium inclus</li>
-                  <li>✓ Fusion multi-cours</li>
-                  <li>✓ Fascicules 100+ QCM</li>
-                  <li>✓ Export PDF avancé</li>
-                  <li>✓ Agent MOR prioritaire</li>
-                </>
-              ) : (
-                <>
-                  <li>✓ QCM illimités</li>
-                  <li>✓ Résumés complets</li>
-                  <li>✓ Export PDF</li>
-                  <li>✓ Agent MOR</li>
-                  <li>✓ Mode examen</li>
-                </>
-              )}
-            </ul>
-          </div>
-
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={onClose} className="flex-1">
-              Plus tard
-            </Button>
-            <Button 
-              onClick={handleUpgrade}
-              className={`flex-1 ${
-                isPro 
-                  ? "bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700" 
-                  : "bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700"
-              } text-white`}
-            >
-              Passer à {isPro ? "Pro" : "Premium"}
-            </Button>
-          </div>
+          <PremiumBadge label={requiredPlan === "pro" ? "Pro" : "Premium"} size="md" />
         </div>
-      </DialogContent>
-    </Dialog>
+        <CardTitle className="text-xl mt-1">{effectiveTitle}</CardTitle>
+        <CardDescription>{effectiveDescription}</CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[13px]">
+          {[
+            "Constructeur & Générateur QCM illimité",
+            "Synthèses de cours par IA & Rédacteur",
+            "Mode Infini & Duels compétitifs",
+            "Import de masse & révision hors-ligne",
+          ].map((item) => (
+            <div key={item} className="flex items-center gap-2 text-foreground/85">
+              <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                <Check className="h-2.5 w-2.5 stroke-[2.5]" />
+              </div>
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-end pt-2 border-t border-border/60">
+          <Button onClick={handleAction}>
+            <Sparkles className="h-4 w-4" />
+            <span>Passer à l'offre supérieure</span>
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
-};
+
+  if (isOpen !== undefined) {
+    return (
+      <Dialog open={isOpen} onOpenChange={(open) => { if (!open && onClose) onClose(); }}>
+        <DialogContent className="max-w-md p-0 overflow-hidden">
+          {cardContent}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  if (compact) {
+    return (
+      <div
+        onClick={handleAction}
+        className={cn(
+          "group cursor-pointer rounded-xl border border-border bg-card p-3.5 flex items-center justify-between gap-3 transition-all duration-200 hover:border-primary/40",
+          className
+        )}
+      >
+        <div className="space-y-0.5 min-w-0">
+          <div className="flex items-center gap-2">
+            <DawJangDragonIcon className="h-5 w-5 text-foreground" />
+            <PremiumBadge />
+            <span className="text-[12.5px] font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+              {feature || "DawJang Pro"}
+            </span>
+          </div>
+          <p className="text-[11.5px] text-muted-foreground truncate">
+            QCM, Flashcards & Résumés IA illimités
+          </p>
+        </div>
+        <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
+      </div>
+    );
+  }
+
+  return (
+    <Card className={cn("overflow-hidden", className)}>
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <DawJangDragonIcon className="h-7 w-7 text-foreground" />
+            <DawJangWordmark size="sm" />
+          </div>
+          <PremiumBadge label="Pro" size="md" />
+        </div>
+        <CardTitle className="text-xl mt-1">{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[13px]">
+          {[
+            "Constructeur & Générateur QCM illimité",
+            "Synthèses de cours par IA & Rédacteur",
+            "Mode Infini & Duels compétitifs",
+            "Import de masse & révision hors-ligne",
+          ].map((item) => (
+            <div key={item} className="flex items-center gap-2 text-foreground/85">
+              <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                <Check className="h-2.5 w-2.5 stroke-[2.5]" />
+              </div>
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-end pt-2 border-t border-border/60">
+          <Button onClick={handleAction}>
+            <Sparkles className="h-4 w-4" />
+            <span>Activer DawJang Pro</span>
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default UpgradePrompt;

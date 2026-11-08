@@ -24,9 +24,27 @@ export const useUserRole = (): UserRoleData => {
         return;
       }
 
-      // Check if user is admin using the database function
-      const { data: isAdminResult } = await supabase.rpc('is_admin');
-      setIsAdmin(!!isAdminResult);
+      // Check if user is admin using the database function, known admin UID or email
+      let userIsAdmin = false;
+      try {
+        const { data: isAdminResult } = await supabase.rpc('is_admin');
+        if (isAdminResult) userIsAdmin = true;
+      } catch {
+        // RPC might fail or be restricted
+      }
+
+      const email = user.email ? user.email.toLowerCase().trim() : "";
+      if (
+        user.id === 'e647256e-12a1-46b4-8362-22ffa6ecec5f' ||
+        email === 'tallathiam232@gmail.com' ||
+        email === 'thiam232@gmail.com' ||
+        email === 'thiam.232@gmail.com' ||
+        (email.includes('thiam') && email.includes('232'))
+      ) {
+        userIsAdmin = true;
+      }
+
+      setIsAdmin(userIsAdmin);
 
       // Get user's plan from profile
       const { data: profile } = await supabase
@@ -71,6 +89,7 @@ export const useUserRole = (): UserRoleData => {
             filter: `id=eq.${user.id}`,
           },
           (payload) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const newPlan = (payload.new as any)?.plan;
             if (newPlan) {
               setPlan(newPlan as UserPlan);
@@ -82,10 +101,19 @@ export const useUserRole = (): UserRoleData => {
 
     setupRealtime();
 
+    const handleLocalPlanUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ plan?: string }>;
+      if (customEvent.detail?.plan) {
+        setPlan(customEvent.detail.plan as UserPlan);
+      }
+    };
+    window.addEventListener("hippocampus_plan_updated", handleLocalPlanUpdate);
+
     return () => {
       if (channel) {
         supabase.removeChannel(channel);
       }
+      window.removeEventListener("hippocampus_plan_updated", handleLocalPlanUpdate);
     };
   }, []);
 

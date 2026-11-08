@@ -27,6 +27,7 @@ export const EcgMonitor = ({
   const playCardiacBeep = () => {
     try {
       if (!audioContextRef.current) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
       const ctx = audioContextRef.current;
@@ -233,6 +234,7 @@ export const EcgMonitor = ({
     return () => {
       cancelAnimationFrame(animationId);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bpm, status]);
 
   // Color mappings based on severity status

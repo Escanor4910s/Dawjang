@@ -1,68 +1,102 @@
+// src/components/ShareResults.tsx
+import React, { useState } from "react";
+import { Share2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Share2, Twitter, Facebook, Linkedin, Copy, Check } from "lucide-react";
-import { useState } from "react";
-import { toast } from "sonner";
+import { DawJangDragonIcon, DawJangWordmark } from "@/components/landing/HippocampusLogo";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
-interface ShareResultsProps {
-  score: number;
-  total: number;
-  title: string;
+export interface ShareResultsProps {
+  title?: string;
+  score?: number;
+  total?: number;
+  subject?: string;
+  streak?: number;
+  className?: string;
 }
 
-export const ShareResults = ({ score, total, title }: ShareResultsProps) => {
+export function ShareResults({
+  title = "Session d'évaluation",
+  score = 18,
+  total = 20,
+  subject = "Médecine",
+  streak = 7,
+  className,
+}: ShareResultsProps) {
+  const { toast } = useToast();
   const [copied, setCopied] = useState(false);
-  const pct = Math.round((score / total) * 100);
-  
-  const shareText = `🩺 J'ai obtenu ${pct}% (${score}/${total}) sur "${title}" avec Hippocampus ! 🧠\n\nRejoins la communauté médicale sur`;
-  const shareUrl = "https://hipocampus2026.lovable.app";
-  const fullText = `${shareText} ${shareUrl}`;
 
-  const shareTwitter = () => {
-    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(fullText)}`, "_blank");
-  };
+  const percentage = total > 0 ? Math.round((score / total) * 100) : 100;
+  const summaryText = `DawJang — ${title} (${subject}) : ${score}/${total} (${percentage}% de réussite) • Cadence : ${streak} jours.`;
 
-  const shareFacebook = () => {
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`, "_blank");
-  };
-
-  const shareLinkedin = () => {
-    window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, "_blank");
-  };
-
-  const shareWhatsApp = () => {
-    window.open(`https://wa.me/?text=${encodeURIComponent(fullText)}`, "_blank");
-  };
-
-  const copyToClipboard = async () => {
-    await navigator.clipboard.writeText(fullText);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(summaryText);
     setCopied(true);
-    toast.success("Copié dans le presse-papier !");
+    toast({
+      title: "Rapport DawJang copié",
+      description: "Le récapitulatif de votre session a été copié.",
+    });
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleNativeShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Résultat DawJang",
+          text: summaryText,
+          url: window.location.origin,
+        });
+      } catch {
+        handleCopy();
+      }
+    } else {
+      handleCopy();
+    }
+  };
+
   return (
-    <div className="space-y-3">
-      <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-        <Share2 className="h-4 w-4" /> Partager ton résultat
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={shareTwitter}>
-          <Twitter className="h-4 w-4 mr-1" /> Twitter
+    <div
+      className={cn(
+        "group rounded-xl border border-border/85 bg-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-200 hover:border-foreground/20",
+        className
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <DawJangDragonIcon className="h-8 w-8 text-foreground" />
+        <div>
+          <div className="flex items-center gap-2">
+            <DawJangWordmark size="sm" />
+            <span className="text-border">•</span>
+            <span className="text-[13.5px] font-semibold text-foreground group-hover:text-primary transition-colors">
+              {title}
+            </span>
+            <span className="font-mono text-[11.5px] font-semibold text-primary tabular-nums">
+              {percentage}%
+            </span>
+          </div>
+          <p className="text-[12px] text-muted-foreground font-mono tabular-nums">
+            Score : {score}/{total} • {subject}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
+        <Button variant="outline" size="sm" onClick={handleCopy}>
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-primary" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+          <span>{copied ? "Copié" : "Copier le score"}</span>
         </Button>
-        <Button variant="outline" size="sm" onClick={shareFacebook}>
-          <Facebook className="h-4 w-4 mr-1" /> Facebook
-        </Button>
-        <Button variant="outline" size="sm" onClick={shareLinkedin}>
-          <Linkedin className="h-4 w-4 mr-1" /> LinkedIn
-        </Button>
-        <Button variant="outline" size="sm" onClick={shareWhatsApp}>
-          📱 WhatsApp
-        </Button>
-        <Button variant="outline" size="sm" onClick={copyToClipboard}>
-          {copied ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-          {copied ? "Copié" : "Copier"}
+        <Button size="sm" onClick={handleNativeShare}>
+          <Share2 className="h-3.5 w-3.5" />
+          <span>Partager</span>
         </Button>
       </div>
     </div>
   );
-};
+}
+
+export default ShareResults;

@@ -1,47 +1,54 @@
-import { useTheme } from "next-themes"
-import { Toaster as Sonner, toast } from "sonner"
-import { CheckCircle2, XCircle, AlertCircle, Info, Loader2 } from "lucide-react"
+// src/components/ui/sonner.tsx
+import { useTheme } from "next-themes";
+import { Toaster as Sonner, toast } from "sonner";
+import {
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  XCircle,
+  Loader2,
+} from "lucide-react";
+import React from "react";
 
-type ToasterProps = React.ComponentProps<typeof Sonner>
+type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  const { theme = "system" } = useTheme();
 
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
+      position="bottom-right"
+      expand={false}
+      closeButton
+      duration={4000}
       className="toaster group"
-      position="top-center"
-      offset={32}
+      icons={{
+        success: <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />,
+        info: <Info className="h-4 w-4 text-primary" />,
+        warning: <AlertTriangle className="h-4 w-4 text-amber-500" />,
+        error: <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />,
+        loading: <Loader2 className="h-4 w-4 animate-spin text-primary" />,
+      }}
       toastOptions={{
         classNames: {
-          /* 
-            Le Rectangle Parfait :
-            Largeur fixe de 356px, Padding équilibré, Rayon de 16px.
-            Ombre naturelle et Verre dépoli natif. Zéro artifice.
-          */
-          toast: "group flex w-[356px] items-start gap-3.5 p-4 bg-white/85 dark:bg-[#111111]/85 backdrop-blur-xl border border-slate-200/50 dark:border-white/10 rounded-[16px] shadow-[0_12px_24px_-6px_rgba(0,0,0,0.08),0_4px_8px_-4px_rgba(0,0,0,0.04)] dark:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.4)] transition-all duration-300",
-          title: "text-[14px] font-semibold text-slate-900 dark:text-slate-100 leading-none tracking-tight",
-          description: "text-[13px] text-slate-500 dark:text-slate-400 leading-snug mt-1",
-          icon: "mt-0.5 shrink-0",
-          actionButton: "bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-medium text-xs rounded-lg px-3.5 py-1.5 transition-opacity hover:opacity-80 ml-auto",
-          cancelButton: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium text-xs rounded-lg px-3.5 py-1.5 transition-colors hover:bg-slate-200 dark:hover:bg-slate-700 ml-2",
+          toast:
+            "group toast !flex !items-start !justify-start !gap-3.5 !w-full !rounded-2xl !border !border-border/90 !bg-card/95 !backdrop-blur-xl !p-4 !text-foreground !shadow-[0_16px_40px_-10px_rgba(20,20,19,0.14)] dark:!shadow-[0_20px_48px_-12px_rgba(0,0,0,0.65)]",
+          icon: "!m-0 !mt-0.5 !flex !h-9 !w-9 !shrink-0 !items-center !justify-center !rounded-xl !border !border-primary/25 !bg-primary/10 !text-primary",
+          content: "!flex !flex-col !gap-0.5 !flex-1 !min-w-0",
+          title: "!text-[13.5px] !font-semibold !tracking-[-0.01em] !text-foreground !leading-tight",
+          description: "!text-[12.5px] !text-muted-foreground !leading-relaxed",
+          actionButton:
+            "!rounded-xl !bg-foreground !text-background !text-[12px] !font-semibold !px-3 !py-1.5",
+          cancelButton:
+            "!rounded-xl !bg-secondary !text-muted-foreground !text-[12px] !font-medium !px-3 !py-1.5",
+          closeButton:
+            "!border-border !bg-card !text-muted-foreground hover:!text-foreground",
         },
-      }}
-      /* 
-        Icônes nues et chirurgicales. 
-        Aucun fond, aucune ombre artificielle. Juste le trait parfait.
-      */
-      icons={{
-        success: <CheckCircle2 className="w-5 h-5 text-emerald-500 stroke-[2px]" />,
-        error: <XCircle className="w-5 h-5 text-rose-500 stroke-[2px]" />,
-        info: <Info className="w-5 h-5 text-blue-500 stroke-[2px]" />,
-        warning: <AlertCircle className="w-5 h-5 text-amber-500 stroke-[2px]" />,
-        loading: <Loader2 className="w-5 h-5 text-slate-500 dark:text-slate-400 animate-spin stroke-[2px]" />,
       }}
       {...props}
     />
-  )
-}
+  );
+};
 
-export { Toaster, toast }
+export { Toaster, toast };
