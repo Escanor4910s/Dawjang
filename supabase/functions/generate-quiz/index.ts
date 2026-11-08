@@ -1,553 +1,122 @@
-// supabase/functions/generate-quiz/index.ts
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.192.0/http/server.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type AnswerLetter = "A" | "B" | "C" | "D" | "E";
-type FacultyQCMType =
-  | "ELECTION"
-  | "CENSURE"
-  | "GROUPAGE"
-  | "JUMELAGE"
-  | "COMPLEMENTS_MULTIPLES"
-  | "ASSOCIATION";
-type QuestionPolarity = "CHERCHER_VRAIES" | "CHERCHER_FAUSSES";
+type OptionLetter = "A" | "B" | "C" | "D" | "E";
+const LETTERS: OptionLetter[] = ["A", "B", "C", "D", "E"];
 
-interface QuestionSpec {
-  number: number;
-  type: FacultyQCMType;
-  polarity: QuestionPolarity;
-  targetLetters: AnswerLetter[];
-  mutationLevel: 1 | 2 | 3 | 4;
-  clinicalCasePlan?: {
-    caseId: string;
-    caseNumber: number;
-    stepIndex: number;
-    totalSteps: number;
-    stepRole: string;
-  };
-}
+// 1. Définition stricte des 3 nouveaux paliers cognitifs
+const COGNITIVE_TIER_DIRECTIVES: Record<string, string> = {
+  ancrage: `PALIER 1 — ANCRAGE & SÉMIOLOGIE (Fondations & Restitution Croisée) :
+- INTERDICTION ABSOLUE de recopier une phrase du cours mot pour mot.
+- Reformule les définitions, les seuils biologiques, les classifications et les signes cardinaux avec un vocabulaire médical précis et élégant.
+- Construis des distracteurs crédibles en inversant deux seuils chiffrés voisins du cours, en confondant un signe constant avec un signe inconstant, ou en attribuant une caractéristique à une entité proche décrite dans le même document.`,
 
-function buildSupervisorSystemPrompt(): string {
-  return `
-Tu es le Doyen du Comité Docimologique FMPOS (UCAD Dakar) & Harvard Medical School (NBME).
-Ton rôle est d'auditer, corriger et sublimer un lot de QCM médicaux générés à partir d'une section de cours.
+  mecanismes: `PALIER 2 — MÉCANISMES & CORRÉLATIONS (Physiopathologie & Causalité) :
+- Ne pose AUCUNE question de simple définition.
+- Chaque question doit exiger de relier une CAUSE à une CONSÉQUENCE présente dans le cours (ex: quel mécanisme physiopathologique explique tel signe clinique, telle complication ou telle anomalie paraclinique ?).
+- Construis des distracteurs redoutables : utilise des faits VRAIS dans le cours mais dont le lien de causalité est inversé, anachronique ou non responsable de l'effet cité.`,
 
-TES 7 RÈGLES D'AUDIT IMPITOYABLES :
-1. ZÉRO ANNOTATION INTERNE DANS LES OPTIONS :
-   - Ne mets JAMAIS de mentions comme "(Déplacement officiel)", "(Bonne réponse)", "(Cible)" dans le texte d'une proposition !
-2. VÉRIFICATION STRICTE DES QUESTIONS D'ASSOCIATION :
-   - Toute question de type "ASSOCIATION" DOIT obligatoirement posséder un objet "associationMatrix" complet contenant :
-     * "leftItems": 4 éléments numérotés de 1 à 4 avec leur texte médical complet.
-     * "rightItems": 4 cibles codées de "A" à "D" (ou "a" à "d") avec leur texte médical complet.
-   - Les 5 options A, B, C, D, E d'une ASSOCIATION doivent TOUTES être des combinaisons d'appariement (ex: "Appariement : 1-A • 2-C • 3-B • 4-D"). Il est FORMELLEMENT INTERDIT de mettre une phrase de Groupage ("Les propositions 1, 2 et 3 sont exactes") dans une question d'ASSOCIATION !
-3. VÉRIFICATION STRICTE DU GROUPAGE :
-   - Toute question de type "GROUPAGE" DOIT posséder "numberedPropositions" (1 à 4) et ses 5 options A..E suivent le code UCAD : A=1+2+3, B=1+3, C=2+4, D=4 uniquement, E=Autre choix.
-4. VÉRIFICATION STRICTE DU JUMELAGE :
-   - Toute question de type "JUMELAGE" DOIT posséder "jumelagePair" (statement1, connector, statement2, statement1True, statement2True, hasCausalLink).
-5. STYLE PROFESSEUR D'UNIVERSITÉ (ZÉRO STYLE SCOLAIRE) :
-   - Utilise les amorces officielles des examens de Dakar (Anatomie, Physiologie, Sémiologie, Hématologie, Maladies de Système, Traumatologie-Orthopédie-Rhumatologie).
-6. ISOMORPHISME & LONGUEUR DES PROPOSITIONS :
-   - Les 5 options (A, B, C, D, E) doivent avoir une longueur homogène et une syntaxe parallèle.
-7. QUESTIONS MIROIRS ("mirrorQuestion") :
-   - Chaque mauvaise proposition possède un objet "mirrorQuestion" ({ "stem", "answer", "courseAnchor" }).
+  discernement: `PALIER 3 — DISCERNEMENT & CAS CROISÉS (Synthèse Clinique & Nuances Restrictives) :
+- Croise 2 à 3 sous-parties distinctes du cours dans une même question (ex: Terrain + Anomalie + Contre-indication ou Traitement).
+- Utilise des micro-vignettes cliniques ou biologiques synthétiques basées à 100% sur les éléments du cours.
+- Exploite les subtilités restrictives du cours (contre-indication absolue vs relative, signe pathognomonique vs évocateur, première intention vs seconde intention) sans jamais inventer de données hors-cours.`
+};
 
-Retourne UNIQUEMENT l'objet JSON final parfaitement valide sous la forme : { "questions": [...] }.
-`;
-}
+// 2. Matrice d'angles syntaxiques pour briser la monotonie des énoncés
+const DYNAMIC_STEM_ANGLES = [
+  "Angle analytique direct : attaque directement par le phénomène physiopathologique ou sémiologique sans préambule scolaire.",
+  "Angle différentiel : oppose deux entités, stades ou formes cliniques du cours pour tester le critère exact de distinction.",
+  "Angle déductif : présente une constellation de 2 ou 3 signes/paramètres du cours et demande la conclusion logique qui s'impose.",
+  "Angle de hiérarchisation / priorité : interroge sur l'élément déterminant, le gold-standard ou le mécanisme prépondérant décrit dans le texte.",
+  "Angle d'interprétation fonctionnelle : part d'un résultat (biologique, clinique ou thérapeutique) mentionné dans le cours et remonte à son origine.",
+  "Angle de restriction conditionnelle : cible une exception, une condition particulière ou un piège classique explicitement mentionné dans le support."
+];
 
-async function callGeminiModel(params: {
-  systemPrompt: string;
-  userPrompt: string;
-  apiKey: string;
-  model?: string;
-}): Promise<any> {
-  const modelName = params.model || "gemini-2.5-flash";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${params.apiKey}`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: params.systemPrompt }],
-      },
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: params.userPrompt }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.3,
-        responseMimeType: "application/json",
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Erreur Gemini (${response.status}): ${errText}`);
+// 3. Mélangeur de Fisher-Yates + Algorithme Anti-Streak (Zéro A-A-A-A / B-B-B-B)
+function shuffleArray<T>(array: T[]): T[] {
+  const copy = [...array];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
   }
-
-  const result = await response.json();
-  const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-  return cleanAndParseJson(rawText);
+  return copy;
 }
 
-async function callClaudeSupervisorModel(params: {
-  systemPrompt: string;
-  userPrompt: string;
-  anthropicKey: string;
-}): Promise<any> {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": params.anthropicKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8192,
-      temperature: 0.2,
-      system: params.systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: params.userPrompt,
-        },
-      ],
-    }),
-  });
+function rebalanceAndShuffleQuestions(rawQuestions: any[]): any[] {
+  const letterHistory: OptionLetter[] = [];
+  const letterCounts: Record<OptionLetter, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Erreur Claude Supervisor (${response.status}): ${errText}`);
-  }
+  return rawQuestions.map((q, idx) => {
+    const options = Array.isArray(q.options) ? q.options.slice(0, 5) : [];
+    if (options.length < 5) return q;
 
-  const result = await response.json();
-  const rawText =
-    result?.content?.find((c: any) => c.type === "text")?.text || "{}";
-  return cleanAndParseJson(rawText);
-}
+    // Identifier la bonne option avant mélange
+    const originalCorrectLetter = (q.correctLetter || "A").toUpperCase() as OptionLetter;
+    const correctIndex = LETTERS.indexOf(originalCorrectLetter) !== -1
+      ? LETTERS.indexOf(originalCorrectLetter)
+      : 0;
+    const correctOptionObj = options[correctIndex] || options[0];
 
-function cleanAndParseJson(raw: string): any {
-  const trimmed = raw
-    .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/, "")
-    .trim();
-  return JSON.parse(trimmed);
-}
+    // Choisir la lettre cible idéale :
+    // - Interdiction d'avoir la même lettre que les 2 questions précédentes (Anti-Streak strict)
+    // - Priorité aux lettres les moins utilisées jusqu'ici pour équilibrer A, B, C, D, E
+    const last1 = letterHistory[letterHistory.length - 1];
+    const last2 = letterHistory[letterHistory.length - 2];
 
-function stripInternalLeaks(txt: string): string {
-  if (!txt) return "";
-  return txt
-    .replace(/\(Déplacement officiel\)/gi, "")
-    .replace(/\(Bonne réponse\)/gi, "")
-    .replace(/\(Cible imposée\)/gi, "")
-    .replace(/\(Proposition exacte\)/gi, "")
-    .replace(/\(Proposition fausse\)/gi, "")
-    .trim();
-}
+    const candidateLetters = shuffleArray(LETTERS).filter((letter) => {
+      if (last1 && last2 && last1 === last2 && letter === last1) return false;
+      if (last1 && letter === last1 && Math.random() < 0.75) return false; // Évite même les doublons fréquents
+      return true;
+    });
 
-const LETTERS: AnswerLetter[] = ["A", "B", "C", "D", "E"];
+    candidateLetters.sort((a, b) => letterCounts[a] - letterCounts[b]);
+    const targetCorrectLetter = candidateLetters[0] || LETTERS[idx % 5];
+    const targetCorrectIdx = LETTERS.indexOf(targetCorrectLetter);
 
-/**
- * Verrou mathématique et structurel déterministe :
- * - Garantit que ASSOCIATION possède TOUJOURS ses listes 1..4 et A..D visibles ET des options d'appariement propres (sans jamais mélanger avec Groupage ni afficher "(Déplacement officiel)").
- * - Garantit que GROUPAGE respecte A=1+2+3, B=1+3, C=2+4, D=4, E=Autre.
- * - Garantit que JUMELAGE respecte A..E.
- * - Garantit que la séquence de bonnes réponses ne fait jamais A, A, A, A.
- */
-function enforceDeterministicGridIntegrity(
-  rawQuestions: any[],
-  specs: QuestionSpec[],
-  sectionIndex: number,
-  sectionTitle: string
-): any[] {
-  return specs.map((spec, idx) => {
-    const q = rawQuestions[idx] || rawQuestions[0] || {};
-    const targetLetter: AnswerLetter = spec.targetLetters[0] || "A";
-    const seekTrue = spec.polarity === "CHERCHER_VRAIES";
+    // Séparer la bonne réponse et mélanger les 4 distracteurs
+    const distractors = options.filter((_, i) => i !== correctIndex);
+    const shuffledDistractors = shuffleArray(distractors);
 
-    let options: any[] = Array.isArray(q.options) ? q.options.slice(0, 5) : [];
-    while (options.length < 5) {
-      const fallbackLetter = LETTERS[options.length];
-      options.push({
-        letter: fallbackLetter,
-        label: `Proposition ${fallbackLetter}`,
-        isStatementTrueInCourse: false,
-        isTargetToCheck: false,
-        trapCategory: "CONFUSION_SYNDROMIQUE",
-        trapBadgeLabel: "Distracteur",
-        feedback: "Information non conforme à cette section du cours.",
-      });
-    }
-
-    // Nettoyage systématique des textes
-    options = options.map((o, i) => ({
-      ...o,
-      letter: LETTERS[i],
-      label: stripInternalLeaks(o.label || o.text || ""),
-      feedback: stripInternalLeaks(o.feedback || o.explanation || ""),
-    }));
-
-    // ------------------------------------------------------------------------
-    // CAS 1 : ASSOCIATION -> Matrice 1..4 <-> A..D obligatoire + 5 vraies combinaisons
-    // ------------------------------------------------------------------------
-    if (spec.type === "ASSOCIATION") {
-      const matrix = q.associationMatrix || {
-        leftColumnTitle: "Liste 1 (Éléments numérotés 1 à 4)",
-        rightColumnTitle: "Liste 2 (Diagnostics / Mécanismes A à D)",
-        leftItems: q.leftItems || [],
-        rightItems: q.rightItems || [],
-      };
-
-      // Génère 5 permutations distinctes dont celle placée sur `targetLetter` est la bonne
-      const allPermutations = [
-        "Appariement : 1-A • 2-B • 3-C • 4-D",
-        "Appariement : 1-B • 2-D • 3-A • 4-C",
-        "Appariement : 1-C • 2-A • 3-D • 4-B",
-        "Appariement : 1-D • 2-C • 3-B • 4-A",
-        "Appariement : 1-A • 2-D • 3-B • 4-C",
-      ];
-
-      const desiredIdx = LETTERS.indexOf(targetLetter);
-      let currentRightIdx = options.findIndex((o) => o.isTargetToCheck === true);
-      if (currentRightIdx === -1) currentRightIdx = 0;
-
-      if (desiredIdx !== -1 && currentRightIdx !== desiredIdx) {
-        const temp = { ...options[desiredIdx] };
-        options[desiredIdx] = { ...options[currentRightIdx] };
-        options[currentRightIdx] = temp;
-      }
-
-      const usedLabels = new Set<string>();
-      options = options.map((opt, i) => {
-        const letter = LETTERS[i];
-        const isRight = i === desiredIdx;
-        let lbl = stripInternalLeaks(opt.label);
-
-        // Si le label contient une erreur de type Groupage ("propositions 1, 2 et 3") ou un doublon, on le remplace par une permutation propre
-        if (
-          !lbl ||
-          /propositions\s+1/i.test(lbl) ||
-          usedLabels.has(lbl.toUpperCase())
-        ) {
-          lbl =
-            allPermutations.find((p) => !usedLabels.has(p.toUpperCase())) ||
-            allPermutations[i];
-        }
-        usedLabels.add(lbl.toUpperCase());
-
-        return {
-          ...opt,
-          letter,
-          label: lbl,
-          isStatementTrueInCourse: isRight,
-          isTargetToCheck: isRight,
-          trapCategory: isRight ? "PROPOSITION_EXACTE" : "CONFUSION_SYNDROMIQUE",
-          trapBadgeLabel: isRight ? "Appariement exact" : "Inversion d'appariement",
-        };
-      });
-
-      return {
-        ...q,
-        number: spec.number,
-        type: "ASSOCIATION",
-        polarity: "CHERCHER_VRAIES",
-        sectionIndex,
-        sectionTitle,
-        mutationLevel: spec.mutationLevel,
-        stem: stripInternalLeaks(q.stem),
-        associationMatrix: matrix,
-        options,
-        correctLetters: [targetLetter],
-      };
-    }
-
-    // ------------------------------------------------------------------------
-    // CAS 2 : ÉLECTION & CENSURE -> Permutation forcée vers `targetLetter`
-    // ------------------------------------------------------------------------
-    if (spec.type === "ELECTION" || spec.type === "CENSURE") {
-      let currentTargetIdx = options.findIndex((o) => o.isTargetToCheck === true);
-      if (currentTargetIdx === -1) {
-        currentTargetIdx = options.findIndex((o) =>
-          spec.type === "ELECTION"
-            ? o.isStatementTrueInCourse === true
-            : o.isStatementTrueInCourse === false
-        );
-      }
-      if (currentTargetIdx === -1) currentTargetIdx = 0;
-
-      const desiredIdx = LETTERS.indexOf(targetLetter);
-      if (desiredIdx !== -1 && currentTargetIdx !== desiredIdx) {
-        const temp = { ...options[desiredIdx] };
-        options[desiredIdx] = { ...options[currentTargetIdx] };
-        options[currentTargetIdx] = temp;
-      }
-
-      options = options.map((opt, i) => {
-        const letter = LETTERS[i];
-        const isTarget = i === desiredIdx;
-        return {
-          ...opt,
-          letter,
-          isTargetToCheck: isTarget,
-          isStatementTrueInCourse:
-            spec.type === "ELECTION" ? isTarget : !isTarget,
-          trapCategory:
-            (spec.type === "ELECTION" && isTarget) ||
-            (spec.type === "CENSURE" && !isTarget)
-              ? "PROPOSITION_EXACTE"
-              : opt.trapCategory === "PROPOSITION_EXACTE"
-              ? "CONFUSION_SYNDROMIQUE"
-              : opt.trapCategory || "CONFUSION_SYNDROMIQUE",
-        };
-      });
-
-      return {
-        ...q,
-        number: spec.number,
-        type: spec.type,
-        polarity: spec.polarity,
-        sectionIndex,
-        sectionTitle,
-        mutationLevel: spec.mutationLevel,
-        stem: stripInternalLeaks(q.stem),
-        options,
-        correctLetters: [targetLetter],
-      };
-    }
-
-    // ------------------------------------------------------------------------
-    // CAS 3 : GROUPAGE (A=1+2+3 | B=1+3 | C=2+4 | D=4 | E=Autre choix)
-    // ------------------------------------------------------------------------
-    if (spec.type === "GROUPAGE") {
-      let props: any[] = Array.isArray(q.numberedPropositions)
-        ? q.numberedPropositions.slice(0, 5)
-        : [];
-
-      while (props.length < 4) {
-        props.push({
-          num: (props.length + 1) as 1 | 2 | 3 | 4,
-          text: `Assertion ${props.length + 1}`,
-          isTrueInCourse: false,
-          feedback: "Se référer au cours.",
+    // Reconstruire les 5 options avec la bonne réponse exactement à targetCorrectIdx
+    const finalOptions = [];
+    let dPtr = 0;
+    for (let i = 0; i < 5; i++) {
+      if (i === targetCorrectIdx) {
+        finalOptions.push({
+          letter: LETTERS[i],
+          text: cleanOptionPrefix(correctOptionObj.text),
+          rationale: correctOptionObj.rationale || "Proposition exacte selon le cours."
+        });
+      } else {
+        const d = shuffledDistractors[dPtr++] || { text: "Aucune de ces réponses", rationale: "" };
+        finalOptions.push({
+          letter: LETTERS[i],
+          text: cleanOptionPrefix(d.text),
+          rationale: d.rationale || "Proposition inexacte."
         });
       }
-
-      const matchesPolarity = (p: any) =>
-        seekTrue ? Boolean(p.isTrueInCourse) : !Boolean(p.isTrueInCourse);
-
-      const firstFour = props.slice(0, 4);
-      const matchingItems = firstFour.filter(matchesPolarity);
-      const nonMatchingItems = firstFour.filter((p) => !matchesPolarity(p));
-
-      if (targetLetter === "A" && matchingItems.length === 3) {
-        props = [
-          matchingItems[0],
-          matchingItems[1],
-          matchingItems[2],
-          nonMatchingItems[0],
-          ...props.slice(4),
-        ];
-      } else if (targetLetter === "B" && matchingItems.length === 2) {
-        props = [
-          matchingItems[0],
-          nonMatchingItems[0],
-          matchingItems[1],
-          nonMatchingItems[1],
-          ...props.slice(4),
-        ];
-      } else if (targetLetter === "C" && matchingItems.length === 2) {
-        props = [
-          nonMatchingItems[0],
-          matchingItems[0],
-          nonMatchingItems[1],
-          matchingItems[1],
-          ...props.slice(4),
-        ];
-      } else if (targetLetter === "D" && matchingItems.length === 1) {
-        props = [
-          nonMatchingItems[0],
-          nonMatchingItems[1],
-          nonMatchingItems[2],
-          matchingItems[0],
-          ...props.slice(4),
-        ];
-      }
-
-      props = props.map((p, idxNum) => ({
-        ...p,
-        num: (idxNum + 1) as 1 | 2 | 3 | 4 | 5,
-        text: stripInternalLeaks(p.text),
-      }));
-
-      const activeNums = props
-        .filter(matchesPolarity)
-        .map((p) => p.num)
-        .join("+");
-
-      const computedCorrectLetter: AnswerLetter =
-        activeNums === "1+2+3"
-          ? "A"
-          : activeNums === "1+3"
-          ? "B"
-          : activeNums === "2+4"
-          ? "C"
-          : activeNums === "4"
-          ? "D"
-          : "E";
-
-      const groupageLabels: Record<AnswerLetter, string> = {
-        A: "1 + 2 + 3",
-        B: "1 + 3",
-        C: "2 + 4",
-        D: "4 uniquement",
-        E: "Autre choix",
-      };
-
-      const polarityWord = seekTrue ? "vraies" : "fausses";
-      const standardizedOptions = LETTERS.map((letter) => {
-        const isRight = letter === computedCorrectLetter;
-        return {
-          letter,
-          label: `Propositions ${groupageLabels[letter]}`,
-          isStatementTrueInCourse: isRight,
-          isTargetToCheck: isRight,
-          trapCategory: isRight ? "PROPOSITION_EXACTE" : "CONFUSION_SYNDROMIQUE",
-          trapBadgeLabel: isRight
-            ? `Combinaison exacte (${activeNums || "aucune"})`
-            : `Code ${letter} incorrect`,
-          feedback: isRight
-            ? `Exact : les propositions ${polarityWord} sont (${activeNums || "aucune"}), ce qui correspond au code ${computedCorrectLetter}.`
-            : `Faux : les propositions ${polarityWord} du cours sont (${activeNums || "aucune"}), la bonne réponse est donc ${computedCorrectLetter}.`,
-        };
-      });
-
-      return {
-        ...q,
-        number: spec.number,
-        type: "GROUPAGE",
-        polarity: spec.polarity,
-        sectionIndex,
-        sectionTitle,
-        mutationLevel: spec.mutationLevel,
-        stem: stripInternalLeaks(q.stem),
-        numberedPropositions: props,
-        options: standardizedOptions,
-        correctLetters: [computedCorrectLetter],
-      };
     }
 
-    // ------------------------------------------------------------------------
-    // CAS 4 : JUMELAGE (CAUSE À EFFET)
-    // ------------------------------------------------------------------------
-    if (spec.type === "JUMELAGE") {
-      const pair = q.jumelagePair || {
-        statement1: "Première proposition",
-        connector: "parce que",
-        statement2: "Seconde proposition",
-        statement1True: true,
-        statement2True: true,
-        hasCausalLink: true,
-      };
-
-      const s1 = Boolean(pair.statement1True);
-      const s2 = Boolean(pair.statement2True);
-      const causal = Boolean(pair.hasCausalLink);
-
-      const computedJumelageLetter: AnswerLetter =
-        s1 && s2 && causal
-          ? "A"
-          : s1 && s2 && !causal
-          ? "B"
-          : s1 && !s2
-          ? "C"
-          : !s1 && s2
-          ? "D"
-          : "E";
-
-      const jumelageLabels: Record<AnswerLetter, string> = {
-        A: "Vrai - Vrai avec relation de cause à effet",
-        B: "Vrai - Vrai sans relation de cause à effet",
-        C: "Vrai - Faux",
-        D: "Faux - Vrai",
-        E: "Faux - Faux",
-      };
-
-      const standardizedOptions = LETTERS.map((letter) => {
-        const isRight = letter === computedJumelageLetter;
-        const existingOpt = options.find((o) => o.letter === letter);
-        return {
-          letter,
-          label: jumelageLabels[letter],
-          isStatementTrueInCourse: isRight,
-          isTargetToCheck: isRight,
-          trapCategory: isRight ? "PROPOSITION_EXACTE" : "FAUX_LIEN_CAUSAL",
-          trapBadgeLabel: isRight ? "Analyse causale exacte" : `Code ${letter}`,
-          feedback:
-            existingOpt?.feedback ||
-            (isRight
-              ? `Exact : Affirmation 1 (${s1 ? "Vraie" : "Fausse"}) et Affirmation 2 (${
-                  s2 ? "Vraie" : "Fausse"
-                })${s1 && s2 ? (causal ? " avec lien de cause à effet." : " sans lien de cause à effet.") : "."}`
-              : `Attendu : ${jumelageLabels[computedJumelageLetter]}.`),
-          mirrorQuestion: existingOpt?.mirrorQuestion,
-        };
-      });
-
-      return {
-        ...q,
-        number: spec.number,
-        type: "JUMELAGE",
-        polarity: "CHERCHER_VRAIES",
-        sectionIndex,
-        sectionTitle,
-        mutationLevel: spec.mutationLevel,
-        stem: stripInternalLeaks(q.stem),
-        jumelagePair: pair,
-        options: standardizedOptions,
-        correctLetters: [computedJumelageLetter],
-      };
-    }
-
-    // ------------------------------------------------------------------------
-    // CAS 5 : COMPLÉMENTS MULTIPLES (SÉMIOLOGIE L3 / TOR)
-    // ------------------------------------------------------------------------
-    const detectedTargets = options
-      .filter((o) => o.isTargetToCheck === true)
-      .map((o) => o.letter as AnswerLetter);
-
-    const finalCorrectLetters: AnswerLetter[] =
-      detectedTargets.length > 0 ? detectedTargets : spec.targetLetters;
-
-    options = options.map((opt) => ({
-      ...opt,
-      isTargetToCheck: finalCorrectLetters.includes(opt.letter),
-    }));
+    letterHistory.push(targetCorrectLetter);
+    letterCounts[targetCorrectLetter]++;
 
     return {
       ...q,
-      number: spec.number,
-      type: spec.type,
-      polarity: spec.polarity,
-      sectionIndex,
-      sectionTitle,
-      mutationLevel: spec.mutationLevel,
-      stem: stripInternalLeaks(q.stem),
-      options,
-      correctLetters: finalCorrectLetters,
+      id: q.id || `q-${Date.now()}-${idx + 1}`,
+      index: idx + 1,
+      options: finalOptions,
+      correctLetter: targetCorrectLetter,
     };
   });
+}
+
+function cleanOptionPrefix(text: string): string {
+  if (!text) return "";
+  return text.replace(/^[A-E][\s.\-):]+/i, "").trim();
 }
 
 serve(async (req) => {
@@ -557,121 +126,194 @@ serve(async (req) => {
 
   try {
     const {
-      systemPrompt,
-      courseTitle,
-      sectionIndex = 0,
-      sectionTitle = "Section du cours",
-      questionSpecs = [],
-      enableSupervisorAudit = true,
+      courseContent,
+      courseTitle = "Cours Médical",
+      archetype = "mixte",
+      cognitiveTier = "mecanismes",
+      questionCount = 10,
+      seriesNumber = 1,
+      excludedConcepts = [] // Liste des concepts ou questions des séries #1, #2 précédentes
     } = await req.json();
 
-    const geminiKey =
-      Deno.env.get("GEMINI_API_KEY") ||
-      Deno.env.get("GOOGLE_AI_API_KEY") ||
-      Deno.env.get("LOVABLE_API_KEY");
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-
-    if (!geminiKey && !anthropicKey) {
-      throw new Error(
-        "Aucune clé API IA trouvée. Configurez GEMINI_API_KEY et/ou ANTHROPIC_API_KEY dans vos secrets Supabase."
+    if (!courseContent || courseContent.trim().length < 50) {
+      return new Response(
+        JSON.stringify({ error: "Le contenu du cours est insuffisant pour générer des QCM." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const draftUserPrompt = `
-Génère maintenant le lot de ${questionSpecs.length} QCM pour le cours "${courseTitle}" (Segment #${
-      sectionIndex + 1
-    } : "${sectionTitle}") en respectant scrupuleusement chaque spécification docimologique.
-Pour toute question de type ASSOCIATION, inclus impérativement "associationMatrix" avec "leftItems" (1 à 4) et "rightItems" (A à D).
-Retourne uniquement le JSON { "questions": [...] }.
-`;
+    const tierDirective = COGNITIVE_TIER_DIRECTIVES[cognitiveTier] || COGNITIVE_TIER_DIRECTIVES.mecanismes;
 
-    let draftData: any;
+    // Plan de distribution des archétypes et des angles syntaxiques question par question
+    const archetypesPool = archetype === "mixte"
+      ? ["complement_multiple", "groupage", "association", "censure", "jumelage"]
+      : [archetype];
+
+    const perQuestionBlueprint = Array.from({ length: questionCount }, (_, i) => {
+      const chosenArchetype = archetypesPool[i % archetypesPool.length];
+      const chosenAngle = DYNAMIC_STEM_ANGLES[i % DYNAMIC_STEM_ANGLES.length];
+      return `Question #${i + 1} -> Type: "${chosenArchetype}" | Directive de style: ${chosenAngle}`;
+    }).join("\n");
+
+    const exclusionBlock = excludedConcepts.length > 0
+      ? `\n=== MÉMOIRE D'EXCLUSION INTER-SÉRIES (SÉRIE #${seriesNumber}) ===
+Les concepts et angles suivants ont DÉJÀ été testés dans les séries précédentes (${courseTitle} #1 à #${seriesNumber - 1}).
+INTERDICTION FORMELLE de poser à nouveau des questions sur ces points précis, explore d'autres passages et détails du cours :
+${excludedConcepts.map((c: string, i: number) => `- ${i + 1}. ${c}`).join("\n")}\n`
+      : "";
+
+    const systemPrompt = `Tu es un Professeur Agrégé de Médecine et concepteur d'épreuves docimologiques de haut niveau.
+Ta mission est de générer exactement ${questionCount} QCM d'excellence à partir EXCLUSIVEMENT du cours fourni ("${courseTitle}", Série #${seriesNumber}).
+
+${tierDirective}
+${exclusionBlock}
+
+=== RÈGLES DOCIMOLOGIQUES PAR ARCHÉTYPE ===
+1. "complement_multiple" :
+   - Énoncé précis et élégant. 5 propositions (A à E) dont UNE SEULE est exacte.
+   - Les 4 distracteurs doivent être homogènes en longueur et en registre médical.
+
+2. "censure" :
+   - L'étudiant doit identifier l'unique proposition FAUSSE (ou INEXACTE) parmi les 5 propositions (4 sont vraies selon le cours, 1 seule comporte une erreur subtile).
+   - Varie la formulation de l'énoncé sans jamais utiliser un moule mécanique répétitif.
+
+3. "groupage" :
+   - Tu DOIS obligatoirement remplir le tableau \`groupageStatements\` avec exactement 5 assertions numérotées "I", "II", "III", "IV", "V".
+   - Les 5 \`options\` (A, B, C, D, E) doivent proposer des combinaisons crédibles de ces chiffres romains (ex: "I + II + IV", "II + III + V", "I + III", etc.).
+
+4. "association" (CRITIQUE — ZÉRO ERREUR D'AFFICHAGE) :
+   - Tu DOIS obligatoirement remplir l'objet \`matchingColumns\` contenant :
+     * \`leftColumnTitle\` (ex: "Entités cliniques / Paramètres")
+     * \`rightColumnTitle\` (ex: "Mécanismes / Caractéristiques")
+     * \`leftItems\`: exactement 5 éléments identifiés de "1" à "5"
+     * \`rightItems\`: exactement 5 éléments identifiés de "A" à "E"
+   - Ensuite seulement, les 5 \`options\` de réponse proposent des appariements complets (ex: "1-B • 2-E • 3-A • 4-C • 5-D").
+
+5. "jumelage" :
+   - Tu DOIS obligatoirement remplir \`jumelageData\` avec \`statementOne\` (1ère assertion issue du cours), \`connector\` ("PARCE QUE" ou "D’OÙ"), et \`statementTwo\` (2ème assertion).
+   - Les 5 \`options\` doivent expliciter clairement le statut de vérité et de liaison :
+     * "Les deux propositions sont vraies et ont une relation de cause à effet"
+     * "Les deux propositions sont vraies mais sans relation de cause à effet"
+     * "La première proposition est vraie, mais la seconde est fausse"
+     * "La première proposition est fausse, mais la seconde est vraie"
+     * "Les deux propositions sont fausses"
+   - Varie le cas de figure réel d'un jumelage à l'autre (ne crée pas uniquement des paires Vrai/Vrai liées).
+
+=== PLAN DE VARIÉTÉ OBLIGATOIRE QUESTION PAR QUESTION ===
+${perQuestionBlueprint}
+
+Réponds UNIQUEMENT avec un objet JSON valide respectant strictement la structure suivante :
+{
+  "questions": [
+    {
+      "archetype": "complement_multiple" | "censure" | "groupage" | "jumelage" | "association",
+      "cognitiveTier": "${cognitiveTier}",
+      "stem": "Énoncé de la question (sans inclure les colonnes ni les assertions I-V qui ont leurs champs dédiés)",
+      "conceptTag": "Résumé en 5 mots du concept précis testé",
+      "matchingColumns": { // UNIQUEMENT si archetype === "association", sinon null
+        "leftColumnTitle": "Titre Colonne 1",
+        "rightColumnTitle": "Titre Colonne 2",
+        "leftItems": [{ "id": "1", "text": "..." }, { "id": "2", "text": "..." }, { "id": "3", "text": "..." }, { "id": "4", "text": "..." }, { "id": "5", "text": "..." }],
+        "rightItems": [{ "id": "A", "text": "..." }, { "id": "B", "text": "..." }, { "id": "C", "text": "..." }, { "id": "D", "text": "..." }, { "id": "E", "text": "..." }]
+      },
+      "groupageStatements": [ // UNIQUEMENT si archetype === "groupage", sinon null
+        { "numeral": "I", "text": "...", "isTrue": true },
+        { "numeral": "II", "text": "...", "isTrue": false },
+        { "numeral": "III", "text": "...", "isTrue": true },
+        { "numeral": "IV", "text": "...", "isTrue": true },
+        { "numeral": "V", "text": "...", "isTrue": false }
+      ],
+      "jumelageData": { // UNIQUEMENT si archetype === "jumelage", sinon null
+        "statementOne": "...",
+        "connector": "PARCE QUE",
+        "statementTwo": "..."
+      },
+      "options": [
+        { "letter": "A", "text": "...", "rationale": "Justification précise selon le cours" },
+        { "letter": "B", "text": "...", "rationale": "..." },
+        { "letter": "C", "text": "...", "rationale": "..." },
+        { "letter": "D", "text": "...", "rationale": "..." },
+        { "letter": "E", "text": "...", "rationale": "..." }
+      ],
+      "correctLetter": "A" | "B" | "C" | "D" | "E",
+      "globalExplanation": "Synthèse pédagogique claire expliquant la démarche de résolution.",
+      "courseExcerpt": "Passage ou fait exact du cours qui valide la réponse."
+    }
+  ]
+}`;
+
+    const geminiKey = Deno.env.get("GEMINI_API_KEY");
+    const openaiKey = Deno.env.get("OPENAI_API_KEY");
+
+    let parsedPayload: { questions: any[] } = { questions: [] };
+
     if (geminiKey) {
-      draftData = await callGeminiModel({
-        systemPrompt,
-        userPrompt: draftUserPrompt,
-        apiKey: geminiKey,
-        model: "gemini-2.5-flash",
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: [
+              {
+                role: "user",
+                parts: [{ text: `CONTENU DU COURS (${courseTitle}) :\n\n${courseContent}` }]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.65,
+              responseMimeType: "application/json"
+            }
+          })
+        }
+      );
+
+      const data = await response.json();
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+      parsedPayload = JSON.parse(rawText);
+    } else if (openaiKey) {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openaiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `CONTENU DU COURS (${courseTitle}) :\n\n${courseContent}` }
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.65
+        })
       });
+
+      const data = await response.json();
+      parsedPayload = JSON.parse(data?.choices?.[0]?.message?.content || "{}");
     } else {
-      draftData = await callClaudeSupervisorModel({
-        systemPrompt,
-        userPrompt: draftUserPrompt,
-        anthropicKey: anthropicKey!,
-      });
+      throw new Error("Aucune clé API (GEMINI_API_KEY ou OPENAI_API_KEY) configurée dans Supabase.");
     }
 
-    let candidateQuestions: any[] = Array.isArray(draftData?.questions)
-      ? draftData.questions
-      : [];
-
-    if (enableSupervisorAudit && candidateQuestions.length > 0) {
-      const supervisorSystem = buildSupervisorSystemPrompt();
-      const supervisorUserPrompt = `
-CAHIER DES CHARGES ET TEXTE SOURCE DU COURS :
-${systemPrompt}
-
-QCM BROUILLONS À AUDITER, CORRIGER ET SUBLIMER :
-${JSON.stringify({ questions: candidateQuestions }, null, 2)}
-`;
-
-      try {
-        let auditedData: any;
-        if (anthropicKey) {
-          auditedData = await callClaudeSupervisorModel({
-            systemPrompt: supervisorSystem,
-            userPrompt: supervisorUserPrompt,
-            anthropicKey,
-          });
-        } else if (geminiKey) {
-          auditedData = await callGeminiModel({
-            systemPrompt: supervisorSystem,
-            userPrompt: supervisorUserPrompt,
-            apiKey: geminiKey,
-            model: "gemini-2.5-flash",
-          });
-        }
-
-        if (Array.isArray(auditedData?.questions) && auditedData.questions.length > 0) {
-          candidateQuestions = auditedData.questions;
-        }
-      } catch (auditErr) {
-        console.warn("Avertissement: Passe superviseur ignorée:", auditErr);
-      }
-    }
-
-    const verifiedQuestions = enforceDeterministicGridIntegrity(
-      candidateQuestions,
-      questionSpecs,
-      sectionIndex,
-      sectionTitle
-    );
+    // Application du mélangeur cryptographique et anti-répétition des lettres (A-E)
+    const balancedQuestions = rebalanceAndShuffleQuestions(parsedPayload.questions || []);
 
     return new Response(
       JSON.stringify({
-        questions: verifiedQuestions,
-        meta: {
-          sectionIndex,
-          sectionTitle,
-          totalGenerated: verifiedQuestions.length,
-          supervisorModel: anthropicKey ? "claude-sonnet-4-6" : "gemini-2.5-flash",
-        },
+        seriesTitle: `${courseTitle} #${seriesNumber}`,
+        seriesNumber,
+        cognitiveTier,
+        archetype,
+        questions: balancedQuestions
       }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
-    console.error("Erreur dans generate-quiz:", error);
     return new Response(
-      JSON.stringify({
-        error: error?.message || "Erreur interne lors de la génération des QCM",
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      }
+      JSON.stringify({ error: error.message || "Erreur lors de la génération des QCM" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
+

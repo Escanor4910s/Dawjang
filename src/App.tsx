@@ -32,6 +32,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const QuizLibrary = lazy(() => import("./pages/QuizLibrary"));
 const Library = lazy(() => import("./pages/Library"));
 const Quiz = lazy(() => import("./pages/Quiz"));
+const QuizWorkspace = lazy(() => import("./components/quiz/QuizWorkspace"));
 const QcmMasterStudio = lazy(() => import("./pages/QcmMasterStudio"));
 const Exams = lazy(() => import("./pages/Exams"));
 const ExamMode = lazy(() => import("./pages/ExamMode"));
@@ -149,6 +150,8 @@ const App = () => {
                 <Route path="/quiz" element={<Quiz />} />
                 <Route path="/quizzes" element={<Navigate to="/qcm" replace />} />
                 <Route path="/qcm" element={<QcmMasterStudio />} />
+                <Route path="/quiz-workspace" element={<QuizWorkspace />} />
+                <Route path="/qcm-v2" element={<QuizWorkspace />} />
                 <Route path="/qcm-studio" element={<QcmMasterStudio />} />
                 <Route path="/constructeur-qcm" element={<QcmMasterStudio />} />
                 <Route path="/qcm-builder" element={<QcmMasterStudio />} />
