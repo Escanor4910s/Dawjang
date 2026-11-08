@@ -112,5 +112,11 @@
   },
   "optionalDependencies": {
     "puppeteer": "^25.16.0"
+  },
+  "overrides": {
+    "react-mde": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
   }
 }
