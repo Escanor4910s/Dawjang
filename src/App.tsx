@@ -144,7 +144,7 @@ const App = () => {
                 <Route path="/smart-flashcards" element={<SmartFlashcardsPage />} />
                 <Route path="/smart-flashcards/:courseId" element={<SmartFlashcardsPage />} />
                 <Route path="/add-course" element={<Navigate to="/qcm" replace />} />
-                <Route path="/quiz-library" element={<Library />} />
+                <Route path="/quiz-library" element={<QuizLibrary />} />
                 <Route path="/library" element={<Library />} />
                 <Route path="/courses" element={<Library />} />
                 <Route path="/quiz" element={<Quiz />} />
