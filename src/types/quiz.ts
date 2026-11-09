@@ -3,15 +3,14 @@ export type QuestionArchetype =
   | 'censure'
   | 'groupage'
   | 'jumelage'
-  | 'association'
-  | 'mixte';
+  | 'association';
 
 export type CognitiveTier = 'ancrage' | 'mecanismes' | 'discernement';
 
 export type OptionLetter = 'A' | 'B' | 'C' | 'D' | 'E';
 
 export interface MatchingColumnItem {
-  id: string; // "1".."5" pour colonne gauche, "A".."E" (ou "a".."e") pour colonne droite
+  id: string; // "1".."5" (Colonne 1) ou "A".."E" (Colonne 2)
   text: string;
 }
 
@@ -25,7 +24,7 @@ export interface MatchingColumnsPayload {
 export interface GroupageStatement {
   numeral: 'I' | 'II' | 'III' | 'IV' | 'V';
   text: string;
-  isTrue: boolean;
+  isTrue?: boolean;
 }
 
 export interface JumelagePayload {
@@ -37,43 +36,41 @@ export interface JumelagePayload {
 export interface QuizOption {
   letter: OptionLetter;
   text: string;
-  rationale?: string; // Justification précise tirée du cours pour cette option
+  rationale?: string;
 }
 
 export interface QuizQuestion {
   id: string;
   index: number;
-  archetype: Exclude<QuestionArchetype, 'mixte'>;
+  archetype: QuestionArchetype;
   cognitiveTier: CognitiveTier;
-  stem: string; // L'énoncé principal reformulé avec créativité
-  conceptTag: string; // Notion clé testée (sert à l'exclusion inter-séries #1, #2...)
-  
-  // Structures spécialisées obligatoires selon l'archétype
-  matchingColumns?: MatchingColumnsPayload;
-  groupageStatements?: GroupageStatement[];
-  jumelageData?: JumelagePayload;
-
-  options: QuizOption[]; // Toujours 5 choix (A, B, C, D, E) mélangés côté serveur
+  stem: string;
+  conceptTag: string;
+  matchingColumns?: MatchingColumnsPayload | null;
+  groupageStatements?: GroupageStatement[] | null;
+  jumelageData?: JumelagePayload | null;
+  options: QuizOption[];
   correctLetter: OptionLetter;
   globalExplanation: string;
-  courseExcerpt: string; // Citation ou référence exacte du cours prouvant la réponse
+  courseExcerpt?: string;
 }
 
-export interface UploadedCourseDocument {
+export interface CourseSourceItem {
   id: string;
-  fileName: string;
-  cleanTitle: string;
+  title: string;
+  cleanRootName: string; // ex: "Anémie"
   content: string;
+  sourceType: 'library' | 'upload' | 'text' | 'annales';
+  wordCount: number;
 }
 
-export interface QuizSeries {
+export interface QuizSeriesSession {
   id: string;
   courseRootTitle: string; // ex: "Anémie"
-  seriesNumber: number;    // ex: 1 -> affiché "Anémie #1"
-  displayTitle: string;    // "Anémie #1"
+  seriesNumber: number;    // ex: 1, 2, 3...
+  displayTitle: string;    // ex: "Anémie #1"
   createdAt: string;
-  archetype: QuestionArchetype;
+  archetypes: QuestionArchetype[];
   cognitiveTier: CognitiveTier;
   questions: QuizQuestion[];
 }
-

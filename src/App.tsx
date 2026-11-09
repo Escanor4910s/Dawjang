@@ -32,7 +32,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const QuizLibrary = lazy(() => import("./pages/QuizLibrary"));
 const Library = lazy(() => import("./pages/Library"));
 const Quiz = lazy(() => import("./pages/Quiz"));
-const QuizWorkspace = lazy(() => import("./components/quiz/QuizWorkspace"));
+const ConstructeurQCM = lazy(() => import("./components/quiz/ConstructeurQCM"));
 const QcmMasterStudio = lazy(() => import("./pages/QcmMasterStudio"));
 const Exams = lazy(() => import("./pages/Exams"));
 const ExamMode = lazy(() => import("./pages/ExamMode"));
@@ -149,13 +149,13 @@ const App = () => {
                 <Route path="/courses" element={<Library />} />
                 <Route path="/quiz" element={<Quiz />} />
                 <Route path="/quizzes" element={<Navigate to="/qcm" replace />} />
-                <Route path="/qcm" element={<QcmMasterStudio />} />
-                <Route path="/quiz-workspace" element={<QuizWorkspace />} />
-                <Route path="/qcm-v2" element={<QuizWorkspace />} />
-                <Route path="/qcm-studio" element={<QcmMasterStudio />} />
-                <Route path="/constructeur-qcm" element={<QcmMasterStudio />} />
-                <Route path="/qcm-builder" element={<QcmMasterStudio />} />
-                <Route path="/create-quiz" element={<QcmMasterStudio />} />
+                <Route path="/qcm" element={<ConstructeurQCM />} />
+                <Route path="/qcm-studio" element={<ConstructeurQCM />} />
+                <Route path="/constructeur-qcm" element={<ConstructeurQCM />} />
+                <Route path="/qcm-builder" element={<ConstructeurQCM />} />
+                <Route path="/create-quiz" element={<ConstructeurQCM />} />
+                <Route path="/quiz-workspace" element={<Navigate to="/qcm" replace />} />
+                <Route path="/qcm-v2" element={<Navigate to="/qcm" replace />} />
                 <Route path="/community" element={<Community />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/collection" element={<Collection />} />
