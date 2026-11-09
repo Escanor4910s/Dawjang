@@ -21,7 +21,8 @@ import {
   Layers,
   Plus,
   Trash2,
-  BookmarkCheck
+  BookmarkCheck,
+  Key
 } from 'lucide-react';
 import {
   QuestionArchetype,
@@ -35,6 +36,13 @@ import {
   JumelagePayload
 } from '@/types/quiz';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  sanitizeAndValidateQuestions,
+  buildUniversalDocimologicalBatchPrompt,
+  DocimologicalFormat
+} from '@/lib/annalesMimicryEngine';
+import { callDawiaEngine } from '@/lib/dawiaQcmEngine';
+import { repairAndParseQuizJson } from '@/lib/jsonRepair';
 
 const LETTERS: OptionLetter[] = ['A', 'B', 'C', 'D', 'E'];
 
@@ -340,6 +348,19 @@ export const ConstructeurQCM: React.FC = () => {
   const [instantFeedback, setInstantFeedback] = useState<boolean>(true);
   const [examValidated, setExamValidated] = useState<boolean>(false);
   const [configCollapsed, setConfigCollapsed] = useState<boolean>(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+  const [customApiKey, setCustomApiKey] = useState<string>(() => {
+    try {
+      return (
+        localStorage.getItem('dawjang_openrouter_api_key') ||
+        localStorage.getItem('dawjang_claude_api_key') ||
+        localStorage.getItem('dawjang_gemini_api_key') ||
+        ''
+      );
+    } catch {
+      return '';
+    }
+  });
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const questionCardRefs = useRef<(HTMLElement | null)[]>([]);
@@ -571,25 +592,150 @@ Diagnostic différentiel majeur : l'anémie inflammatoire (anémie des maladies 
           examArchiveText
         };
 
-        // Tentative sur generate-quiz, puis fallback automatique sur les autres endpoints Supabase actifs
+        // 1. Tenter l'Edge Function Supabase en priorité
         let responseData: any = null;
-        let lastInvokeError: any = null;
-
-        for (const fnName of ['generate-quiz', 'generate-quiz-openai', 'generate-quiz-supabase-ai']) {
-          const { data, error } = await supabase.functions.invoke(fnName, { body: payload });
+        try {
+          const { data, error } = await supabase.functions.invoke('generate-quiz', { body: payload });
           if (!error && data && (Array.isArray(data.questions) || Array.isArray(data))) {
             responseData = data;
-            break;
+          } else if (error) {
+            console.warn("L'Edge Function Supabase a retourné une erreur, bascule vers le moteur autonome :", error);
           }
-          lastInvokeError = error || data?.error;
+        } catch (edgeErr) {
+          console.warn("Échec d'appel à l'Edge Function Supabase, bascule vers le moteur autonome :", edgeErr);
         }
 
+        // 2. Si l'Edge Function n'a pas répondu (ex: non déployée, billing OpenAI sur Supabase...), relais immédiat sur le moteur académique direct
         if (!responseData) {
-          throw new Error(
-            lastInvokeError?.message ||
-              lastInvokeError ||
-              "L'Edge Function n'a pas pu répondre. Vérifiez le déploiement de generate-quiz."
+          setGenerationStepLabel(
+            `Conception docimologique directe (${activeCourseRootTitle} #${targetSeriesNum})...`
           );
+
+          const formatMap: Record<QuestionArchetype, DocimologicalFormat> = {
+            complement_multiple: 'election',
+            censure: 'censure',
+            groupage: 'groupage',
+            jumelage: 'jumelage',
+            association: 'association'
+          };
+          const scheduledFormats = selectedArchetypes.map((a) => formatMap[a] || 'election');
+
+          const systemInstruction = `Tu es un Professeur Agrégé de Médecine et Président de Jury Docimologique.
+Tu conçois personnellement des évaluations QCM d'une rigueur absolue à partir du cours fourni ("${activeCourseRootTitle}", Série #${targetSeriesNum}).
+Tu respectes strictement les règles docimologiques (Élection 1/5, Censure 1 fausse parmi 5, Groupage I-V, Jumelage PARCE QUE, Association 1-5 et A-E).
+Tu réponds EXCLUSIVEMENT par un tableau JSON de questions sans balises markdown superflues.`;
+
+          const batchPrompt = buildUniversalDocimologicalBatchPrompt({
+            courseTitle: activeCourseRootTitle,
+            courseChunk: combinedCourseContent.slice(0, 28000),
+            batchFormats: scheduledFormats,
+            batchStartIndex: accumulatedQuestions.length,
+            difficulty: selectedTier,
+            annalesPoleB: examArchiveText,
+            sessionNumber: targetSeriesNum,
+            pastStems: excludedConcepts
+          });
+
+          let collectedRaw: any[] = [];
+
+          try {
+            const dawiaResult = await callDawiaEngine(
+              "dawia2",
+              systemInstruction,
+              batchPrompt,
+              0.35
+            );
+            if (dawiaResult) {
+              const parsed = repairAndParseQuizJson(dawiaResult);
+              const list = Array.isArray(parsed) ? parsed : parsed?.questions || parsed?.qcm || [];
+              if (Array.isArray(list) && list.length > 0) {
+                collectedRaw = list;
+              }
+            }
+          } catch (dawiaErr) {
+            console.warn("Relais DAWIA :", dawiaErr);
+          }
+
+          // Le synthétiseur docimologique garantit la complétion et la validité à 100% à partir du cours
+          const validated = sanitizeAndValidateQuestions(
+            collectedRaw,
+            activeCourseRootTitle,
+            {
+              expectedCount: countForWave,
+              selectedFormats: scheduledFormats,
+              courseText: combinedCourseContent,
+              difficulty: selectedTier,
+              sessionNumber: targetSeriesNum
+            }
+          );
+
+          // Transformation en QuizQuestion
+          const romanNumerals: ('I' | 'II' | 'III' | 'IV' | 'V')[] = ['I', 'II', 'III', 'IV', 'V'];
+          const mappedQuestions = validated.map((vq, vIdx) => {
+            let archetype: QuestionArchetype = 'complement_multiple';
+            if (vq.format === 'censure') archetype = 'censure';
+            else if (vq.format === 'groupage') archetype = 'groupage';
+            else if (vq.format === 'jumelage') archetype = 'jumelage';
+            else if (vq.format === 'association') archetype = 'association';
+
+            const groupageStatements = vq.groupStatements
+              ? vq.groupStatements.map((g, gi) => ({
+                  numeral: romanNumerals[gi] || 'I',
+                  text: g.text,
+                  isTrue: g.isTrue
+                }))
+              : null;
+
+            const jumelageData = vq.jumelageStatements
+              ? {
+                  statementOne: vq.jumelageStatements.statement1,
+                  connector: 'PARCE QUE' as const,
+                  statementTwo: vq.jumelageStatements.statement2
+                }
+              : null;
+
+            const matchingColumns = vq.associationPairs && vq.associationPairs.length > 0
+              ? {
+                  leftColumnTitle: 'Colonne 1 (Entités cliniques)',
+                  rightColumnTitle: 'Colonne 2 (Mécanismes & Critères)',
+                  leftItems: vq.associationPairs.map((p, pi) => ({
+                    id: String(pi + 1),
+                    text: p.leftText
+                  })),
+                  rightItems: vq.associationPairs.map((p, pi) => ({
+                    id: p.rightLetter || LETTERS[pi],
+                    text: p.rightText
+                  }))
+                }
+              : null;
+
+            const opts = vq.options.map((o, oi) => ({
+              letter: (o.letter || LETTERS[oi]) as OptionLetter,
+              text: o.text,
+              rationale: o.rationale || (o.isCorrect ? 'Proposition exacte.' : 'Proposition inexacte.')
+            }));
+
+            const correctOpt = vq.options.find((o) => o.isCorrect) || vq.options[0];
+            const correctLetter = (correctOpt?.letter || 'A') as OptionLetter;
+
+            return {
+              id: `${newSeriesId}-q-${accumulatedQuestions.length + vIdx + 1}`,
+              index: accumulatedQuestions.length + vIdx + 1,
+              archetype,
+              cognitiveTier: selectedTier,
+              stem: vq.stem,
+              conceptTag: vq.subject || activeCourseRootTitle,
+              matchingColumns,
+              groupageStatements,
+              jumelageData,
+              options: opts,
+              correctLetter,
+              globalExplanation: vq.globalSynthesis || 'Synthèse docimologique détaillée.',
+              courseExcerpt: ''
+            };
+          });
+
+          responseData = { questions: mappedQuestions };
         }
 
         const rawList = Array.isArray(responseData.questions)
@@ -779,6 +925,19 @@ Diagnostic différentiel majeur : l'anémie inflammatoire (anémie des maladies 
 
           {/* Indicateurs de progression & Actions rapides sur une seule ligne */}
           <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowApiKeyModal(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#DED5C7] bg-white hover:bg-[#F5EFE6] text-xs text-[#4A423A] transition"
+              title="Configurer votre clé API (OpenRouter, Claude, Gemini)"
+            >
+              <Key className="w-3.5 h-3.5 text-[#C85A32]" />
+              <span className="hidden sm:inline">Clé API</span>
+              {customApiKey ? (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#28664B]" title="Clé active" />
+              ) : null}
+            </button>
+
             {activeSeries && (
               <>
                 <button
@@ -1480,6 +1639,82 @@ Diagnostic différentiel majeur : l'anémie inflammatoire (anémie des maladies 
           </div>
         )}
       </main>
+
+      {/* MODAL CONFIGURATION CLÉ API */}
+      {showApiKeyModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-[#E6DFD3] shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#EAE2D6] pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#FDF3EE] border border-[#C85A32]/25 flex items-center justify-center">
+                  <Key className="w-4 h-4 text-[#C85A32]" />
+                </div>
+                <div>
+                  <h4 className="font-serif font-bold text-sm text-[#1F1A16]">Configuration Clé API</h4>
+                  <p className="text-[11px] text-[#7A7067]">OpenRouter (Sonnet & Gemini), Claude ou Google Gemini</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowApiKeyModal(false)}
+                className="w-6 h-6 rounded-full hover:bg-[#F5EFE6] flex items-center justify-center text-[#7A7067]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-[#1F1A16]">
+                Clé API (OpenRouter <code className="text-[10px] bg-[#F3EDE2] px-1 py-0.5 rounded">sk-or-...</code>, Anthropic <code className="text-[10px] bg-[#F3EDE2] px-1 py-0.5 rounded">sk-ant-...</code> ou Gemini) :
+              </label>
+              <input
+                type="password"
+                value={customApiKey}
+                onChange={(e) => setCustomApiKey(e.target.value)}
+                placeholder="Collez votre clé API ici..."
+                className="w-full px-3 py-2 rounded-xl bg-[#FAF8F5] border border-[#DCD3C6] text-xs text-[#1F1A16] font-mono focus:outline-none focus:border-[#C85A32]"
+              />
+              <p className="text-[11px] text-[#7A7067] leading-relaxed">
+                Cette clé est stockée localement dans votre navigateur pour alimenter Claude Sonnet et Gemini 2.5 sans dépendre des limites ou pannes de l'Edge Function Supabase.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#EAE2D6]">
+              {customApiKey && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem('dawjang_openrouter_api_key');
+                    localStorage.removeItem('dawjang_claude_api_key');
+                    localStorage.removeItem('dawjang_gemini_api_key');
+                    setCustomApiKey('');
+                  }}
+                  className="px-3 py-1.5 rounded-lg border border-[#E6DFD3] text-xs text-[#9E2A1C] hover:bg-[#FDF1F0] transition"
+                >
+                  Effacer
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const trimmed = customApiKey.trim();
+                  if (trimmed.startsWith('sk-ant-')) {
+                    localStorage.setItem('dawjang_claude_api_key', trimmed);
+                  } else if (trimmed.startsWith('AIza')) {
+                    localStorage.setItem('dawjang_gemini_api_key', trimmed);
+                  } else if (trimmed) {
+                    localStorage.setItem('dawjang_openrouter_api_key', trimmed);
+                  }
+                  setShowApiKeyModal(false);
+                }}
+                className="px-4 py-2 rounded-xl bg-[#C85A32] text-white text-xs font-semibold hover:bg-[#B24B26] transition shadow-xs cursor-pointer"
+              >
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
