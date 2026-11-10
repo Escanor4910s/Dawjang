@@ -1,8 +1,3 @@
-import {
-  generateAtlasMagistralSummary,
-  compileAtlasSummaryToHtml,
-  type AtlasMagistralSummary
-} from "@/lib/atlasMagistralEngine";
 // src/pages/GenerateSummary.tsx
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -67,7 +62,6 @@ import {
 import { ObjectiveExamBatchUploader } from "@/components/ObjectiveExamBatchUploader";
 
 export type PureSynthesisMode =
-  | "atlas_magistral"
   | "objectives_verbatim"
   | "drive_objective_strategy";
 type SourceTabMode = "upload" | "library" | "paste";
@@ -1035,25 +1029,7 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
     try {
       let generatedMarkdown = "";
 
-      if (selectedMode === "atlas_magistral") {
-        setCurrentStepIndex(1);
-        setTotalStepsCount(7);
-        setProgressLabel("Étape 1/7 : Cartographie des chapitres Romains (Mode Atlas)...");
-
-        const atlasResult = await generateAtlasMagistralSummary({
-          rawCourseText: effectiveCourseText,
-          courseTitle: title,
-          courseAuthor: "Faculté de Médecine",
-          onProgress: (step, total, label) => {
-            setCurrentStepIndex(step);
-            setTotalStepsCount(total);
-            setProgressLabel(label);
-          },
-        });
-
-        const atlasHtml = compileAtlasSummaryToHtml(atlasResult);
-        generatedMarkdown = atlasHtml;
-      } else if (selectedMode === "drive_objective_strategy") {
+      if (selectedMode === "drive_objective_strategy") {
         setCurrentStepIndex(1);
         setTotalStepsCount(5);
         setProgressLabel(
@@ -1172,9 +1148,7 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
 
       const wc = Math.max(1, plain.trim().split(/\s+/).filter(Boolean).length);
       const doctrineLabel =
-        selectedMode === "atlas_magistral"
-          ? (DOCTRINE_LABELS.atlas_magistral || "Mode Atlas Magistral")
-          : selectedMode === "objectives_verbatim"
+        selectedMode === "objectives_verbatim"
           ? DOCTRINE_LABELS.objectives_verbatim
           : DOCTRINE_LABELS.drive_objective_strategy;
 
@@ -1315,18 +1289,13 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
 
               {[
                 {
-                  id: "atlas_magistral" as PureSynthesisMode,
-                  label: "Mode Atlas",
-                  icon: Layers,
-                },
-                {
                   id: "objectives_verbatim" as PureSynthesisMode,
-                  label: "Fidèle aux Objectifs",
+                  label: "1. Fidèle aux Objectifs",
                   icon: Target,
                 },
                 {
                   id: "drive_objective_strategy" as PureSynthesisMode,
-                  label: "Objectifs & Audit d'Annales",
+                  label: "2. Objectifs & Audit d'Annales (Argon)",
                   icon: ShieldCheck,
                 },
               ].map((tab) => {
@@ -1375,31 +1344,22 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
-              {
-                id: "atlas_magistral" as PureSynthesisMode,
-                title: "Mode Atlas",
-                desc: "Restitution intégrale du cours en chapitres Romains • Tableaux comparatifs .course-table, seuils chiffrés & protocoles sans coupure.",
-                icon: Layers,
-                badge: "ATLAS",
-                isHighlight: true,
-              },
               {
                 id: "objectives_verbatim" as PureSynthesisMode,
                 title: "Fidèle aux Objectifs",
                 desc: "Extrait la diapositive officielle « Objectifs » du professeur et consacre 1 passe dédiée à chaque objectif du 1er au dernier.",
                 icon: Target,
-                badge: "OBJECTIFS",
-                isHighlight: false,
+                badge: "MODE 1",
               },
               {
                 id: "drive_objective_strategy" as PureSynthesisMode,
                 title: "Objectifs & Audit d'Annales",
                 desc: "Synthèse Unifiée en 4 Parties : Audit d'incidence par sous-partie, Cours exhaustif complet, 5 Pièges Majeurs & Démarche Cas Clinique.",
                 icon: ShieldCheck,
-                badge: "AUDIT D'ANNALES",
-                isHighlight: false,
+                badge: "PROTOCOLE ARGON",
+                isHighlight: true,
               },
             ].map((modeCard) => {
               const MIcon = modeCard.icon;
