@@ -1,3 +1,5 @@
+import { AtlasMagistralViewer } from "@/components/synthesis/AtlasMagistralViewer";
+import { tryParseAtlasMagistralHtml } from "@/lib/atlasMagistralEngine";
 // src/pages/SummaryView.tsx
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -336,6 +338,22 @@ export default function SummaryView() {
             </Button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  const atlasCourse = React.useMemo(() => {
+    if (!summary?.htmlContent) return null;
+    return tryParseAtlasMagistralHtml(summary.htmlContent);
+  }, [summary?.htmlContent]);
+
+  if (atlasCourse) {
+    return (
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8 space-y-6">
+        <AtlasMagistralViewer
+          course={atlasCourse}
+          onBack={() => navigate("/summaries")}
+        />
       </div>
     );
   }

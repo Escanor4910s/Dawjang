@@ -1,3 +1,5 @@
+import { callGeminiAcademicEngine } from "@/lib/syncEngine";
+import { repairAndParseQuizJson } from "@/lib/jsonRepair";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeWithRetry } from "@/lib/edgeRetry";
 
@@ -97,20 +99,42 @@ export async function generateQuizWithLovable(
 ): Promise<any[]> {
   console.log(`[Lovable AI] Generating ${nbQuestions} questions (${type}, ${difficulty})`);
   
-  const { data, error } = await supabase.functions.invoke('generate-quiz-openai', {
-    body: { content, nbQuestions, type, difficulty }
-  });
-
-  if (error) {
-    console.error("[Lovable AI] Error generating quiz:", error);
-    throw new Error(error.message || "Erreur lors de la génération des QCM.");
+  let rawQcm: any[] = [];
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-quiz-openai', {
+      body: { content, nbQuestions, type, difficulty }
+    });
+    if (!error && data?.qcm && Array.isArray(data.qcm) && data.qcm.length > 0) {
+      rawQcm = data.qcm;
+    }
+  } catch (err) {
+    console.warn("[Lovable AI] Edge function invoke exception, falling back:", err);
   }
 
-  if (data?.error) {
-    throw new Error(data.error);
+  if (rawQcm.length === 0) {
+    try {
+      const prompt = `Génère ${nbQuestions} QCM médicaux (${type}, difficulté ${difficulty}) basés sur ce cours :\n${content.slice(0, 20000)}\n\nRéponds EXCLUSIVEMENT par un tableau JSON valide au format :\n[{"question": "...", "choices": ["A", "B", "C", "D", "E"], "correct": [0], "explanation": "..."}]`;
+      const fallbackText = await callGeminiAcademicEngine(
+        "Tu es un professeur agrégé de médecine expert en docimologie médicale.",
+        prompt,
+        0.35
+      );
+      if (fallbackText) {
+        const parsed = repairAndParseQuizJson(fallbackText);
+        const list = Array.isArray(parsed) ? parsed : (parsed?.questions || parsed?.qcm || []);
+        if (Array.isArray(list) && list.length > 0) {
+          rawQcm = list;
+        }
+      }
+    } catch (fbErr) {
+      console.warn("[Lovable AI] Fallback direct failed:", fbErr);
+    }
   }
 
-  const rawQcm = data.qcm || [];
+  if (rawQcm.length === 0) {
+    throw new Error("Impossible de joindre le service de génération. Veuillez vérifier vos clés API dans les paramètres.");
+  }
+
   return smartShuffleQCM(rawQcm, type);
 }
 
@@ -174,9 +198,21 @@ export async function askMorWithLovable(
     }
   });
 
-  if (error) {
-    console.error("[Lovable AI] Error asking Mor:", error);
-    throw new Error(error.message || "Erreur lors de la communication avec l'Agent Mor.");
+  if (error || !data?.answer) {
+    console.warn("[Lovable AI] ask-mor Edge function unavailable, using academic engine fallback:", error);
+    try {
+      const fallbackReply = await callGeminiAcademicEngine(
+        "Tu es le Pr. Mor, mentor pédagogique et agrégé de médecine. Réponds avec rigueur et bienveillance à l'étudiant.",
+        questionContext,
+        0.3
+      );
+      if (fallbackReply) {
+        return { answer: fallbackReply, sources: [] };
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(error?.message || "Erreur lors de la communication avec l'Agent Mor.");
   }
 
   if (data?.error) {

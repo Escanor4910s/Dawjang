@@ -1,3 +1,5 @@
+import { exportAtlasMagistralToPDF } from "@/utils/atlasMagistralPdfExport";
+import { tryParseAtlasMagistralHtml } from "@/lib/atlasMagistralEngine";
 // src/pages/Summaries.tsx
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -46,6 +48,7 @@ import {
 import { exportArgonSummaryToPDF } from "@/utils/argonPdfExport";
 
 export type SynthesisDoctrine =
+  | "atlas_magistral"
   | "objectives_verbatim"
   | "drive_objective_strategy"
   | "harvard_method"
@@ -279,6 +282,15 @@ export default function Summaries() {
 
   const handleDirectPdfDownload = (item: EditorSummaryItem, e: React.MouseEvent) => {
     e.stopPropagation();
+    const atlasData = tryParseAtlasMagistralHtml(item.htmlContent);
+    if (atlasData) {
+      exportAtlasMagistralToPDF(atlasData);
+      toast({
+        title: "Export PDF Atlas Magistral lancé",
+        description: `Le document PDF vectoriel haute définition « ${item.title} » est prêt.`,
+      });
+      return;
+    }
     const isAudit =
       (item.doctrineLabel || "").toLowerCase().includes("argon") ||
       (item.doctrineLabel || "").toLowerCase().includes("audit") ||
@@ -600,6 +612,7 @@ export default function Summaries() {
               rawHtml.match(/\|.*\|.*\n\|[\s\-:|]+\|/g) || []
             ).length;
             const labelLower = (item.doctrineLabel || "").toLowerCase();
+            const isAtlas = labelLower.includes("atlas") || rawHtml.includes("@ATLAS_MAGISTRAL_JSON");
             const isArgon =
               labelLower.includes("argon") ||
               labelLower.includes("audit") ||

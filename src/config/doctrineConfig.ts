@@ -1,3 +1,5 @@
+import { AtlasMagistralViewer } from "@/components/synthesis/AtlasMagistralViewer";
+import { ATLAS_MAGISTRAL_SONNET_4_6_SYSTEM_PROMPT } from "@/lib/atlasMagistralEngine";
 // src/config/doctrineConfig.ts
 import React from "react";
 import { ObjectifEditor, ObjectivesEditor } from "@/components/synthesis/ObjectifEditor";
@@ -9,6 +11,7 @@ import { ArvaRenderer } from "@/components/synthesis/ArvaRenderer";
 import { PROMPTS, buildArvaPrompt } from "@/utils/doctrineGenerators";
 
 export type Doctrine =
+  | "atlas_magistral"
   | "objectives_verbatim"
   | "harvard_method"
   | "world_number_one"
@@ -38,6 +41,27 @@ export interface DoctrineDefinition {
 }
 
 export const DOCTRINE_CONFIG: Record<Doctrine, DoctrineDefinition> = {
+  atlas_magistral: {
+    id: "atlas_magistral",
+    label: "Mode Atlas Magistral (Diapo-par-Diapo)",
+    title: "Mode Atlas Magistral",
+    shortLabel: "Atlas Magistral",
+    badge: "Intégral 100% • Diapo par Diapo",
+    subtitle: "Synthèse intégrale diapo-par-diapo • Tableaux comparatifs, seuils chiffrés & protocoles exacts",
+    tooltip:
+      "Transforme l'intégralité des diapositives du cours magistral en un atlas structuré (Chapitres I à VI, badges de diapositives, tableaux comparatifs .course-table, seuils en évidence et export PDF A4 avec filigranes DawJang).",
+    buttonText: "Générer le Résumé en Mode Atlas Magistral",
+    loadingText: "Construction de l'Atlas Magistral diapo par diapo (Claude Sonnet 4.6)...",
+    inputLabel: "Support de cours magistral (PDF, DOCX ou Texte)",
+    inputHelper: "Toutes les diapositives sont couvertes de la 1re à la dernière sans aucune perte de chiffre",
+    inputPlaceholder: "Importez votre cours magistral pour générer l'Atlas Magistral...",
+    promptDescription: ATLAS_MAGISTRAL_SONNET_4_6_SYSTEM_PROMPT,
+    editorComponent: AtlasMagistralViewer,
+    rendererComponent: AtlasMagistralViewer,
+    promptBuilder: () => ATLAS_MAGISTRAL_SONNET_4_6_SYSTEM_PROMPT,
+    buildPrompt: () => ATLAS_MAGISTRAL_SONNET_4_6_SYSTEM_PROMPT,
+  },
+
   objectives_verbatim: {
     id: "objectives_verbatim",
     label: "Objectifs du Cours (Verbatim)",
@@ -153,6 +177,7 @@ export const doctrineConfig = DOCTRINE_CONFIG;
 export const DOCTRINES_LIST: DoctrineDefinition[] = Object.values(DOCTRINE_CONFIG);
 
 export const DOCTRINE_LABELS: Record<Doctrine, string> = {
+  atlas_magistral: "Mode Atlas Magistral (Diapo-par-Diapo)",
   objectives_verbatim: "Objectifs du Cours (Verbatim)",
   harvard_method: "Méthode de Harvard",
   arva: "Méthode ARVA Excellence",
@@ -161,6 +186,12 @@ export const DOCTRINE_LABELS: Record<Doctrine, string> = {
 };
 
 export const DOCTRINE_STYLES: Record<Doctrine, { bg: string; border: string; accent: string }> = {
+  atlas_magistral: {
+    bg: "",
+    border: "border-[#C96442]",
+    accent: "text-[#C96442]",
+  },
+
   objectives_verbatim: {
     bg: "",
     border: "border-[#D96B43]",
@@ -196,5 +227,6 @@ export {
   ObjectivesRenderer,
   HarvardRenderer,
   ArvaRenderer,
+  AtlasMagistralViewer,
 };
 
