@@ -18,6 +18,19 @@ import {
 } from "@/lib/annalesMimicryEngine";
 import { callDawiaEngine } from "@/lib/dawiaQcmEngine";
 import { repairAndParseQuizJson } from "@/lib/jsonRepair";
+import { getSavedCourses } from "@/pages/Library";
+import { filterOutTombstoned } from "@/lib/syncEngine";
+import {
+  Search,
+  LayoutGrid,
+  List,
+  Check,
+  BookOpen,
+  Clock,
+  X,
+  Layers,
+  Sparkles,
+} from "lucide-react";
 
 const LETTERS: OptionLetter[] = ["A", "B", "C", "D", "E"];
 const STORAGE_SERIES_KEY = "dawjang_qcm_series_v2";
@@ -146,6 +159,111 @@ function extractCleanRootName(rawTitle: string): string {
   const cleaned = withoutYears.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
   const words = cleaned.split(" ").slice(0, 4).join(" ");
   return words || "Cours";
+}
+
+function detectSpecialtyFromText(title: string, content: string): string {
+  const combined = `${title} ${content}`.toLowerCase();
+  if (/cardio|coronaire|ecg|infarctus|péricardite|insuffisance cardiaque|hta|troponine|valvulopath/i.test(combined)) {
+    return "Cardiologie";
+  }
+  if (/anémie|hémato|drépanocytose|thalassémie|leucémie|lymphome|plaquette|ferriprive|hémolyse|hemostase|coagulation/i.test(combined)) {
+    return "Hématologie";
+  }
+  if (/pneumo|bpco|asthme|poumon|respiratoire|dyspnée|pleurésie|tuberculose|pneumonie/i.test(combined)) {
+    return "Pneumologie";
+  }
+  if (/infectio|bactérie|paludisme|méningite|sepsis|antibiotique|vih|fièvre|parasit/i.test(combined)) {
+    return "Maladies Infectieuses";
+  }
+  if (/néphro|rein|glomérul|créatinine|insuffisance rénale|protéinurie|dialyse|lithiase/i.test(combined)) {
+    return "Néphrologie";
+  }
+  if (/neuro|avc|céphalée|épilepsie|coma|méningé|paralysie|neuropathie|parkinson|alzh/i.test(combined)) {
+    return "Neurologie";
+  }
+  if (/gastro|hépato|foie|ulcère|cirrhose|ictère|diarrhée|pancréas|digestif/i.test(combined)) {
+    return "Gastro-Entérologie";
+  }
+  if (/pédiatr|enfant|nourrisson|néonat|vaccination/i.test(combined)) {
+    return "Pédiatrie";
+  }
+  if (/gynéco|obstétri|grossesse|accouchement|hémorragie de la délivrance/i.test(combined)) {
+    return "Gynécologie-Obstétrique";
+  }
+  if (/endocrino|diabète|thyroïde|surrénale|hypophyse/i.test(combined)) {
+    return "Endocrinologie";
+  }
+  return "Médecine Générale";
+}
+
+function getSpecialtyBadgeStyle(subject?: string): {
+  badgeClass: string;
+  dotColor: string;
+} {
+  const s = (subject || "").toLowerCase();
+  if (s.includes("cardio")) {
+    return {
+      badgeClass:
+        "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/50",
+      dotColor: "bg-rose-500",
+    };
+  }
+  if (s.includes("hèm") || s.includes("hem")) {
+    return {
+      badgeClass:
+        "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50",
+      dotColor: "bg-amber-600",
+    };
+  }
+  if (s.includes("pneumo")) {
+    return {
+      badgeClass:
+        "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900/50",
+      dotColor: "bg-sky-500",
+    };
+  }
+  if (s.includes("infect")) {
+    return {
+      badgeClass:
+        "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50",
+      dotColor: "bg-emerald-500",
+    };
+  }
+  if (s.includes("néphro") || s.includes("nephro") || s.includes("uro")) {
+    return {
+      badgeClass:
+        "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900/50",
+      dotColor: "bg-violet-500",
+    };
+  }
+  if (s.includes("neuro")) {
+    return {
+      badgeClass:
+        "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/50",
+      dotColor: "bg-indigo-500",
+    };
+  }
+  if (s.includes("gastro") || s.includes("hépato")) {
+    return {
+      badgeClass:
+        "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-900/50",
+      dotColor: "bg-orange-500",
+    };
+  }
+  return {
+    badgeClass: "bg-secondary text-secondary-foreground border-border",
+    dotColor: "bg-foreground/60",
+  };
+}
+
+function getClinicalExcerpt(content: string, maxChars = 135): string {
+  const cleaned = (content || "")
+    .replace(/---.*?---/g, "")
+    .replace(/^#+.*$/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length <= maxChars) return cleaned;
+  return cleaned.slice(0, maxChars).trim() + "...";
 }
 
 async function extractTextFromUploadedFile(file: File): Promise<string> {
@@ -315,6 +433,8 @@ export const ConstructeurQCM: React.FC = () => {
   const [libraryCourses, setLibraryCourses] = useState<CourseSourceItem[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("anemies_2026_ucad");
   const [biblioSearch, setBiblioSearch] = useState<string>("");
+  const [biblioLayout, setBiblioLayout] = useState<"mosaic" | "list">("mosaic");
+  const [selectedBiblioSubject, setSelectedBiblioSubject] = useState<string>("Tous");
 
   // Paramètres de génération
   const [selectedStyle, setSelectedStyle] = useState<"professeurs" | "ia_progressif">("professeurs");
@@ -382,16 +502,55 @@ export const ConstructeurQCM: React.FC = () => {
     }
   }, [seriesList]);
 
-  // Chargement des cours depuis la Bibliothèque existante (Supabase + localStorage) sans collision
+  // Chargement exhaustif des cours depuis la Bibliothèque (LocalStorage + Supabase) sans collision
   useEffect(() => {
     async function loadCourses() {
-      const list: CourseSourceItem[] = [
+      const seenIds = new Set<string>();
+      const seenTitles = new Set<string>();
+      const list: CourseSourceItem[] = [];
+
+      const addCourse = (item: CourseSourceItem) => {
+        const normTitle = (item.cleanRootName || item.title).toLowerCase().trim();
+        if (seenIds.has(item.id) || seenTitles.has(normTitle)) return;
+        seenIds.add(item.id);
+        seenTitles.add(normTitle);
+        list.push(item);
+      };
+
+      // 1. Cours enregistrés dans la bibliothèque de l'étudiant (LocalStorage)
+      try {
+        const saved = getSavedCourses();
+        if (Array.isArray(saved)) {
+          for (const c of saved) {
+            if (c && c.title && c.content) {
+              addCourse({
+                id: c.id,
+                title: c.title,
+                cleanRootName: extractCleanRootName(c.title),
+                content: c.content,
+                sourceType: "library",
+                wordCount: c.wordCount || c.content.split(/\s+/).filter(Boolean).length,
+                subject: c.subject || detectSpecialtyFromText(c.title, c.content),
+                updatedAt: c.updatedAt || "Enregistré",
+                code: c.code,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[ConstructeurQCM] Erreur lecture getSavedCourses:", err);
+      }
+
+      // 2. Cours de référence officiels (Gold Standard UCAD)
+      const demoCourses: CourseSourceItem[] = [
         {
           id: "anemies_2026_ucad",
           title: "Anémies : Diagnostic et prise en charge",
           cleanRootName: "Anémies : Diagnostic et prise en charge",
           sourceType: "library",
           wordCount: 1850,
+          subject: "Hématologie",
+          updatedAt: "Aujourd'hui",
           content:
             "Anémies : Diagnostic et prise en charge (Prof. Saliou Diop, Service d'Hématologie UCAD). Seuils Hb : Homme < 13 g/dl, Femme < 12 g/dl, Femme enceinte et enfant < 11 g/dl, Nouveau-né < 14 g/dl. VGM = Ht x 10 / GR (80-90 fl), TCMH = Hb x 10 / GR (27-31 pg), CCMH = Hb x 100 / Ht (32-36 %). Réticulocytes < 80 000/mm3 = arégénérative (centrale) ; > 80 000/mm3 = régénérative (périphérique). RET-He < 28 pg = carence martiale / fer indisponible. Sels ferreux 100-200 mg/j adulte et 10 mg/kg enfant pendant 2 à 3 mois puis demi-dose.",
         },
@@ -401,37 +560,55 @@ export const ConstructeurQCM: React.FC = () => {
           cleanRootName: "Hémoglobinopathies : Drépanocytose & Thalassémies",
           sourceType: "library",
           wordCount: 2640,
+          subject: "Hématologie",
+          updatedAt: "Aujourd'hui",
           content:
             "Hémoglobinopathies (Prof. Saliou Diop, Master 1 Hématologie Clinique). Drépanocytose : mutation GAG -> GTG du codon 6 du gène bêta (Glu -> Val). Sénégal : 8-10 % de porteurs AS, 0,2-0,5 % de formes majeures. Électrophorèse SS : HbS > 80 %, HbA2 2-3 %, HbF < 15 %. Hydroxyurée : dose initiale 15 mg/kg/j (-50 % si clairance < 60 ml/min), max 35 mg/kg/j, arrêt provisoire si PNN < 1 G/L ou Plaquettes < 100 G/L. Oracilline : 100 000 UI/kg/j si <= 10 kg, 50 000 UI/kg/j si > 10 kg jusqu'à 10 ans.",
         },
       ];
+      demoCourses.forEach(addCourse);
 
+      // 3. Récupération distante sécurisée depuis Supabase
       try {
         const { data } = await supabase
           .from("courses")
-          .select("id, title, content")
+          .select("id, title, content, created_at")
           .order("created_at", { ascending: false })
-          .limit(30);
+          .limit(40);
 
         if (Array.isArray(data)) {
           for (const row of data) {
             if (row && row.title && row.content) {
-              list.push({
+              addCourse({
                 id: String(row.id),
                 title: String(row.title),
                 cleanRootName: extractCleanRootName(String(row.title)),
                 content: String(row.content),
                 sourceType: "library",
-                wordCount: String(row.content).split(/\s+/).length,
+                wordCount: String(row.content).split(/\s+/).filter(Boolean).length,
+                subject: detectSpecialtyFromText(String(row.title), String(row.content)),
+                updatedAt: row.created_at
+                  ? new Date(row.created_at).toLocaleDateString("fr-FR", {
+                      day: "numeric",
+                      month: "short",
+                    })
+                  : "Récemment",
               });
             }
           }
         }
       } catch {
-        // Hors-ligne
+        // Mode hors-ligne
       }
 
-      setLibraryCourses(list);
+      const filteredList = filterOutTombstoned("course", list);
+      setLibraryCourses(filteredList);
+
+      // Conserver ou initialiser le cours sélectionné
+      setSelectedCourseId((prev) => {
+        if (prev && filteredList.some((c) => c.id === prev)) return prev;
+        return filteredList[0]?.id || "anemies_2026_ucad";
+      });
     }
     loadCourses();
   }, []);
@@ -455,6 +632,34 @@ export const ConstructeurQCM: React.FC = () => {
     () => libraryCourses.find((c) => c.id === selectedCourseId) || libraryCourses[0],
     [libraryCourses, selectedCourseId]
   );
+
+  const availableSubjects = useMemo(() => {
+    const set = new Set<string>();
+    set.add("Tous");
+    libraryCourses.forEach((c) => {
+      const s = c.subject?.trim();
+      if (s) set.add(s);
+    });
+    return Array.from(set);
+  }, [libraryCourses]);
+
+  const filteredLibraryCourses = useMemo(() => {
+    return libraryCourses.filter((c) => {
+      const query = biblioSearch.trim().toLowerCase();
+      const matchesSearch =
+        !query ||
+        c.title.toLowerCase().includes(query) ||
+        c.cleanRootName.toLowerCase().includes(query) ||
+        (c.subject && c.subject.toLowerCase().includes(query)) ||
+        c.content.toLowerCase().includes(query);
+
+      const matchesSubject =
+        selectedBiblioSubject === "Tous" ||
+        (c.subject && c.subject.toLowerCase() === selectedBiblioSubject.toLowerCase());
+
+      return matchesSearch && matchesSubject;
+    });
+  }, [libraryCourses, biblioSearch, selectedBiblioSubject]);
 
   const activeSeries = useMemo(
     () => seriesList.find((s) => s.id === activeSeriesId) || seriesList[0],
@@ -491,7 +696,9 @@ export const ConstructeurQCM: React.FC = () => {
         cleanRootName: extractCleanRootName(file.name),
         content: text,
         sourceType: "upload",
-        wordCount: Math.max(1, text.split(/\s+/).length),
+        wordCount: Math.max(1, text.split(/\s+/).filter(Boolean).length),
+        subject: detectSpecialtyFromText(file.name, text),
+        updatedAt: "Aujourd'hui",
       };
       setLibraryCourses((prev) => [newCourse, ...prev]);
       setSelectedCourseId(newCourse.id);
@@ -1044,61 +1251,261 @@ export const ConstructeurQCM: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-2.5">
-                    <input
-                      type="text"
-                      value={biblioSearch}
-                      onChange={(e) => setBiblioSearch(e.target.value)}
-                      placeholder="Rechercher un cours dans la bibliothèque..."
-                      className="w-full h-9 px-3.5 rounded-xl bg-background border border-border text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground/40"
-                    />
-                    <div className="divide-y divide-border/60 border border-border rounded-xl bg-background/50 max-h-56 overflow-y-auto">
-                      {libraryCourses
-                        .filter(
-                          (c) =>
-                            !biblioSearch.trim() ||
-                            c.title.toLowerCase().includes(biblioSearch.toLowerCase())
-                        )
-                        .map((c) => {
-                          const active = c.id === selectedCourse?.id;
+                  <div className="space-y-3.5">
+                    {/* Ligne de recherche & commutateur de vue */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                        <input
+                          type="text"
+                          value={biblioSearch}
+                          onChange={(e) => setBiblioSearch(e.target.value)}
+                          placeholder="Rechercher par titre, spécialité, mot-clé clinique..."
+                          className="w-full h-10 pl-9 pr-9 rounded-xl bg-background/90 border border-border text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground/50 transition-colors shadow-2xs"
+                        />
+                        {biblioSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setBiblioSearch("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                            title="Effacer la recherche"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+                        <span className="font-mono-metric text-[11px] text-muted-foreground px-1">
+                          {filteredLibraryCourses.length} cours
+                        </span>
+
+                        {/* Boutons Bascule Mosaïque / Liste */}
+                        <div className="inline-flex rounded-xl border border-border bg-secondary/60 p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setBiblioLayout("mosaic")}
+                            className={`p-1.5 rounded-lg text-xs transition-all ${
+                              biblioLayout === "mosaic"
+                                ? "bg-card text-foreground shadow-2xs font-semibold"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                            title="Vue Mosaïque (Cartes)"
+                          >
+                            <LayoutGrid className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBiblioLayout("list")}
+                            className={`p-1.5 rounded-lg text-xs transition-all ${
+                              biblioLayout === "list"
+                                ? "bg-card text-foreground shadow-2xs font-semibold"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                            title="Vue Liste (Haute densité)"
+                          >
+                            <List className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Filtres horizontaux par spécialité */}
+                    {availableSubjects.length > 2 && (
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar">
+                        {availableSubjects.map((subj) => {
+                          const isSelected = selectedBiblioSubject === subj;
                           return (
                             <button
-                              key={c.id}
+                              key={subj}
                               type="button"
-                              onClick={() => setSelectedCourseId(c.id)}
-                              className={`w-full text-left px-4 py-3 flex items-center justify-between gap-3 transition-colors ${
-                                active ? "bg-secondary/85" : "hover:bg-secondary/40"
+                              onClick={() => setSelectedBiblioSubject(subj)}
+                              className={`px-3 py-1 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap cursor-pointer border ${
+                                isSelected
+                                  ? "bg-foreground text-background border-foreground shadow-2xs font-semibold"
+                                  : "bg-card/70 hover:bg-secondary border-border/80 text-muted-foreground hover:text-foreground"
                               }`}
                             >
-                              <div className="min-w-0">
-                                <div className="text-xs font-semibold text-foreground truncate">
-                                  {c.title}
-                                </div>
-                                <div className="text-[11px] text-muted-foreground mt-0.5">
-                                  {c.wordCount} mots
-                                </div>
-                              </div>
-                              <span
-                                className={`shrink-0 font-mono-metric text-[10px] px-2 py-0.5 rounded-md border ${
-                                  active
-                                    ? "border-primary/40 bg-primary/10 text-primary font-semibold"
-                                    : "border-border text-muted-foreground"
-                                }`}
-                              >
-                                {active ? "Sélectionné" : "Choisir"}
-                              </span>
+                              {subj}
                             </button>
                           );
                         })}
-                    </div>
-                  </div>
-                )}
+                      </div>
+                    )}
 
-                {selectedCourse && (
-                  <div className="pt-1 flex items-center gap-2 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
-                    <span className="text-muted-foreground">Cours sélectionné :</span>
-                    <strong className="text-foreground truncate">{selectedCourse.title}</strong>
+                    {/* Contenu : Mosaïque ou Liste */}
+                    {filteredLibraryCourses.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-border p-8 text-center bg-card/40 space-y-2">
+                        <BookOpen className="h-7 w-7 text-muted-foreground mx-auto stroke-1" />
+                        <p className="text-xs font-semibold text-foreground">
+                          Aucun cours ne correspond à « {biblioSearch} »
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Modifiez votre recherche ou importez un nouveau document via l'onglet « Importer »
+                        </p>
+                      </div>
+                    ) : biblioLayout === "mosaic" ? (
+                      /* Grille Mosaïque Haute Définition */
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
+                        {filteredLibraryCourses.map((c) => {
+                          const active = c.id === selectedCourse?.id;
+                          const style = getSpecialtyBadgeStyle(c.subject);
+                          const excerpt = getClinicalExcerpt(c.content);
+                          const readingMin = Math.max(1, Math.round(c.wordCount / 200));
+
+                          return (
+                            <div
+                              key={c.id}
+                              onClick={() => setSelectedCourseId(c.id)}
+                              className={`group relative rounded-2xl p-4 border transition-all cursor-pointer flex flex-col justify-between gap-3 text-left ${
+                                active
+                                  ? "bg-card border-foreground/60 shadow-md ring-2 ring-foreground/15"
+                                  : "bg-card/80 border-border/90 hover:border-foreground/30 hover:shadow-xs hover:bg-card"
+                              }`}
+                            >
+                              <div className="space-y-2">
+                                {/* Ligne En-tête : Spécialité + Date */}
+                                <div className="flex items-center justify-between gap-2">
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10.5px] font-semibold border ${style.badgeClass}`}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${style.dotColor}`} />
+                                    {c.subject || "Médecine"}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground font-mono-metric">
+                                    {c.updatedAt}
+                                  </span>
+                                </div>
+
+                                {/* Titre du cours */}
+                                <h3 className="text-[13px] font-bold text-foreground leading-snug line-clamp-2">
+                                  {c.title}
+                                </h3>
+
+                                {/* Extrait clinique */}
+                                <p className="text-[11px] text-muted-foreground/90 leading-relaxed line-clamp-2">
+                                  {excerpt}
+                                </p>
+                              </div>
+
+                              {/* Pied de carte : Volume de texte + Indicateur de sélection */}
+                              <div className="pt-2 border-t border-border/70 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-[10.5px] text-muted-foreground font-mono-metric">
+                                  <span>{c.wordCount.toLocaleString("fr-FR")} mots</span>
+                                  <span>•</span>
+                                  <span>~{readingMin} min</span>
+                                </div>
+
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10.5px] font-semibold transition-all ${
+                                    active
+                                      ? "bg-foreground text-background shadow-xs"
+                                      : "bg-secondary text-muted-foreground group-hover:text-foreground group-hover:bg-secondary/90"
+                                  }`}
+                                >
+                                  {active ? (
+                                    <>
+                                      <Check className="h-3 w-3" />
+                                      Sélectionné
+                                    </>
+                                  ) : (
+                                    "Choisir"
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      /* Vue Liste Alignée Linear Style */
+                      <div className="rounded-2xl border border-border/90 bg-card divide-y divide-border/70 max-h-[380px] overflow-y-auto">
+                        {filteredLibraryCourses.map((c) => {
+                          const active = c.id === selectedCourse?.id;
+                          const style = getSpecialtyBadgeStyle(c.subject);
+                          return (
+                            <div
+                              key={c.id}
+                              onClick={() => setSelectedCourseId(c.id)}
+                              className={`p-3 flex items-center justify-between gap-3 text-left transition-colors cursor-pointer ${
+                                active ? "bg-secondary/90" : "hover:bg-secondary/40"
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div
+                                  className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+                                    active
+                                      ? "border-foreground bg-foreground text-background"
+                                      : "border-border text-transparent"
+                                  }`}
+                                >
+                                  <Check className="h-3 w-3 stroke-[3]" />
+                                </div>
+
+                                <div className="min-w-0 space-y-0.5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-bold text-foreground truncate max-w-sm">
+                                      {c.title}
+                                    </span>
+                                    <span
+                                      className={`inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-medium border ${style.badgeClass}`}
+                                    >
+                                      {c.subject || "Médecine"}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-muted-foreground line-clamp-1">
+                                    {getClinicalExcerpt(c.content, 90)}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2.5 shrink-0">
+                                <span className="text-[10px] font-mono-metric text-muted-foreground hidden sm:inline">
+                                  {c.wordCount} mots
+                                </span>
+                                <span
+                                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
+                                    active
+                                      ? "bg-foreground text-background border-foreground"
+                                      : "border-border text-muted-foreground"
+                                  }`}
+                                >
+                                  {active ? "Actif" : "Choisir"}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Barre d'état exécutive du cours actif */}
+                    {selectedCourse && (
+                      <div className="mt-2.5 p-3 rounded-xl bg-card border border-border flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="relative flex h-2.5 w-2.5 shrink-0">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                          </span>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-foreground truncate">
+                              {selectedCourse.title}
+                            </div>
+                            <div className="text-[10.5px] text-muted-foreground flex items-center gap-2">
+                              <span>{selectedCourse.subject || "Médecine"}</span>
+                              <span>•</span>
+                              <span className="font-mono-metric">
+                                {selectedCourse.wordCount.toLocaleString("fr-FR")} mots
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <span className="font-mono-metric text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 shrink-0">
+                          ✓ Prêt pour l'épreuve QCM
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

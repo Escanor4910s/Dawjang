@@ -63,6 +63,9 @@ export interface CourseSourceItem {
   content: string;
   sourceType: 'library' | 'upload' | 'text' | 'annales';
   wordCount: number;
+  subject?: string;
+  updatedAt?: string;
+  code?: string;
 }
 
 export interface UserQuestionAnswerState {

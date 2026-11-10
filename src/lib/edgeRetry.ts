@@ -243,5 +243,14 @@ export async function invokeWithRetry<T = any>(
     }
   }
 
+  if (
+    !lastErrorMsg ||
+    lastErrorMsg.includes("Failed to send a request to the Edge Function") ||
+    lastErrorMsg.includes("FunctionsFetchError")
+  ) {
+    lastErrorMsg =
+      "Le service cloud est temporairement inaccessible. Les données locales et le moteur autonome prennent le relais.";
+  }
+
   return { data: null, error: { message: lastErrorMsg, status: lastStatus } };
 }
