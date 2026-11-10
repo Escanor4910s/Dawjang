@@ -1,29 +1,6 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import {
-  Upload,
-  X,
-  Check,
-  AlertCircle,
-  BookOpen,
-  FileText,
-  GraduationCap,
-  SlidersHorizontal,
-  ArrowDown,
-  ArrowUp,
-  RotateCcw,
-  Eye,
-  EyeOff,
-  CheckCircle2,
-  XCircle,
-  ChevronRight,
-  ChevronDown,
-  Library,
-  Layers,
-  Plus,
-  Trash2,
-  BookmarkCheck,
-  Key
-} from 'lucide-react';
+import { exportQuizToPDF } from "@/utils/pdfExport";
+import type { QuizData } from "@/utils/QuizPDF";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   QuestionArchetype,
   CognitiveTier,
@@ -31,1696 +8,1910 @@ import {
   QuizQuestion,
   QuizSeriesSession,
   CourseSourceItem,
-  MatchingColumnsPayload,
-  GroupageStatement,
-  JumelagePayload
-} from '@/types/quiz';
-import { supabase } from '@/integrations/supabase/client';
+  UserQuestionAnswerState,
+} from "@/types/quiz";
+import { supabase } from "@/integrations/supabase/client";
 import {
   sanitizeAndValidateQuestions,
   buildUniversalDocimologicalBatchPrompt,
-  DocimologicalFormat
-} from '@/lib/annalesMimicryEngine';
-import { callDawiaEngine } from '@/lib/dawiaQcmEngine';
-import { repairAndParseQuizJson } from '@/lib/jsonRepair';
+  DocimologicalFormat,
+} from "@/lib/annalesMimicryEngine";
+import { callDawiaEngine } from "@/lib/dawiaQcmEngine";
+import { repairAndParseQuizJson } from "@/lib/jsonRepair";
 
-const LETTERS: OptionLetter[] = ['A', 'B', 'C', 'D', 'E'];
+const LETTERS: OptionLetter[] = ["A", "B", "C", "D", "E"];
+const STORAGE_SERIES_KEY = "dawjang_qcm_series_v2";
 
-const ARCHETYPE_CATALOG: {
+type ConstructeurStage = "studio" | "library" | "reading";
+
+const QCM_FORMAT_CATALOG: {
   id: QuestionArchetype;
-  label: string;
-  shortTag: string;
-  desc: string;
+  name: string;
+  rule: string;
 }[] = [
-  {
-    id: 'complement_multiple',
-    label: 'Élection (QCU)',
-    shortTag: 'ÉLECTION',
-    desc: '1 proposition exacte parmi 5'
-  },
-  {
-    id: 'censure',
-    label: 'Censure',
-    shortTag: 'CENSURE',
-    desc: 'Identifier l’unique proposition inexacte'
-  },
-  {
-    id: 'groupage',
-    label: 'Groupage (I–V)',
-    shortTag: 'GROUPAGE',
-    desc: 'Assertions romaines I à V combinées en A–E'
-  },
-  {
-    id: 'association',
-    label: 'Association (1–5 ↔ A–E)',
-    shortTag: 'ASSOCIATION',
-    desc: '2 colonnes affichées en vis-à-vis avant les choix'
-  },
-  {
-    id: 'jumelage',
-    label: 'Jumelage',
-    shortTag: 'JUMELAGE',
-    desc: 'Lien de causalité (PARCE QUE / D’OÙ)'
-  }
+  { id: "complement_multiple", name: "Élection", rule: "1 seule proposition exacte (A–E)" },
+  { id: "censure", name: "Censure", rule: "Identifier la proposition fausse" },
+  { id: "election_censure", name: "Élection-Censure", rule: "Combinaison codée A, B, C, D, E" },
+  { id: "groupage", name: "Groupage", rule: "Regroupement I, II, III, IV" },
+  { id: "jumelage", name: "Jumelage", rule: "Lien de causalité entre 2 énoncés" },
+  { id: "association", name: "Association (ACM)", rule: "Appariement entités cliniques" },
 ];
 
-const COGNITIVE_TIERS: {
-  id: CognitiveTier;
-  num: string;
-  title: string;
-  subtitle: string;
-  detail: string;
-}[] = [
+const INITIAL_DEMO_QUESTIONS: QuizQuestion[] = [
   {
-    id: 'ancrage',
-    num: 'PALIER I',
-    title: 'Ancrage & Sémiologie',
-    subtitle: 'Restitution croisée & seuils biologiques',
-    detail: 'Reformulation médicale stricte sans paraphrase scolaire ; pièges sur les seuils et signes cardinaux.'
+    id: "q_init_1",
+    index: 1,
+    archetype: "complement_multiple",
+    cognitiveTier: "mecanismes",
+    stem: "Concernant la définition biologique de l'anémie et les fausses anémies par hémodilution, quelle est la proposition exacte ?",
+    conceptTag: "Seuils OMS & Hémodilution",
+    options: [
+      { letter: "A", text: "Chez la femme adulte non enceinte, le diagnostic d'anémie est posé dès que le taux d'hémoglobine est inférieur à 13 g/dl." },
+      { letter: "B", text: "Chez la femme enceinte et chez l'enfant, on parle d'anémie lorsque le taux d'hémoglobine est inférieur à 11 g/dl à volume plasmatique normal." },
+      { letter: "C", text: "Chez le nouveau-né, la limite inférieure normale du taux d'hémoglobine est fixée à 10 g/dl." },
+      { letter: "D", text: "Une splénomégalie volumineuse ou une hyperhydratation entraîne une fausse polyglobulie par hémoconcentration." },
+      { letter: "E", text: "L'interprétation du taux d'hémoglobine est totalement indépendante des variations du volume plasmatique." },
+    ],
+    correctLetter: "B",
+    globalExplanation:
+      "Les seuils d'Hb définissant l'anémie (à volume plasmatique normal) sont : Homme adulte < 13 g/dl, Femme adulte < 12 g/dl, Femme enceinte et enfant < 11 g/dl, et Nouveau-né < 14 g/dl. L'hyperhydratation et la splénomégalie provoquent de fausses anémies par hémodilution.",
   },
   {
-    id: 'mecanismes',
-    num: 'PALIER II',
-    title: 'Mécanismes & Corrélations',
-    subtitle: 'Physiopathologie & liens de causalité',
-    detail: 'Relie chaque anomalie clinique ou paraclinique à son mécanisme générateur exact dans le cours.'
+    id: "q_init_2",
+    index: 2,
+    archetype: "complement_multiple",
+    cognitiveTier: "mecanismes",
+    stem: "Un patient présente à l'hémogramme : Globules rouges = 4,0 millions/mm³, Hémoglobine = 10 g/dl, Hématocrite = 30 %. Quelle est la proposition exacte concernant ses constantes érythrocytaires ?",
+    conceptTag: "Constantes érythrocytaires",
+    options: [
+      { letter: "A", text: "Le volume globulaire moyen (VGM) se calcule par la formule Hémoglobine × 10 / Globules rouges et vaut ici 25 fl." },
+      { letter: "B", text: "La concentration corpusculaire moyenne en hémoglobine (CCMH) normale est comprise entre 27 et 31 %." },
+      { letter: "C", text: "La teneur corpusculaire moyenne en hémoglobine (TCMH) se calcule par la formule Hb × 100 / Hématocrite." },
+      { letter: "D", text: "Son volume globulaire moyen (VGM = Ht × 10 / GR) est égal à 75 fl et sa TCMH (Hb × 10 / GR) est égale à 25 pg, caractérisant une anémie microcytaire hypochrome." },
+      { letter: "E", text: "Son indice de distribution cellulaire (IDR) normal est compris entre 32 et 36 %." },
+    ],
+    correctLetter: "D",
+    globalExplanation:
+      "VGM = Ht (%) × 10 / GR (en millions) = (30 × 10) / 4 = 75 fl (normale 80–90 fl → microcytose) ; TCMH = Hb (g/dl) × 10 / GR (en millions) = 100 / 4 = 25 pg (normale 27–31 pg → hypochromie) ; CCMH = Hb × 100 / Ht = 33,3 % (normale 32–36 %).",
   },
   {
-    id: 'discernement',
-    num: 'PALIER III',
-    title: 'Discernement & Cas Croisés',
-    subtitle: 'Micro-vignettes & nuances restrictives',
-    detail: 'Croise plusieurs sous-parties du cours (terrain, diagnostic différentiel, contre-indications).'
-  }
+    id: "q_init_3",
+    index: 3,
+    archetype: "complement_multiple",
+    cognitiveTier: "discernement",
+    stem: "À propos des tests d'exploration du métabolisme du fer devant une anémie hypochrome microcytaire, quelle est la proposition exacte ?",
+    conceptTag: "Bilan martial & sTfR",
+    options: [
+      { letter: "A", text: "Le récepteur soluble de la transferrine (sTfR) n'augmente pas avec l'inflammation, mais s'élève franchement en cas de déficit en fer." },
+      { letter: "B", text: "La ferritinémie est systématiquement effondrée au cours d'une anémie inflammatoire pure." },
+      { letter: "C", text: "Le coefficient de saturation de la transferrine normal est compris entre 80 et 90 %." },
+      { letter: "D", text: "Le dosage du fer sérique isolé est le test le plus sensible et le plus spécifique du stock martial." },
+      { letter: "E", text: "Dans la thalassémie, le fer sérique et la ferritinémie sont toujours effondrés." },
+    ],
+    correctLetter: "A",
+    globalExplanation:
+      "Le récepteur soluble de la transferrine (sTfR) ne s'élève pas lors des états inflammatoires : il demeure normal dans l'anémie inflammatoire pure mais augmente dans le déficit en fer (ou l'association déficit + inflammation).",
+  },
+  {
+    id: "q_init_4",
+    index: 4,
+    archetype: "complement_multiple",
+    cognitiveTier: "discernement",
+    stem: "Concernant l'étude des réticulocytes et la teneur en hémoglobine des réticulocytes (RET-He), quelle est la proposition exacte ?",
+    conceptTag: "Réticulocytes & RET-He",
+    options: [
+      { letter: "A", text: "Le réticulocyte séjourne normalement 10 jours dans le sang périphérique après sa sortie de la moelle osseuse." },
+      { letter: "B", text: "La coloration supravitale des réticulocytes se fait exclusivement par le May-Grünwald Giemsa standard." },
+      { letter: "C", text: "Une valeur de RET-He inférieure à 28 pg traduit une carence en fer ou une indisponibilité actuelle du fer pour l'érythropoïèse au cours des 1 à 2 derniers jours." },
+      { letter: "D", text: "Une anémie normochrome normocytaire est dite régénérative lorsque le taux de réticulocytes est inférieur à 20 000/mm³." },
+      { letter: "E", text: "La fraction LFR correspond aux réticulocytes les plus immatures à très haute fluorescence." },
+    ],
+    correctLetter: "C",
+    globalExplanation:
+      "Le réticulocyte (coloré au bleu de crésyl brillant ou bleu de méthylène) reste 3 jours dans la moelle et 1 jour dans le sang périphérique. Le paramètre RET-He reflète l'hémoglobinisation des érythrocytes produits au cours des 1 à 2 derniers jours : une valeur < 28 pg signe l'indisponibilité actuelle du fer pour l'érythropoïèse.",
+  },
+  {
+    id: "q_init_5",
+    index: 5,
+    archetype: "complement_multiple",
+    cognitiveTier: "discernement",
+    stem: "Concernant le traitement des anémies par carence martiale, inflammatoires ou mégaloblastiques, quelle est la proposition exacte ?",
+    conceptTag: "Traitement & Contre-indications",
+    options: [
+      { letter: "A", text: "Dans l'anémie inflammatoire pure, l'administration parentérale ou orale de sels ferreux constitue le traitement de première intention." },
+      { letter: "B", text: "Le déficit en vitamine B12 se traite exclusivement par acide folique à la dose de 5 mg/jour per os." },
+      { letter: "C", text: "Le traitement curatif de la carence en fer chez l'adulte ne doit jamais dépasser 7 jours de sels ferreux." },
+      { letter: "D", text: "Dans la carence en fer de l'enfant, la posologie des sels ferreux est de 100 mg/kg/jour pendant 1 an." },
+      { letter: "E", text: "Dans la carence en fer, on prescrit des sels ferreux à raison de 100 à 200 mg/jour chez l'adulte (10 mg/kg chez l'enfant) pendant 2 à 3 mois jusqu'à correction de l'anémie puis à demi-dose, tandis que le fer est contre-indiqué dans l'anémie inflammatoire." },
+    ],
+    correctLetter: "E",
+    globalExplanation:
+      "La carence en fer se traite par sels ferreux (100–200 mg/j chez l'adulte, 10 mg/kg chez l'enfant) pendant 2 à 3 mois puis demi-dose pour recharger les réserves, associé au traitement de la cause. Dans l'anémie inflammatoire, l'administration de fer est contre-indiquée.",
+  },
 ];
 
-const STORAGE_SERIES_KEY = 'dawjang_qcm_series_v2';
+function formatMinuteTimestamp(date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} à ${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
 
-/**
- * Extrait un nom de cours court et élégant (ex: "1-Anémies 2026 (Médecine Générale).pdf" -> "Anémies")
- */
 function extractCleanRootName(rawTitle: string): string {
-  if (!rawTitle) return 'Cours';
-  const withoutExt = rawTitle.replace(/\.[^/.]+$/, '');
-  const withoutParen = withoutExt.replace(/\([^)]*\)/g, '');
-  const withoutLeadingNums = withoutParen.replace(/^[0-9]+[\s._-]+/, '');
-  const withoutYears = withoutLeadingNums.replace(/\b(202[0-9]|19[0-9]{2})\b/g, '');
-  const cleaned = withoutYears.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
-  const words = cleaned.split(' ').slice(0, 3).join(' ');
-  return words || 'Cours';
+  if (!rawTitle) return "Cours";
+  const withoutExt = rawTitle.replace(/\.[^/.]+$/, "");
+  const withoutParen = withoutExt.replace(/\([^)]*\)/g, "");
+  const withoutLeadingNums = withoutParen.replace(/^[0-9]+[\s._-]+/, "");
+  const withoutYears = withoutLeadingNums.replace(/\b(202[0-9]|19[0-9]{2})\b/g, "");
+  const cleaned = withoutYears.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  const words = cleaned.split(" ").slice(0, 4).join(" ");
+  return words || "Cours";
 }
 
-/**
- * Mélangeur déterministe côté client (Filet de sécurité absolu contre les suites A-A-A-A)
- * Garantit que même si une ancienne fonction Edge répond, les lettres A-E sont mélangées
- * et aucune série mécanique de réponses identiques ne peut apparaître.
- */
-function enforceClientSideRandomizationAndStructure(
-  rawQuestions: any[],
-  fallbackTier: CognitiveTier
-): QuizQuestion[] {
-  const letterHistory: OptionLetter[] = [];
-  const letterCounts: Record<OptionLetter, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
-
-  const shuffle = <T,>(arr: T[]): T[] => {
-    const copy = [...arr];
-    for (let i = copy.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy;
-  };
-
-  return rawQuestions.map((q, idx) => {
-    const archetype: QuestionArchetype =
-      q.archetype ||
-      q.type ||
-      (q.matchingColumns ? 'association' : q.groupageStatements ? 'groupage' : q.jumelageData ? 'jumelage' : 'complement_multiple');
-
-    // Normalisation des options brutes
-    let rawOptions: { letter?: string; text: string; rationale?: string }[] = [];
-    if (Array.isArray(q.options)) {
-      rawOptions = q.options.map((o: any, i: number) =>
-        typeof o === 'string'
-          ? { letter: LETTERS[i], text: o.replace(/^[A-E][\s.\-):]+/i, '').trim() }
-          : {
-              letter: o.letter || LETTERS[i],
-              text: String(o.text || o.label || o.content || '').replace(/^[A-E][\s.\-):]+/i, '').trim(),
-              rationale: o.rationale || o.explanation || ''
-            }
-      );
-    }
-
-    while (rawOptions.length < 5) {
-      rawOptions.push({
-        letter: LETTERS[rawOptions.length],
-        text: `Proposition ${LETTERS[rawOptions.length]}`,
-        rationale: ''
-      });
-    }
-    rawOptions = rawOptions.slice(0, 5);
-
-    // Identification de la bonne réponse initiale
-    let origCorrectIdx = 0;
-    if (typeof q.correctLetter === 'string') {
-      const found = LETTERS.indexOf(q.correctLetter.trim().toUpperCase().charAt(0) as OptionLetter);
-      if (found !== -1) origCorrectIdx = found;
-    } else if (typeof q.correct_answer === 'string') {
-      const found = LETTERS.indexOf(q.correct_answer.trim().toUpperCase().charAt(0) as OptionLetter);
-      if (found !== -1) origCorrectIdx = found;
-    } else if (typeof q.correctIndex === 'number') {
-      origCorrectIdx = Math.max(0, Math.min(4, q.correctIndex));
-    }
-
-    const correctObj = rawOptions[origCorrectIdx] || rawOptions[0];
-    const distractors = shuffle(rawOptions.filter((_, i) => i !== origCorrectIdx));
-
-    // Choix d'une lettre cible qui interdit les répétitions (Anti-Streak strict)
-    const last1 = letterHistory[letterHistory.length - 1];
-    const last2 = letterHistory[letterHistory.length - 2];
-
-    const candidates = shuffle(LETTERS).filter((l) => {
-      if (last1 && l === last1) return false;
-      if (last2 && l === last2 && Math.random() < 0.6) return false;
-      return true;
-    });
-    candidates.sort((a, b) => letterCounts[a] - letterCounts[b]);
-
-    const targetLetter = candidates[0] || LETTERS[idx % 5];
-    const targetIdx = LETTERS.indexOf(targetLetter);
-
-    const finalOptions = [];
-    let dPtr = 0;
-    for (let i = 0; i < 5; i++) {
-      if (i === targetIdx) {
-        finalOptions.push({
-          letter: LETTERS[i],
-          text: correctObj.text,
-          rationale: correctObj.rationale || 'Proposition exacte selon les données du cours.'
-        });
-      } else {
-        const d = distractors[dPtr++] || { text: 'Proposition inexacte', rationale: '' };
-        finalOptions.push({
-          letter: LETTERS[i],
-          text: d.text,
-          rationale: d.rationale || 'Proposition comportant une inexactitude par rapport au cours.'
-        });
-      }
-    }
-
-    letterHistory.push(targetLetter);
-    letterCounts[targetLetter]++;
-
-    // Garantie structurelle pour l'Association (2 colonnes 1-5 et A-E toujours présentes)
-    let matchingColumns: MatchingColumnsPayload | null = q.matchingColumns || q.matching_columns || null;
-    if (archetype === 'association' && (!matchingColumns || !Array.isArray(matchingColumns.leftItems))) {
-      matchingColumns = {
-        leftColumnTitle: 'Colonne 1 (Éléments à relier)',
-        rightColumnTitle: 'Colonne 2 (Correspondances)',
-        leftItems: [1, 2, 3, 4, 5].map((n) => ({
-          id: String(n),
-          text: (q.leftColumn && q.leftColumn[n - 1]) || `Élément clinique ou biologique ${n}`
-        })),
-        rightItems: ['A', 'B', 'C', 'D', 'E'].map((l, i) => ({
-          id: l,
-          text: (q.rightColumn && q.rightColumn[i]) || `Mécanisme ou caractéristique ${l}`
-        }))
-      };
-    }
-
-    // Garantie structurelle pour le Groupage (Assertions I à V)
-    let groupageStatements: GroupageStatement[] | null = q.groupageStatements || q.groupage_statements || null;
-    if (archetype === 'groupage' && (!Array.isArray(groupageStatements) || groupageStatements.length === 0)) {
-      const numerals: ('I' | 'II' | 'III' | 'IV' | 'V')[] = ['I', 'II', 'III', 'IV', 'V'];
-      if (Array.isArray(q.statements) && q.statements.length > 0) {
-        groupageStatements = numerals.map((num, i) => ({
-          numeral: num,
-          text: String(q.statements[i]?.text || q.statements[i] || `Assertion ${num}`).replace(/^(I|II|III|IV|V)[\s.\-):]+/i, ''),
-          isTrue: q.statements[i]?.isTrue
-        }));
-      }
-    }
-
-    // Garantie structurelle pour le Jumelage
-    let jumelageData: JumelagePayload | null = q.jumelageData || q.jumelage_data || null;
-    if (archetype === 'jumelage' && !jumelageData && (q.statementOne || q.assertion1)) {
-      jumelageData = {
-        statementOne: q.statementOne || q.assertion1,
-        connector: q.connector || 'PARCE QUE',
-        statementTwo: q.statementTwo || q.assertion2 || ''
-      };
-    }
-
-    return {
-      id: q.id || `q-${Date.now()}-${idx + 1}`,
-      index: idx + 1,
-      archetype,
-      cognitiveTier: q.cognitiveTier || fallbackTier,
-      stem: q.stem || q.question || 'Analysez les propositions suivantes selon les données du cours :',
-      conceptTag: q.conceptTag || q.topic || 'Sémiologie & Physiopathologie',
-      matchingColumns,
-      groupageStatements,
-      jumelageData,
-      options: finalOptions,
-      correctLetter: targetLetter,
-      globalExplanation:
-        q.globalExplanation ||
-        q.explanation ||
-        'Consultez les justifications détaillées sous chaque proposition.',
-      courseExcerpt: q.courseExcerpt || q.excerpt || ''
-    };
-  });
-}
-
-/**
- * Extracteur de texte côté client pour fichiers TXT, MD, JSON ou PDF simples
- */
 async function extractTextFromUploadedFile(file: File): Promise<string> {
-  if (file.name.toLowerCase().endsWith('.pdf')) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".txt") || name.endsWith(".md") || name.endsWith(".csv")) {
+    return await file.text();
+  }
+  if (name.endsWith(".pdf")) {
+    try {
+      const pdfjsLib = (window as any).pdfjsLib;
+      if (pdfjsLib) {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let fullText = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const pageText = content.items.map((it: any) => it.str).join(" ");
+          fullText += `\n--- Page ${i} ---\n` + pageText;
+        }
+        if (fullText.trim().length > 50) return fullText.trim();
+      }
+    } catch {
+      // Fallback binaire
+    }
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
-    const rawLatin = new TextDecoder('latin1').decode(bytes);
-    // Extraction des chaînes lisibles dans les flux texte PDF si pdfjs n'est pas chargé
+    const rawLatin = new TextDecoder("latin1").decode(bytes);
     const textChunks: string[] = [];
     const regex = /\(([^()\\]{3,})\)/g;
     let match;
     while ((match = regex.exec(rawLatin)) !== null) {
-      const cleaned = match[1].replace(/[^\x20-\x7E\xC0-\xFF]/g, ' ').trim();
+      const cleaned = match[1].replace(/[^\x20-\x7E\xC0-\xFF]/g, " ").trim();
       if (cleaned.length > 3 && !/^[0-9\s.]+$/.test(cleaned)) {
         textChunks.push(cleaned);
       }
     }
-    const joined = textChunks.join(' ').replace(/\s+/g, ' ').trim();
-    if (joined.length > 150) return joined;
+    const joined = textChunks.join(" ").replace(/\s+/g, " ").trim();
+    if (joined.length > 100) return joined;
   }
   return await file.text();
 }
 
-export const ConstructeurQCM: React.FC = () => {
-  // 1. Sources de cours (Bibliothèque Supabase + Fichiers uploadés + Texte libre)
-  const [libraryCourses, setLibraryCourses] = useState<CourseSourceItem[]>([]);
-  const [selectedSources, setSelectedSources] = useState<CourseSourceItem[]>([]);
-  const [showLibraryPicker, setShowLibraryPicker] = useState<boolean>(false);
-  const [showTextDrawer, setShowTextDrawer] = useState<boolean>(false);
-  const [manualTitle, setManualTitle] = useState<string>('');
-  const [manualText, setManualText] = useState<string>('');
-  const [examArchiveText, setExamArchiveText] = useState<string>('');
-
-  // 2. Configuration Docimologique
-  const [selectedArchetypes, setSelectedArchetypes] = useState<QuestionArchetype[]>([
-    'complement_multiple',
-    'groupage',
-    'association'
-  ]);
-  const [selectedTier, setSelectedTier] = useState<CognitiveTier>('mecanismes');
-  const [questionCount, setQuestionCount] = useState<number>(10);
-
-  // 3. Séries générées (#1, #2, #3...) & État du flux vertical
-  const [seriesList, setSeriesList] = useState<QuizSeriesSession[]>([]);
-  const [activeSeriesId, setActiveSeriesId] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [generationStepLabel, setGenerationStepLabel] = useState<string>('');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // 4. Réponses & Navigation dans le Défilement Vertical
-  const [userAnswers, setUserAnswers] = useState<Record<string, OptionLetter>>({});
-  const [activeQuestionIdx, setActiveQuestionIdx] = useState<number>(0);
-  const [instantFeedback, setInstantFeedback] = useState<boolean>(true);
-  const [examValidated, setExamValidated] = useState<boolean>(false);
-  const [configCollapsed, setConfigCollapsed] = useState<boolean>(false);
-  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
-  const [customApiKey, setCustomApiKey] = useState<string>(() => {
-    try {
-      return (
-        localStorage.getItem('dawjang_openrouter_api_key') ||
-        localStorage.getItem('dawjang_claude_api_key') ||
-        localStorage.getItem('dawjang_gemini_api_key') ||
-        ''
-      );
-    } catch {
-      return '';
+/**
+ * Loi d'Équisme : garantit l'absence de suites monotones (jamais 3 fois la même lettre consécutive)
+ */
+function enforceEquismeOnQuestions(questions: QuizQuestion[]): QuizQuestion[] {
+  const copy: QuizQuestion[] = JSON.parse(JSON.stringify(questions));
+  for (let i = 2; i < copy.length; i++) {
+    const prev2 = copy[i - 2].correctLetter;
+    const prev1 = copy[i - 1].correctLetter;
+    const curr = copy[i].correctLetter;
+    if (curr === prev1 && curr === prev2) {
+      const q = copy[i];
+      const currentIdx = LETTERS.indexOf(curr);
+      const targetIdx = (currentIdx + 2) % q.options.length;
+      const tempText = q.options[currentIdx].text;
+      const tempRat = q.options[currentIdx].rationale;
+      q.options[currentIdx].text = q.options[targetIdx].text;
+      q.options[currentIdx].rationale = q.options[targetIdx].rationale;
+      q.options[targetIdx].text = tempText;
+      q.options[targetIdx].rationale = tempRat;
+      q.correctLetter = LETTERS[targetIdx];
     }
-  });
+  }
+  return copy;
+}
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const questionCardRefs = useRef<(HTMLElement | null)[]>([]);
+const CONSTRUCTEUR_SCOPED_CSS = `
+  .font-mono-metric {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .craft-surface {
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 1px 2px rgba(24, 22, 19, 0.035),
+                0 6px 20px -4px rgba(24, 22, 19, 0.045),
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.85);
+    transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.2s ease,
+                background-color 0.2s ease;
+  }
+  .craft-card-interactive:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 8px rgba(24, 22, 19, 0.05),
+                0 16px 34px -6px rgba(24, 22, 19, 0.085),
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.95);
+    border-color: hsl(var(--foreground) / 0.18);
+  }
+  .craft-card-interactive:active {
+    transform: translateY(0px) scale(0.996);
+  }
+  @keyframes popoverSpring {
+    0% { opacity: 0; transform: scale(0.94) translateY(-6px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .craft-popover {
+    background-color: hsl(var(--popover, var(--card)) / 0.97);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: 0 18px 42px -8px rgba(18, 16, 14, 0.18),
+                0 4px 12px -2px rgba(18, 16, 14, 0.08),
+                0 0 0 1px rgba(18, 16, 14, 0.07);
+    border: 1px solid hsl(var(--border));
+    transform-origin: top right;
+    animation: popoverSpring 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .qcm-option-card {
+    transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+                background-color 0.16s ease,
+                border-color 0.16s ease,
+                box-shadow 0.16s ease;
+  }
+  .qcm-option-card:hover:not(.qcm-option-locked) {
+    background-color: hsl(var(--secondary) / 0.65);
+    border-color: hsl(var(--foreground) / 0.22);
+    transform: translateX(2px);
+  }
+  .qcm-option-picked {
+    background-color: hsl(var(--primary) / 0.075) !important;
+    border-color: hsl(var(--primary)) !important;
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.22);
+  }
+  .qcm-option-correct {
+    background-color: rgba(16, 185, 129, 0.08) !important;
+    border-color: rgba(16, 185, 129, 0.55) !important;
+  }
+  .qcm-option-wrong {
+    background-color: rgba(244, 63, 94, 0.08) !important;
+    border-color: rgba(244, 63, 94, 0.55) !important;
+  }
+  .glass-arrow-tab {
+    background: hsl(var(--card) / 0.9);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border: 1px solid hsl(var(--border));
+    border-right: none;
+    box-shadow: -6px 10px 28px -4px rgba(20, 18, 15, 0.1);
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .glass-arrow-tab:hover {
+    padding-right: 12px;
+    background: hsl(var(--card) / 0.98);
+  }
+  @keyframes drawerSlideLeft {
+    from { opacity: 0; transform: translateX(18px) scale(0.98); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+  }
+  .glass-expanded-drawer {
+    background: hsl(var(--card) / 0.86);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid hsl(var(--border));
+    border-right: none;
+    box-shadow: -16px 24px 56px -12px rgba(18, 16, 14, 0.22),
+                0 0 0 1px rgba(255, 255, 255, 0.25) inset;
+    animation: drawerSlideLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+`;
 
-  // Chargement initial : Séries sauvegardées + Cours de la Bibliothèque Supabase
-  useEffect(() => {
+export const ConstructeurQCM: React.FC = () => {
+  // Navigation interne du Constructeur de QCM (Studio | Librairie | Lecture — SANS "Voir le cours")
+  const [activeStage, setActiveStage] = useState<ConstructeurStage>("library");
+  const [sourceTab, setSourceTab] = useState<"import" | "biblio">("import");
+  const [libraryCourses, setLibraryCourses] = useState<CourseSourceItem[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>("anemies_2026_ucad");
+  const [biblioSearch, setBiblioSearch] = useState<string>("");
+
+  // Paramètres de génération
+  const [selectedStyle, setSelectedStyle] = useState<"professeurs" | "ia_progressif">("professeurs");
+  const [selectedFormats, setSelectedFormats] = useState<QuestionArchetype[]>(["complement_multiple"]);
+  const [questionCount, setQuestionCount] = useState<number>(10);
+  const [infiniteMode, setInfiniteMode] = useState<boolean>(false);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+
+  // Librairie (Mosaïque / Alignement + Menu •••)
+  const [libraryViewMode, setLibraryViewMode] = useState<"mosaic" | "alignment">("mosaic");
+  const [librarySearch, setLibrarySearch] = useState<string>("");
+  const [openDropdownSeriesId, setOpenDropdownSeriesId] = useState<string | null>(null);
+
+  // Séries & Lecture en défilement
+  const [seriesList, setSeriesList] = useState<QuizSeriesSession[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_SERIES_KEY);
       if (saved) {
-        const parsed: QuizSeriesSession[] = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setSeriesList(parsed);
-          setActiveSeriesId(parsed[0].id);
-        }
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch {
-      // Ignore storage error
+      // ignore
     }
+    return [
+      {
+        id: "serie_1_initiale",
+        courseRootTitle: "Anémies : Diagnostic et prise en charge",
+        seriesNumber: 1,
+        displayTitle: "Série 1",
+        createdAt: "09/11/2026 à 14:50",
+        archetypes: ["complement_multiple"],
+        cognitiveTier: "mecanismes",
+        questions: INITIAL_DEMO_QUESTIONS,
+        userAnswers: {
+          q_init_1: { picked: "B", validated: true, isCorrect: true },
+          q_init_2: { picked: "A", validated: true, isCorrect: false },
+          q_init_3: { picked: "A", validated: true, isCorrect: true },
+        },
+      },
+    ];
+  });
 
-    async function fetchUserLibraryCourses() {
-      try {
-        // Interroge les tables de cours existantes dans Supabase
-        const { data: coursesData } = await supabase
-          .from('courses')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(30);
+  const [activeSeriesId, setActiveSeriesId] = useState<string>(() => seriesList[0]?.id || "serie_1_initiale");
+  const [examMode, setExamMode] = useState<boolean>(false);
+  const [widgetExpanded, setWidgetExpanded] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-        if (Array.isArray(coursesData) && coursesData.length > 0) {
-          const mapped: CourseSourceItem[] = coursesData.map((c: any) => {
-            const rawTitle = c.title || c.name || c.file_name || 'Cours Médical';
-            const content =
-              c.content ||
-              c.extracted_text ||
-              c.text ||
-              c.summary ||
-              `Contenu médical du cours ${rawTitle}`;
-            return {
-              id: String(c.id),
-              title: rawTitle,
-              cleanRootName: extractCleanRootName(rawTitle),
-              content,
-              sourceType: 'library',
-              wordCount: String(content).split(/\s+/).length
-            };
-          });
-          setLibraryCourses(mapped);
-          if (selectedSources.length === 0 && mapped.length > 0) {
-            setSelectedSources([mapped[0]]);
-          }
-          return;
-        }
-      } catch {
-        // Fallback si la table porte un autre nom ou en local
-      }
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const widgetRootRef = useRef<HTMLDivElement | null>(null);
 
-      // Cours de la bibliothèque par défaut si la base locale est vide
-      const defaultCourse: CourseSourceItem = {
-        id: 'lib-anemies-2026',
-        title: '1-Anémies 2026 (Médecine Générale)',
-        cleanRootName: 'Anémies',
-        sourceType: 'library',
-        wordCount: 420,
-        content: `L'anémie est définie par la diminution de la concentration d'hémoglobine (Hb) en dessous des valeurs seuils physiologiques : < 13 g/dL chez l'homme adulte, < 12 g/dL chez la femme non enceinte, et < 10,5 g/dL chez la femme enceinte à partir du 2e trimestre (hémodilution physiologique).
-L'anémie ferriprive est une anémie centrale (arégénérative, réticulocytes < 120 G/L), microcytaire (VGM < 80 fL) et hypochrome (TCMH < 27 pg). Sa physiopathologie repose sur l'épuisement progressif des réserves martiales :
-1. Stade pré-latent : chute isolée de la ferritine sérique (< 20-30 µg/L), paramètre le plus précoce et le plus spécifique reflétant l'épuisement des stocks tissulaires.
-2. Stade latent (sidéropénie sans anémie) : élévation compensatrice de la capacité totale de fixation de la transferrine (CTF > 70 µmol/L) par synthèse hépatique accrue de transferrine, chute du fer sérique et effondrement du coefficient de saturation de la transferrine (CST < 16%), avec surexpression membranaire érythroblastique du récepteur soluble de la transferrine (RsTf élevé).
-3. Stade patent : défaut d'hémoglobinisation érythroblastique entraînant une mitose supplémentaire dans la moelle osseuse, d'où la microcytose et l'hypochromie.
-Diagnostic différentiel majeur : l'anémie inflammatoire (anémie des maladies chroniques). Sous l'action de l'IL-6, le foie sécrète l'hepcidine qui dégrade la ferroportine, séquestrant le fer dans les macrophages et bloquant son absorption duodénale. Dans l'inflammation pure : la ferritine est normale ou élevée (> 100 µg/L), la CTF est abaissée (< 50 µmol/L), le fer sérique est bas, et le récepteur soluble de la transferrine (RsTf) demeure strictement normal.`
-      };
-      setLibraryCourses([defaultCourse]);
-      setSelectedSources((prev) => (prev.length === 0 ? [defaultCourse] : prev));
-    }
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((prev) => (prev === msg ? null : prev));
+    }, 2600);
+  };
 
-    fetchUserLibraryCourses();
-  }, []);
-
-  // Sauvegarde automatique des séries dans localStorage
+  // Synchronisation localStorage
   useEffect(() => {
-    if (seriesList.length > 0) {
-      try {
-        localStorage.setItem(STORAGE_SERIES_KEY, JSON.stringify(seriesList.slice(0, 25)));
-      } catch {
-        // Ignore quota error
-      }
+    try {
+      localStorage.setItem(STORAGE_SERIES_KEY, JSON.stringify(seriesList));
+    } catch {
+      // ignore
     }
   }, [seriesList]);
 
-  // Nom racine du cours actif (ex: "Anémies")
-  const activeCourseRootTitle = useMemo(() => {
-    if (selectedSources.length === 0) return 'Session';
-    if (selectedSources.length === 1) return selectedSources[0].cleanRootName;
-    return `${selectedSources[0].cleanRootName} +${selectedSources.length - 1}`;
-  }, [selectedSources]);
+  // Chargement des cours depuis la Bibliothèque existante (Supabase + localStorage) sans collision
+  useEffect(() => {
+    async function loadCourses() {
+      const list: CourseSourceItem[] = [
+        {
+          id: "anemies_2026_ucad",
+          title: "Anémies : Diagnostic et prise en charge",
+          cleanRootName: "Anémies : Diagnostic et prise en charge",
+          sourceType: "library",
+          wordCount: 1850,
+          content:
+            "Anémies : Diagnostic et prise en charge (Prof. Saliou Diop, Service d'Hématologie UCAD). Seuils Hb : Homme < 13 g/dl, Femme < 12 g/dl, Femme enceinte et enfant < 11 g/dl, Nouveau-né < 14 g/dl. VGM = Ht x 10 / GR (80-90 fl), TCMH = Hb x 10 / GR (27-31 pg), CCMH = Hb x 100 / Ht (32-36 %). Réticulocytes < 80 000/mm3 = arégénérative (centrale) ; > 80 000/mm3 = régénérative (périphérique). RET-He < 28 pg = carence martiale / fer indisponible. Sels ferreux 100-200 mg/j adulte et 10 mg/kg enfant pendant 2 à 3 mois puis demi-dose.",
+        },
+        {
+          id: "hemoglobinopathies_m1_ucad",
+          title: "Hémoglobinopathies : Drépanocytose & Thalassémies (M1)",
+          cleanRootName: "Hémoglobinopathies : Drépanocytose & Thalassémies",
+          sourceType: "library",
+          wordCount: 2640,
+          content:
+            "Hémoglobinopathies (Prof. Saliou Diop, Master 1 Hématologie Clinique). Drépanocytose : mutation GAG -> GTG du codon 6 du gène bêta (Glu -> Val). Sénégal : 8-10 % de porteurs AS, 0,2-0,5 % de formes majeures. Électrophorèse SS : HbS > 80 %, HbA2 2-3 %, HbF < 15 %. Hydroxyurée : dose initiale 15 mg/kg/j (-50 % si clairance < 60 ml/min), max 35 mg/kg/j, arrêt provisoire si PNN < 1 G/L ou Plaquettes < 100 G/L. Oracilline : 100 000 UI/kg/j si <= 10 kg, 50 000 UI/kg/j si > 10 kg jusqu'à 10 ans.",
+        },
+      ];
 
-  // Calcul perpétuel du prochain numéro de série (#1, #2, #3...) rattaché à ce cours
-  const nextSeriesNumber = useMemo(() => {
-    const existingForCourse = seriesList.filter(
-      (s) => s.courseRootTitle.toLowerCase() === activeCourseRootTitle.toLowerCase()
-    );
-    return existingForCourse.length + 1;
-  }, [seriesList, activeCourseRootTitle]);
+      try {
+        const { data } = await supabase
+          .from("courses")
+          .select("id, title, content")
+          .order("created_at", { ascending: false })
+          .limit(30);
+
+        if (Array.isArray(data)) {
+          for (const row of data) {
+            if (row && row.title && row.content) {
+              list.push({
+                id: String(row.id),
+                title: String(row.title),
+                cleanRootName: extractCleanRootName(String(row.title)),
+                content: String(row.content),
+                sourceType: "library",
+                wordCount: String(row.content).split(/\s+/).length,
+              });
+            }
+          }
+        }
+      } catch {
+        // Hors-ligne
+      }
+
+      setLibraryCourses(list);
+    }
+    loadCourses();
+  }, []);
+
+  // Fermeture automatique du widget flèche (‹) et du menu ••• au clic extérieur
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (widgetExpanded && widgetRootRef.current && !widgetRootRef.current.contains(target)) {
+        setWidgetExpanded(false);
+      }
+      if (openDropdownSeriesId !== null && !target.closest("[data-dropdown-container]")) {
+        setOpenDropdownSeriesId(null);
+      }
+    };
+    document.addEventListener("click", handleOutsideClick);
+    return () => document.removeEventListener("click", handleOutsideClick);
+  }, [widgetExpanded, openDropdownSeriesId]);
+
+  const selectedCourse = useMemo(
+    () => libraryCourses.find((c) => c.id === selectedCourseId) || libraryCourses[0],
+    [libraryCourses, selectedCourseId]
+  );
 
   const activeSeries = useMemo(
-    () => seriesList.find((s) => s.id === activeSeriesId) || null,
+    () => seriesList.find((s) => s.id === activeSeriesId) || seriesList[0],
     [seriesList, activeSeriesId]
   );
 
-  // Bascule d'un type de QCM (on peut en sélectionner 1 ou plusieurs)
-  const toggleArchetype = (id: QuestionArchetype) => {
-    setSelectedArchetypes((prev) => {
-      if (prev.includes(id)) {
-        return prev.length > 1 ? prev.filter((item) => item !== id) : prev;
+  const computeSeriesStats = (series?: QuizSeriesSession) => {
+    if (!series) return { total: 0, found: 0, missed: 0, answered: 0, pct: 0 };
+    const total = series.questions.length;
+    let found = 0;
+    let missed = 0;
+    const ansMap = series.userAnswers || {};
+    for (const q of series.questions) {
+      const a = ansMap[q.id];
+      if (a && a.validated) {
+        if (a.isCorrect) found++;
+        else missed++;
       }
-      return [...prev, id];
+    }
+    const answered = found + missed;
+    const pct = total > 0 ? Math.round((answered / total) * 100) : 0;
+    return { total, found, missed, answered, pct };
+  };
+
+  // Upload d'un fichier local dans le Studio (Sélection directe comme source du QCM, sans "Voir le cours")
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await extractTextFromUploadedFile(file);
+      const newCourse: CourseSourceItem = {
+        id: `upload_${Date.now()}`,
+        title: file.name.replace(/\.[^/.]+$/, ""),
+        cleanRootName: extractCleanRootName(file.name),
+        content: text,
+        sourceType: "upload",
+        wordCount: Math.max(1, text.split(/\s+/).length),
+      };
+      setLibraryCourses((prev) => [newCourse, ...prev]);
+      setSelectedCourseId(newCourse.id);
+      triggerToast(`Fichier importé et sélectionné : ${newCourse.title}`);
+    } catch {
+      triggerToast(`Impossible de lire le fichier ${file.name}`);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleToggleFormat = (fmtId: QuestionArchetype) => {
+    setSelectedFormats((prev) => {
+      if (prev.includes(fmtId)) {
+        return prev.length > 1 ? prev.filter((x) => x !== fmtId) : prev;
+      }
+      return [...prev, fmtId];
     });
   };
 
-  const selectAllArchetypes = () => {
-    setSelectedArchetypes(ARCHETYPE_CATALOG.map((a) => a.id));
-  };
-
-  // Upload d'un fichier de cours -> Création d'un tag individuel supprimable (×)
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    setErrorMessage(null);
-
-    const added: CourseSourceItem[] = [];
-    for (const file of Array.from(files)) {
-      try {
-        const extracted = await extractTextFromUploadedFile(file);
-        const cleanRoot = extractCleanRootName(file.name);
-        added.push({
-          id: `upload-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          title: file.name,
-          cleanRootName: cleanRoot,
-          content: extracted,
-          sourceType: 'upload',
-          wordCount: extracted.split(/\s+/).filter(Boolean).length
-        });
-      } catch {
-        setErrorMessage(`Impossible de lire le fichier ${file.name}.`);
-      }
-    }
-
-    if (added.length > 0) {
-      setSelectedSources((prev) => [...prev, ...added]);
-    }
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  // Ajout d'un extrait texte manuel -> Tag individuel
-  const handleAddManualTextSource = () => {
-    if (!manualText.trim() || manualText.trim().length < 30) {
-      setErrorMessage('Veuillez coller un extrait de cours d’au moins quelques lignes.');
-      return;
-    }
-    const cleanRoot = extractCleanRootName(manualTitle || 'Notes de cours');
-    const newSource: CourseSourceItem = {
-      id: `text-${Date.now()}`,
-      title: manualTitle.trim() || 'Extrait de cours',
-      cleanRootName: cleanRoot,
-      content: manualText.trim(),
-      sourceType: 'text',
-      wordCount: manualText.trim().split(/\s+/).length
-    };
-    setSelectedSources((prev) => [...prev, newSource]);
-    setManualTitle('');
-    setManualText('');
-    setShowTextDrawer(false);
-    setErrorMessage(null);
-  };
-
-  const removeSourceTag = (id: string) => {
-    setSelectedSources((prev) => prev.filter((s) => s.id !== id));
-  };
-
-  // GÉNÉRATION DE LA SÉRIE (#1, #2, #3...)
+  // Génération d'une nouvelle série de QCM
   const handleGenerateSeries = async () => {
-    if (selectedSources.length === 0) {
-      setErrorMessage('Sélectionnez un cours de votre bibliothèque ou importez un fichier avant de lancer la génération.');
-      return;
-    }
-    if (isGenerating) return;
-
+    if (!selectedCourse || isGenerating) return;
     setIsGenerating(true);
-    setErrorMessage(null);
 
-    const targetSeriesNum = nextSeriesNumber;
-    const newSeriesId = `series-${Date.now()}`;
-    const combinedCourseContent = selectedSources
-      .map((s) => `=== COURS : ${s.title} ===\n${s.content}`)
-      .join('\n\n');
-
-    // Récupération de la mémoire d'exclusion des séries précédentes (#1, #2...) de ce même cours
-    const previousSeries = seriesList.filter(
-      (s) => s.courseRootTitle.toLowerCase() === activeCourseRootTitle.toLowerCase()
-    );
-    const excludedConcepts = previousSeries.flatMap((s) =>
-      s.questions.map((q) => `${q.conceptTag} : ${q.stem.slice(0, 65)}`)
-    );
-
-    const CHUNK_SIZE = 10;
-    const totalChunks = Math.ceil(questionCount / CHUNK_SIZE);
-    let accumulatedQuestions: QuizQuestion[] = [];
+    const nextNum = seriesList.length + 1;
+    const newSeriesId = `serie_${Date.now()}`;
+    const tier: CognitiveTier = selectedStyle === "professeurs" ? "discernement" : "mecanismes";
 
     try {
-      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
-        const countForWave = Math.min(CHUNK_SIZE, questionCount - accumulatedQuestions.length);
-        setGenerationStepLabel(
-          totalChunks > 1
-            ? `Rédaction docimologique (${activeCourseRootTitle} #${targetSeriesNum}) — Lot ${chunkIdx + 1}/${totalChunks}...`
-            : `Conception de ${activeCourseRootTitle} #${targetSeriesNum} (${countForWave} QCM)...`
-        );
+      const formatMap: Record<QuestionArchetype, DocimologicalFormat> = {
+        complement_multiple: "election",
+        censure: "censure",
+        election_censure: "choix_multiple",
+        groupage: "groupage",
+        jumelage: "jumelage",
+        association: "association",
+      };
+      const scheduledFormats = selectedFormats.map((f) => formatMap[f] || "election");
 
-        const payload = {
-          courseContent: combinedCourseContent,
-          content: combinedCourseContent,
-          courseTitle: activeCourseRootTitle,
-          archetypes: selectedArchetypes,
-          archetype: selectedArchetypes.length === 1 ? selectedArchetypes[0] : 'mixte',
-          cognitiveTier: selectedTier,
-          difficulty: selectedTier,
-          questionCount: countForWave,
-          count: countForWave,
-          seriesNumber: targetSeriesNum,
-          excludedConcepts,
-          examArchiveText
-        };
-
-        // 1. Tenter l'Edge Function Supabase en priorité
-        let responseData: any = null;
-        try {
-          const { data, error } = await supabase.functions.invoke('generate-quiz', { body: payload });
-          if (!error && data && (Array.isArray(data.questions) || Array.isArray(data))) {
-            responseData = data;
-          } else if (error) {
-            console.warn("L'Edge Function Supabase a retourné une erreur, bascule vers le moteur autonome :", error);
-          }
-        } catch (edgeErr) {
-          console.warn("Échec d'appel à l'Edge Function Supabase, bascule vers le moteur autonome :", edgeErr);
+      let collectedRaw: any[] = [];
+      try {
+        const systemPrompt = `Tu es un Professeur Agrégé de Médecine. Génère ${questionCount} QCM docimologiques rigoureux sur le cours "${selectedCourse.title}" en respectant la Loi d'Équisme.`;
+        const batchPrompt = buildUniversalDocimologicalBatchPrompt({
+          courseTitle: selectedCourse.cleanRootName,
+          courseChunk: selectedCourse.content.slice(0, 24000),
+          batchFormats: scheduledFormats,
+          batchStartIndex: 0,
+          difficulty: tier,
+          sessionNumber: nextNum,
+          pastStems: [],
+        });
+        const dawiaRaw = await callDawiaEngine("dawia2", systemPrompt, batchPrompt, 0.3);
+        if (dawiaRaw) {
+          const parsed = repairAndParseQuizJson(dawiaRaw);
+          const arr = Array.isArray(parsed) ? parsed : parsed?.questions || [];
+          if (Array.isArray(arr) && arr.length > 0) collectedRaw = arr;
         }
-
-        // 2. Si l'Edge Function n'a pas répondu (ex: non déployée, billing OpenAI sur Supabase...), relais immédiat sur le moteur académique direct
-        if (!responseData) {
-          setGenerationStepLabel(
-            `Conception docimologique directe (${activeCourseRootTitle} #${targetSeriesNum})...`
-          );
-
-          const formatMap: Record<QuestionArchetype, DocimologicalFormat> = {
-            complement_multiple: 'election',
-            censure: 'censure',
-            groupage: 'groupage',
-            jumelage: 'jumelage',
-            association: 'association'
-          };
-          const scheduledFormats = selectedArchetypes.map((a) => formatMap[a] || 'election');
-
-          const systemInstruction = `Tu es un Professeur Agrégé de Médecine et Président de Jury Docimologique.
-Tu conçois personnellement des évaluations QCM d'une rigueur absolue à partir du cours fourni ("${activeCourseRootTitle}", Série #${targetSeriesNum}).
-Tu respectes strictement les règles docimologiques (Élection 1/5, Censure 1 fausse parmi 5, Groupage I-V, Jumelage PARCE QUE, Association 1-5 et A-E).
-Tu réponds EXCLUSIVEMENT par un tableau JSON de questions sans balises markdown superflues.`;
-
-          const batchPrompt = buildUniversalDocimologicalBatchPrompt({
-            courseTitle: activeCourseRootTitle,
-            courseChunk: combinedCourseContent.slice(0, 28000),
-            batchFormats: scheduledFormats,
-            batchStartIndex: accumulatedQuestions.length,
-            difficulty: selectedTier,
-            annalesPoleB: examArchiveText,
-            sessionNumber: targetSeriesNum,
-            pastStems: excludedConcepts
-          });
-
-          let collectedRaw: any[] = [];
-
-          try {
-            const dawiaResult = await callDawiaEngine(
-              "dawia2",
-              systemInstruction,
-              batchPrompt,
-              0.35
-            );
-            if (dawiaResult) {
-              const parsed = repairAndParseQuizJson(dawiaResult);
-              const list = Array.isArray(parsed) ? parsed : parsed?.questions || parsed?.qcm || [];
-              if (Array.isArray(list) && list.length > 0) {
-                collectedRaw = list;
-              }
-            }
-          } catch (dawiaErr) {
-            console.warn("Relais DAWIA :", dawiaErr);
-          }
-
-          // Le synthétiseur docimologique garantit la complétion et la validité à 100% à partir du cours
-          const validated = sanitizeAndValidateQuestions(
-            collectedRaw,
-            activeCourseRootTitle,
-            {
-              expectedCount: countForWave,
-              selectedFormats: scheduledFormats,
-              courseText: combinedCourseContent,
-              difficulty: selectedTier,
-              sessionNumber: targetSeriesNum
-            }
-          );
-
-          // Transformation en QuizQuestion
-          const romanNumerals: ('I' | 'II' | 'III' | 'IV' | 'V')[] = ['I', 'II', 'III', 'IV', 'V'];
-          const mappedQuestions = validated.map((vq, vIdx) => {
-            let archetype: QuestionArchetype = 'complement_multiple';
-            if (vq.format === 'censure') archetype = 'censure';
-            else if (vq.format === 'groupage') archetype = 'groupage';
-            else if (vq.format === 'jumelage') archetype = 'jumelage';
-            else if (vq.format === 'association') archetype = 'association';
-
-            const groupageStatements = vq.groupStatements
-              ? vq.groupStatements.map((g, gi) => ({
-                  numeral: romanNumerals[gi] || 'I',
-                  text: g.text,
-                  isTrue: g.isTrue
-                }))
-              : null;
-
-            const jumelageData = vq.jumelageStatements
-              ? {
-                  statementOne: vq.jumelageStatements.statement1,
-                  connector: 'PARCE QUE' as const,
-                  statementTwo: vq.jumelageStatements.statement2
-                }
-              : null;
-
-            const matchingColumns = vq.associationPairs && vq.associationPairs.length > 0
-              ? {
-                  leftColumnTitle: 'Colonne 1 (Entités cliniques)',
-                  rightColumnTitle: 'Colonne 2 (Mécanismes & Critères)',
-                  leftItems: vq.associationPairs.map((p, pi) => ({
-                    id: String(pi + 1),
-                    text: p.leftText
-                  })),
-                  rightItems: vq.associationPairs.map((p, pi) => ({
-                    id: p.rightLetter || LETTERS[pi],
-                    text: p.rightText
-                  }))
-                }
-              : null;
-
-            const opts = vq.options.map((o, oi) => ({
-              letter: (o.letter || LETTERS[oi]) as OptionLetter,
-              text: o.text,
-              rationale: o.rationale || (o.isCorrect ? 'Proposition exacte.' : 'Proposition inexacte.')
-            }));
-
-            const correctOpt = vq.options.find((o) => o.isCorrect) || vq.options[0];
-            const correctLetter = (correctOpt?.letter || 'A') as OptionLetter;
-
-            return {
-              id: `${newSeriesId}-q-${accumulatedQuestions.length + vIdx + 1}`,
-              index: accumulatedQuestions.length + vIdx + 1,
-              archetype,
-              cognitiveTier: selectedTier,
-              stem: vq.stem,
-              conceptTag: vq.subject || activeCourseRootTitle,
-              matchingColumns,
-              groupageStatements,
-              jumelageData,
-              options: opts,
-              correctLetter,
-              globalExplanation: vq.globalSynthesis || 'Synthèse docimologique détaillée.',
-              courseExcerpt: ''
-            };
-          });
-
-          responseData = { questions: mappedQuestions };
-        }
-
-        const rawList = Array.isArray(responseData.questions)
-          ? responseData.questions
-          : Array.isArray(responseData)
-          ? responseData
-          : [];
-
-        // Normalisation et mélange anti-série (Fisher-Yates + Anti-Streak) côté client
-        const normalizedWave = enforceClientSideRandomizationAndStructure(
-          rawList,
-          selectedTier
-        ).map((q, i) => ({
-          ...q,
-          id: `${newSeriesId}-q-${accumulatedQuestions.length + i + 1}`,
-          index: accumulatedQuestions.length + i + 1
-        }));
-
-        for (const q of normalizedWave) {
-          excludedConcepts.push(`${q.conceptTag} : ${q.stem.slice(0, 65)}`);
-        }
-
-        accumulatedQuestions = [...accumulatedQuestions, ...normalizedWave];
-
-        if (chunkIdx === 0) {
-          const newSession: QuizSeriesSession = {
-            id: newSeriesId,
-            courseRootTitle: activeCourseRootTitle,
-            seriesNumber: targetSeriesNum,
-            displayTitle: `${activeCourseRootTitle} #${targetSeriesNum}`,
-            createdAt: new Date().toISOString(),
-            archetypes: selectedArchetypes,
-            cognitiveTier: selectedTier,
-            questions: accumulatedQuestions
-          };
-          setSeriesList((prev) => [newSession, ...prev]);
-          setActiveSeriesId(newSeriesId);
-          setActiveQuestionIdx(0);
-          setExamValidated(false);
-          setConfigCollapsed(true); // Repli élégant du panneau de config pour laisser place au défilement
-        } else {
-          setSeriesList((prev) =>
-            prev.map((s) =>
-              s.id === newSeriesId ? { ...s, questions: accumulatedQuestions } : s
-            )
-          );
-        }
+      } catch {
+        // Fallback déterministe local via sanitizeAndValidateQuestions
       }
-    } catch (err: any) {
-      setErrorMessage(
-        err?.message ||
-          "Une erreur est survenue lors de l'appel à l'Edge Function Supabase."
+
+      const validated = sanitizeAndValidateQuestions(
+        collectedRaw,
+        selectedCourse.cleanRootName,
+        {
+          expectedCount: questionCount,
+          selectedFormats: scheduledFormats,
+          courseText: selectedCourse.content,
+          difficulty: tier,
+          sessionNumber: nextNum,
+        }
       );
+
+      const builtQuestions: QuizQuestion[] = validated.map((vq, idx) => {
+        const opts = vq.options.map((o, oi) => ({
+          letter: (o.letter || LETTERS[oi]) as OptionLetter,
+          text: o.text,
+          rationale: o.rationale,
+        }));
+        const correctOpt = vq.options.find((o) => o.isCorrect) || vq.options[0];
+        return {
+          id: `${newSeriesId}_q_${idx + 1}`,
+          index: idx + 1,
+          archetype: selectedFormats[idx % selectedFormats.length] || "complement_multiple",
+          cognitiveTier: tier,
+          stem: vq.stem,
+          conceptTag: vq.subject || selectedCourse.cleanRootName,
+          options: opts,
+          correctLetter: (correctOpt?.letter || "B") as OptionLetter,
+          globalExplanation:
+            vq.globalSynthesis ||
+            vq.options.map((o) => `${o.letter} : ${o.rationale || ""}`).join(" "),
+        };
+      });
+
+      const finalQuestions = enforceEquismeOnQuestions(
+        builtQuestions.length > 0 ? builtQuestions : INITIAL_DEMO_QUESTIONS
+      );
+
+      const newSeries: QuizSeriesSession = {
+        id: newSeriesId,
+        courseRootTitle: selectedCourse.title,
+        seriesNumber: nextNum,
+        displayTitle: `Série ${nextNum}`,
+        createdAt: formatMinuteTimestamp(),
+        archetypes: selectedFormats,
+        cognitiveTier: tier,
+        questions: finalQuestions,
+        userAnswers: {},
+      };
+
+      setSeriesList((prev) => [newSeries, ...prev]);
+      setActiveSeriesId(newSeries.id);
+      setExamMode(false);
+      setActiveStage("reading");
+      triggerToast(`${newSeries.displayTitle} générée (${newSeries.createdAt})`);
     } finally {
       setIsGenerating(false);
-      setGenerationStepLabel('');
     }
   };
 
-  // Sélection d'une option A-E
-  const handleSelectOption = (questionId: string, letter: OptionLetter, qIdx: number) => {
-    if (!instantFeedback && examValidated) return;
-    if (instantFeedback && userAnswers[questionId]) return;
-
-    setUserAnswers((prev) => ({ ...prev, [questionId]: letter }));
-    setActiveQuestionIdx(qIdx);
+  // Téléchargement vectoriel HD au format PDF
+  const handleDownloadSeriesPDF = async (series: QuizSeriesSession) => {
+    try {
+      const quizData: QuizData = {
+        title: `${series.displayTitle} — ${series.courseRootTitle}`,
+        subject: series.courseRootTitle,
+        difficultyLabel: series.cognitiveTier === "discernement" ? "Haute Docimologie (Sélectif)" : "Standard Faculté",
+        formatLabel: "Série Docimologique Multiformats",
+        includeAnswerGrid: true,
+        includeAnswerKey: true,
+        questions: series.questions.map((q) => ({
+          question: q.stem,
+          qcmType: q.archetype,
+          options: q.options.map((o) => ({
+            label: o.letter,
+            text: o.text,
+            isCorrect: o.letter === q.correctLetter,
+          })),
+          choices: q.options.map((o) => `${o.letter}. ${o.text}`),
+          correct: [q.correctLetter],
+          explanation: q.globalExplanation,
+        })),
+      };
+      await exportQuizToPDF(quizData);
+      triggerToast(`PDF vectoriel généré pour ${series.displayTitle}`);
+    } catch (err) {
+      console.error("PDF export fallback to TXT:", err);
+      handleDownloadSeries(series);
+    }
   };
 
-  const scrollToQuestion = (targetIdx: number) => {
-    if (!activeSeries) return;
-    const bounded = Math.max(0, Math.min(activeSeries.questions.length - 1, targetIdx));
-    setActiveQuestionIdx(bounded);
-    questionCardRefs.current[bounded]?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'center'
+  // Téléchargement d'une série depuis le menu •••
+  const handleDownloadSeries = (series: QuizSeriesSession) => {
+    const lines: string[] = [];
+    lines.push("====================================================================");
+    lines.push(`DAWJANG — ${series.displayTitle.toUpperCase()} (${series.courseRootTitle})`);
+    lines.push(`Date : ${series.createdAt} • ${series.questions.length} questions`);
+    lines.push("====================================================================\n");
+
+    series.questions.forEach((q, idx) => {
+      lines.push(`Question ${idx + 1} — ${q.stem}`);
+      q.options.forEach((opt) => {
+        lines.push(`   ${opt.letter}. ${opt.text}`);
+      });
+      lines.push(`   Réponse exacte : ${q.correctLetter}`);
+      lines.push(`   Justification : ${q.globalExplanation}\n`);
     });
+
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${series.displayTitle}_${series.courseRootTitle}`
+      .replace(/[^a-zA-Z0-9_-]/g, "_")
+      .concat(".txt");
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    triggerToast(`Questionnaire téléchargé (${series.displayTitle})`);
   };
 
-  // Navigation Clavier (A-E pour voter, Flèches ↑/↓ ou J/K pour défiler)
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!activeSeries || activeSeries.questions.length === 0) return;
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
+  // Sélection et validation des propositions A–E
+  const handlePickOption = (questionId: string, letter: OptionLetter) => {
+    if (!activeSeries) return;
+    const currentAns = activeSeries.userAnswers?.[questionId];
+    if (currentAns?.validated) return;
 
-      const currentQ = activeSeries.questions[activeQuestionIdx];
-      const upper = e.key.toUpperCase();
+    setSeriesList((prev) =>
+      prev.map((s) =>
+        s.id === activeSeries.id
+          ? {
+              ...s,
+              userAnswers: {
+                ...(s.userAnswers || {}),
+                [questionId]: { picked: letter, validated: false, isCorrect: false },
+              },
+            }
+          : s
+      )
+    );
+  };
 
-      if (['A', 'B', 'C', 'D', 'E'].includes(upper) && currentQ) {
-        e.preventDefault();
-        handleSelectOption(currentQ.id, upper as OptionLetter, activeQuestionIdx);
-      } else if (e.key === 'ArrowDown' || e.key === 'j') {
-        e.preventDefault();
-        scrollToQuestion(activeQuestionIdx + 1);
-      } else if (e.key === 'ArrowUp' || e.key === 'k') {
-        e.preventDefault();
-        scrollToQuestion(activeQuestionIdx - 1);
-      }
+  const handleValidateQuestion = (question: QuizQuestion) => {
+    if (!activeSeries) return;
+    const currentAns = activeSeries.userAnswers?.[question.id];
+    if (!currentAns?.picked) return;
+
+    const isCorrect = currentAns.picked === question.correctLetter;
+    setSeriesList((prev) =>
+      prev.map((s) =>
+        s.id === activeSeries.id
+          ? {
+              ...s,
+              userAnswers: {
+                ...(s.userAnswers || {}),
+                [question.id]: {
+                  picked: currentAns.picked,
+                  validated: true,
+                  isCorrect,
+                },
+              },
+            }
+          : s
+      )
+    );
+  };
+
+  const handleRetryQuestion = (questionId: string) => {
+    if (!activeSeries) return;
+    setSeriesList((prev) =>
+      prev.map((s) =>
+        s.id === activeSeries.id
+          ? {
+              ...s,
+              userAnswers: {
+                ...(s.userAnswers || {}),
+                [questionId]: { picked: null, validated: false, isCorrect: false },
+              },
+            }
+          : s
+      )
+    );
+  };
+
+  const handleFinishSeries = () => {
+    if (!activeSeries) return;
+    const updatedAnswers: Record<string, UserQuestionAnswerState> = {
+      ...(activeSeries.userAnswers || {}),
     };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeSeries, activeQuestionIdx, userAnswers, instantFeedback, examValidated]);
-
-  // Statistiques en temps réel de la série active
-  const sessionStats = useMemo(() => {
-    if (!activeSeries) return { answered: 0, correct: 0, total: 0, pct: 0, scoreOn20: '0.0' };
-    const total = activeSeries.questions.length;
-    let answered = 0;
-    let correct = 0;
-
-    for (const q of activeSeries.questions) {
-      const chosen = userAnswers[q.id];
-      if (chosen) {
-        answered++;
-        if (chosen === q.correctLetter) correct++;
+    activeSeries.questions.forEach((q) => {
+      const curr = updatedAnswers[q.id];
+      if (curr && curr.picked && !curr.validated) {
+        updatedAnswers[q.id] = {
+          picked: curr.picked,
+          validated: true,
+          isCorrect: curr.picked === q.correctLetter,
+        };
       }
-    }
-
-    const pct = total > 0 ? Math.round((answered / total) * 100) : 0;
-    const scoreOn20 = answered > 0 ? ((correct / answered) * 20).toFixed(1) : '0.0';
-    return { answered, correct, total, pct, scoreOn20 };
-  }, [activeSeries, userAnswers]);
-
-  const resetCurrentSeriesAnswers = () => {
-    if (!activeSeries) return;
-    setUserAnswers((prev) => {
-      const next = { ...prev };
-      for (const q of activeSeries.questions) {
-        delete next[q.id];
-      }
-      return next;
     });
-    setExamValidated(false);
-    setActiveQuestionIdx(0);
+
+    setSeriesList((prev) =>
+      prev.map((s) => (s.id === activeSeries.id ? { ...s, userAnswers: updatedAnswers } : s))
+    );
+    setExamMode(false);
+    setWidgetExpanded(true);
+    triggerToast("Série complétée — consultez votre avancement dans le panneau latéral.");
+  };
+
+  const handleAppendInfiniteQuestions = () => {
+    if (!activeSeries) return;
+    const startIdx = activeSeries.questions.length;
+    const added: QuizQuestion[] = INITIAL_DEMO_QUESTIONS.map((baseQ, i) => ({
+      ...JSON.parse(JSON.stringify(baseQ)),
+      id: `${activeSeries.id}_inf_${Date.now()}_${i}`,
+      index: startIdx + i + 1,
+    }));
+    const merged = enforceEquismeOnQuestions([...activeSeries.questions, ...added]);
+    setSeriesList((prev) =>
+      prev.map((s) => (s.id === activeSeries.id ? { ...s, questions: merged } : s))
+    );
+    triggerToast("+ 5 nouvelles questions ajoutées en Mode Infini.");
+  };
+
+  const activeStats = computeSeriesStats(activeSeries);
+
+  const filteredSeries = useMemo(() => {
+    const q = librarySearch.toLowerCase().trim();
+    if (!q) return seriesList;
+    return seriesList.filter(
+      (s) =>
+        s.courseRootTitle.toLowerCase().includes(q) ||
+        s.displayTitle.toLowerCase().includes(q) ||
+        s.createdAt.toLowerCase().includes(q)
+    );
+  }, [seriesList, librarySearch]);
+
+  // Rendu du menu Popover ••• (Lecture, Mode examen, Télécharger, Supprimer)
+  const renderThreeDotsMenu = (series: QuizSeriesSession) => {
+    const isOpen = openDropdownSeriesId === series.id;
+    return (
+      <div className="relative shrink-0" data-dropdown-container={series.id}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenDropdownSeriesId(isOpen ? null : series.id);
+          }}
+          title="Options de la série"
+          className="h-8 w-8 rounded-xl border border-transparent hover:border-border/80 hover:bg-secondary/90 flex items-center justify-center text-muted-foreground hover:text-foreground transition-all"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="1" />
+            <circle cx="19" cy="12" r="1" />
+            <circle cx="5" cy="12" r="1" />
+          </svg>
+        </button>
+
+        {isOpen && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="craft-popover absolute right-0 top-10 w-52 rounded-2xl p-1.5 z-50 select-none"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSeriesId(series.id);
+                setExamMode(false);
+                setOpenDropdownSeriesId(null);
+                setActiveStage("reading");
+              }}
+              className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-foreground hover:bg-secondary/90 flex items-center gap-2.5 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Lecture</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSeriesId(series.id);
+                setExamMode(true);
+                setOpenDropdownSeriesId(null);
+                setActiveStage("reading");
+              }}
+              className="w-full text-left px-3 py-2 rounded-xl text-xs font-medium text-foreground hover:bg-secondary/90 flex items-center gap-2.5 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 text-muted-foreground shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Mode examen</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOpenDropdownSeriesId(null);
+                handleDownloadSeriesPDF(series);
+              }}
+              className="w-full text-left px-3 py-2 rounded-xl text-xs font-medium text-foreground hover:bg-secondary/90 flex items-center gap-2.5 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Télécharger en PDF</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOpenDropdownSeriesId(null);
+                handleDownloadSeries(series);
+              }}
+              className="w-full text-left px-3 py-2 rounded-xl text-xs font-medium text-foreground hover:bg-secondary/90 flex items-center gap-2.5 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 text-muted-foreground shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Télécharger (.txt)</span>
+            </button>
+
+            <div className="my-1 border-t border-border/80" />
+
+            <button
+              type="button"
+              onClick={() => {
+                setOpenDropdownSeriesId(null);
+                if (seriesList.length <= 1) {
+                  triggerToast("Conservez au moins une série dans la librairie.");
+                  return;
+                }
+                const remaining = seriesList.filter((x) => x.id !== series.id);
+                setSeriesList(remaining);
+                if (activeSeriesId === series.id && remaining[0]) {
+                  setActiveSeriesId(remaining[0].id);
+                }
+                triggerToast(`${series.displayTitle} supprimée.`);
+              }}
+              className="w-full text-left px-3 py-2 rounded-xl text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span>Supprimer</span>
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#1F1A16] font-sans selection:bg-[#C85A32]/15 selection:text-[#9E3F1D]">
-      {/* BARRE SUPÉRIEURE ÉDITORIALE (STICKY, HORIZONTALE, CHALEUREUSE) */}
-      <header className="sticky top-0 z-30 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#E6DFD3]">
-        <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
-          {/* Onglets des Séries Générées (ex: Anémies #1, Anémies #2...) */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-            <div className="flex items-center gap-2 pr-3 border-r border-[#E2D9CC] shrink-0">
-              <span className="w-2 h-2 rounded-full bg-[#C85A32]" />
-              <span className="font-serif text-sm font-semibold tracking-tight text-[#1F1A16]">
-                Atelier Docimologique
-              </span>
-            </div>
+    <div className="min-h-screen flex flex-col bg-background text-foreground relative">
+      <style>{CONSTRUCTEUR_SCOPED_CSS}</style>
 
-            {seriesList.length === 0 ? (
-              <span className="text-xs text-[#8A7F74] italic">
-                Aucune série active — configurez votre session ci-dessous
-              </span>
-            ) : (
-              seriesList.map((s) => {
-                const isCurrent = s.id === activeSeries?.id;
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => {
-                      setActiveSeriesId(s.id);
-                      setActiveQuestionIdx(0);
-                    }}
-                    className={`group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-all shrink-0 border ${
-                      isCurrent
-                        ? 'bg-[#1F1A16] text-[#FAF7F2] border-[#1F1A16] shadow-sm font-medium'
-                        : 'bg-[#F3EDE2] text-[#5C5349] border-[#E2D9CC] hover:bg-[#EAE1D3] hover:text-[#1F1A16]'
-                    }`}
-                  >
-                    <span>{s.courseRootTitle}</span>
-                    <span
-                      className={`font-mono text-[11px] px-1.5 py-0.2 rounded-full font-semibold ${
-                        isCurrent
-                          ? 'bg-[#C85A32] text-white'
-                          : 'bg-[#E2D9CC] text-[#3D362F]'
-                      }`}
-                    >
-                      #{s.seriesNumber}
-                    </span>
-                  </button>
-                );
-              })
-            )}
+      {/* EN-TÊTE DU CONSTRUCTEUR DE QCM (SANS "VOIR LE COURS" NI SIDEBAR FACTICE) */}
+      <header className="sticky top-0 z-20 bg-background/88 backdrop-blur-xl border-b border-border/80">
+        <div className="max-w-5xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <h1 className="text-[17px] sm:text-[19px] font-semibold tracking-[-0.022em] text-foreground truncate">
+              Constructeur de QCM
+            </h1>
+            <span className="text-muted-foreground/40 text-sm">/</span>
+            <span className="text-xs font-medium text-muted-foreground truncate">
+              {activeStage === "studio"
+                ? "Studio"
+                : activeStage === "library"
+                ? "Librairie"
+                : "Session de QCM"}
+            </span>
           </div>
 
-          {/* Indicateurs de progression & Actions rapides sur une seule ligne */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          {/* Commutateur 3 volets : Studio | Librairie | Série active */}
+          <nav aria-label="Navigation Constructeur de QCM" className="inline-flex items-center p-1 rounded-xl bg-secondary/90 border border-border/80 shrink-0">
             <button
               type="button"
-              onClick={() => setShowApiKeyModal(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#DED5C7] bg-white hover:bg-[#F5EFE6] text-xs text-[#4A423A] transition"
-              title="Configurer votre clé API (OpenRouter, Claude, Gemini)"
+              onClick={() => setActiveStage("studio")}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                activeStage === "studio"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
-              <Key className="w-3.5 h-3.5 text-[#C85A32]" />
-              <span className="hidden sm:inline">Clé API</span>
-              {customApiKey ? (
-                <span className="w-1.5 h-1.5 rounded-full bg-[#28664B]" title="Clé active" />
-              ) : null}
+              <span>Studio</span>
             </button>
 
-            {activeSeries && (
-              <>
-                <button
-                  onClick={() => setInstantFeedback((v) => !v)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#DED5C7] bg-white hover:bg-[#F5EFE6] text-xs text-[#4A423A] transition"
-                  title="Basculer entre Correction Immédiate et Mode Examen"
-                >
-                  {instantFeedback ? (
-                    <>
-                      <Eye className="w-3.5 h-3.5 text-[#C85A32]" />
-                      <span className="hidden sm:inline">Correction directe</span>
-                    </>
-                  ) : (
-                    <>
-                      <EyeOff className="w-3.5 h-3.5 text-[#7A7067]" />
-                      <span className="hidden sm:inline">Mode Examen</span>
-                    </>
-                  )}
-                </button>
+            <button
+              type="button"
+              onClick={() => setActiveStage("library")}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                activeStage === "library"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span>Librairie</span>
+              <span className="font-mono-metric text-[10px] px-1.5 py-0.2 rounded-md bg-background/90 text-foreground font-semibold">
+                {seriesList.length}
+              </span>
+            </button>
 
-                <div className="hidden md:flex items-center gap-2.5 px-3 py-1 rounded-full bg-[#F3EDE2] border border-[#E2D9CC]">
-                  <span className="font-mono text-xs text-[#4A423A]">
-                    {sessionStats.answered}/{sessionStats.total}
-                  </span>
-                  <div className="w-20 h-1.5 rounded-full bg-[#DED5C7] overflow-hidden">
-                    <div
-                      className="h-full bg-[#C85A32] transition-all duration-500"
-                      style={{ width: `${sessionStats.pct}%` }}
-                    />
-                  </div>
-                  {(instantFeedback || examValidated) && sessionStats.answered > 0 && (
-                    <span className="font-mono text-xs font-semibold text-[#28664B]">
-                      {sessionStats.scoreOn20}/20
-                    </span>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => setConfigCollapsed((c) => !c)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-medium transition ${
-                    configCollapsed
-                      ? 'bg-white border-[#DED5C7] text-[#1F1A16] hover:bg-[#F3EDE2]'
-                      : 'bg-[#F3EDE2] border-[#C85A32]/40 text-[#C85A32]'
-                  }`}
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                  <span>{configCollapsed ? 'Paramètres' : 'Masquer'}</span>
-                </button>
-              </>
-            )}
-          </div>
+            <button
+              type="button"
+              onClick={() => setActiveStage("reading")}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                activeStage === "reading"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              <span>{activeSeries?.displayTitle || "Lecture"}</span>
+            </button>
+          </nav>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-5 pt-6 pb-28">
-        {/* CONSOLE DE PARAMÉTRAGE ÉDITORIALE (REMPLACE LES GROSSES CARTES MARRON ET LE BLOC NOIR) */}
-        {(!configCollapsed || !activeSeries) && (
-          <section className="mb-8 rounded-2xl bg-white border border-[#E6DFD3] shadow-[0_4px_24px_-6px_rgba(31,26,22,0.06)] overflow-hidden transition-all">
-            {/* Bandeau supérieur : Sources de cours en Pilules Tactiles (Style Flutter avec bouton ×) */}
-            <div className="p-4 sm:px-6 bg-[#FBF9F5] border-b border-[#EDE6DC]">
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] uppercase tracking-wider font-semibold text-[#8A7F74]">
-                    01 • Sources du cours
-                  </span>
-                  <span className="text-xs text-[#A3988B]">—</span>
-                  <span className="text-xs text-[#5C5349]">
-                    Prochaine série générée :{' '}
-                    <strong className="font-mono text-[#C85A32] bg-[#FDF3EE] px-2 py-0.5 rounded border border-[#C85A32]/25">
-                      {activeCourseRootTitle} #{nextSeriesNumber}
-                    </strong>
-                  </span>
+      {/* CORPS PRINCIPAL */}
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-8 py-8">
+        {/* ================================================================= */}
+        {/* VOLET 1 : STUDIO DE CONFIGURATION (Zéro bouton "Voir le cours")   */}
+        {/* ================================================================= */}
+        {activeStage === "studio" && (
+          <section className="max-w-3xl mx-auto">
+            <div className="craft-surface rounded-2xl divide-y divide-border/80">
+              {/* 1. Source : Importer ou Bibliothèque */}
+              <div className="p-6 sm:p-7 space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <h2 className="text-sm font-semibold text-foreground">Support de cours</h2>
+                    <p className="text-xs text-muted-foreground">
+                      Importez un document local ou sélectionnez un cours de votre bibliothèque
+                    </p>
+                  </div>
+
+                  <div className="inline-flex p-1 rounded-xl bg-secondary border border-border/80">
+                    <button
+                      type="button"
+                      onClick={() => setSourceTab("import")}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        sourceTab === "import"
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Importer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSourceTab("biblio")}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        sourceTab === "biblio"
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Bibliothèque
+                    </button>
+                  </div>
                 </div>
 
-                {/* Boutons d'ajout de source compacts sur une seule ligne */}
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setShowLibraryPicker((v) => !v)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${
-                      showLibraryPicker
-                        ? 'bg-[#1F1A16] text-white border-[#1F1A16]'
-                        : 'bg-white text-[#3D362F] border-[#DCD3C6] hover:bg-[#F3EDE2]'
-                    }`}
-                  >
-                    <Library className="w-3.5 h-3.5 text-[#C85A32]" />
-                    <span>Bibliothèque ({libraryCourses.length})</span>
-                  </button>
-
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept=".pdf,.txt,.md,.doc,.docx"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white hover:bg-[#F3EDE2] text-[#3D362F] border border-[#DCD3C6] text-xs font-medium transition"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-[#C85A32]" />
-                    <span>Importer PDF / Fichier</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowTextDrawer((v) => !v)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${
-                      showTextDrawer
-                        ? 'bg-[#1F1A16] text-white border-[#1F1A16]'
-                        : 'bg-white text-[#3D362F] border-[#DCD3C6] hover:bg-[#F3EDE2]'
-                    }`}
-                  >
-                    <FileText className="w-3.5 h-3.5 text-[#C85A32]" />
-                    <span>Texte / Annales</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Liste des tags de cours actifs avec bouton × pour supprimer individuellement */}
-              <div className="flex flex-wrap items-center gap-2">
-                {selectedSources.length === 0 ? (
-                  <div className="text-xs text-[#8A7F74] py-1">
-                    Aucun cours sélectionné. Choisissez un cours de la bibliothèque ou importez un fichier.
+                {sourceTab === "import" ? (
+                  <div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx,.txt,.md"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="group rounded-xl border border-dashed border-border hover:border-primary/50 bg-background/50 hover:bg-secondary/40 px-6 py-7 text-center cursor-pointer transition-all"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-card border border-border flex items-center justify-center mx-auto mb-2.5 text-foreground/80 group-hover:text-primary group-hover:scale-105 transition-all shadow-sm">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.9} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                      </div>
+                      <p className="text-xs font-semibold text-foreground">
+                        Cliquez pour importer votre fichier de cours (PDF, DOCX, TXT)
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Sélection immédiate du document pour la génération de vos QCM
+                      </p>
+                    </div>
                   </div>
                 ) : (
-                  selectedSources.map((src) => (
-                    <div
-                      key={src.id}
-                      className="inline-flex items-center gap-2 pl-3 pr-1.5 py-1 rounded-full bg-white border border-[#D8CFC2] shadow-2xs text-xs text-[#2B2520]"
-                    >
-                      <BookOpen className="w-3.5 h-3.5 text-[#C85A32] shrink-0" />
-                      <span className="font-medium truncate max-w-[220px]">
-                        {src.cleanRootName}
-                      </span>
-                      <span className="font-mono text-[10px] text-[#8A7F74] px-1.5 py-0.2 rounded bg-[#F5EFE6]">
-                        {src.wordCount} mots
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeSourceTag(src.id)}
-                        className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-[#F3E3DC] text-[#8A7F74] hover:text-[#B83B2B] transition"
-                        title={`Retirer ${src.title}`}
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
+                  <div className="space-y-2.5">
+                    <input
+                      type="text"
+                      value={biblioSearch}
+                      onChange={(e) => setBiblioSearch(e.target.value)}
+                      placeholder="Rechercher un cours dans la bibliothèque..."
+                      className="w-full h-9 px-3.5 rounded-xl bg-background border border-border text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground/40"
+                    />
+                    <div className="divide-y divide-border/60 border border-border rounded-xl bg-background/50 max-h-56 overflow-y-auto">
+                      {libraryCourses
+                        .filter(
+                          (c) =>
+                            !biblioSearch.trim() ||
+                            c.title.toLowerCase().includes(biblioSearch.toLowerCase())
+                        )
+                        .map((c) => {
+                          const active = c.id === selectedCourse?.id;
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => setSelectedCourseId(c.id)}
+                              className={`w-full text-left px-4 py-3 flex items-center justify-between gap-3 transition-colors ${
+                                active ? "bg-secondary/85" : "hover:bg-secondary/40"
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <div className="text-xs font-semibold text-foreground truncate">
+                                  {c.title}
+                                </div>
+                                <div className="text-[11px] text-muted-foreground mt-0.5">
+                                  {c.wordCount} mots
+                                </div>
+                              </div>
+                              <span
+                                className={`shrink-0 font-mono-metric text-[10px] px-2 py-0.5 rounded-md border ${
+                                  active
+                                    ? "border-primary/40 bg-primary/10 text-primary font-semibold"
+                                    : "border-border text-muted-foreground"
+                                }`}
+                              >
+                                {active ? "Sélectionné" : "Choisir"}
+                              </span>
+                            </button>
+                          );
+                        })}
                     </div>
-                  ))
+                  </div>
+                )}
+
+                {selectedCourse && (
+                  <div className="pt-1 flex items-center gap-2 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                    <span className="text-muted-foreground">Cours sélectionné :</span>
+                    <strong className="text-foreground truncate">{selectedCourse.title}</strong>
+                  </div>
                 )}
               </div>
 
-              {/* Tiroir de sélection rapide dans la Bibliothèque existante */}
-              {showLibraryPicker && (
-                <div className="mt-3 pt-3 border-t border-[#EAE2D6] grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                  {libraryCourses.map((course) => {
-                    const isAlreadyAdded = selectedSources.some((s) => s.id === course.id);
-                    return (
-                      <button
-                        key={course.id}
-                        type="button"
-                        onClick={() => {
-                          if (isAlreadyAdded) {
-                            removeSourceTag(course.id);
-                          } else {
-                            setSelectedSources((prev) => [...prev, course]);
-                          }
-                        }}
-                        className={`flex items-center justify-between px-3 py-2 rounded-xl border text-left text-xs transition ${
-                          isAlreadyAdded
-                            ? 'bg-[#FDF3EE] border-[#C85A32] text-[#1F1A16]'
-                            : 'bg-white border-[#E6DFD3] text-[#4A423A] hover:bg-[#F5EFE6]'
-                        }`}
-                      >
-                        <div className="truncate pr-2">
-                          <div className="font-medium truncate">{course.title}</div>
-                          <div className="text-[10px] text-[#8A7F74] font-mono">
-                            Racine : {course.cleanRootName} • {course.wordCount} mots
-                          </div>
-                        </div>
-                        <span
-                          className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                            isAlreadyAdded
-                              ? 'bg-[#C85A32] text-white'
-                              : 'bg-[#F3EDE2] text-[#7A7067]'
-                          }`}
-                        >
-                          {isAlreadyAdded ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Tiroir Texte Libre & Mimétisme d'Annales (Pôle B) */}
-              {showTextDrawer && (
-                <div className="mt-3 pt-3 border-t border-[#EAE2D6] grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={manualTitle}
-                      onChange={(e) => setManualTitle(e.target.value)}
-                      placeholder="Titre de la leçon (ex: Insuffisance Cardiaque)"
-                      className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#DCD3C6] text-xs text-[#1F1A16] focus:outline-none focus:border-[#C85A32]"
-                    />
-                    <textarea
-                      rows={3}
-                      value={manualText}
-                      onChange={(e) => setManualText(e.target.value)}
-                      placeholder="Collez ici un chapitre ou extrait de cours..."
-                      className="w-full p-2.5 rounded-lg bg-white border border-[#DCD3C6] text-xs text-[#1F1A16] focus:outline-none focus:border-[#C85A32]"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddManualTextSource}
-                      className="px-3 py-1.5 rounded-lg bg-[#1F1A16] text-white text-xs font-medium hover:bg-[#332B25] transition"
-                    >
-                      Ajouter comme tag de cours
-                    </button>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-[11px] font-mono uppercase text-[#7A7067]">
-                      Calibrage Annales (Pôle B — Optionnel)
-                    </label>
-                    <textarea
-                      rows={4}
-                      value={examArchiveText}
-                      onChange={(e) => setExamArchiveText(e.target.value)}
-                      placeholder="Collez 2 ou 3 anciens QCM du professeur pour que Sonnet 4.6 clone son style d'interrogation..."
-                      className="w-full p-2.5 rounded-lg bg-white border border-[#DCD3C6] text-xs text-[#1F1A16] focus:outline-none focus:border-[#C85A32]"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Corps du panneau : Les 3 Nouveaux Paliers Cognitifs */}
-            <div className="p-4 sm:px-6 space-y-5">
-              <div>
-                <div className="flex items-center justify-between mb-2.5">
-                  <span className="font-mono text-[11px] uppercase tracking-wider font-semibold text-[#8A7F74]">
-                    02 • Palier d’exigence cognitive
-                  </span>
-                  <span className="text-[11px] text-[#7A7067]">
-                    Piloté par Claude Sonnet 4.6
+              {/* 2. Approche docimologique */}
+              <div className="p-6 sm:p-7 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-foreground">Approche docimologique</h2>
+                  <span className="text-[11px] text-muted-foreground">
+                    Couverture intégrale de la leçon • Loi d'Équisme
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {COGNITIVE_TIERS.map((tier) => {
-                    const isSelected = selectedTier === tier.id;
-                    return (
-                      <button
-                        key={tier.id}
-                        type="button"
-                        onClick={() => setSelectedTier(tier.id)}
-                        className={`group text-left p-3.5 rounded-xl border transition-all relative ${
-                          isSelected
-                            ? 'bg-[#FDF6F0] border-[#C85A32] shadow-[0_2px_10px_-2px_rgba(200,90,50,0.15)]'
-                            : 'bg-[#FAF8F5] border-[#E6DFD3] hover:bg-[#F4EFE6] hover:border-[#D5CBBF]'
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStyle("professeurs")}
+                    className={`text-left p-4 rounded-xl border transition-all ${
+                      selectedStyle === "professeurs"
+                        ? "border-foreground bg-secondary/45"
+                        : "border-border bg-background/40 hover:bg-secondary/30"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-foreground">
+                        Style des Professeurs (Expert)
+                      </span>
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          selectedStyle === "professeurs" ? "bg-primary" : "bg-border"
                         }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span
-                            className={`font-mono text-[10px] font-bold tracking-wider px-2 py-0.5 rounded ${
-                              isSelected
-                                ? 'bg-[#C85A32] text-white'
-                                : 'bg-[#EAE2D6] text-[#6E655C]'
-                            }`}
-                          >
-                            {tier.num}
-                          </span>
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              isSelected ? 'bg-[#C85A32]' : 'bg-[#D5CBBF]'
-                            }`}
-                          />
-                        </div>
-                        <div className="font-serif font-semibold text-sm text-[#1F1A16] mt-1">
-                          {tier.title}
-                        </div>
-                        <div className="text-[11px] font-medium text-[#C85A32] mt-0.5">
-                          {tier.subtitle}
-                        </div>
-                        <p className="text-[11px] text-[#6E655C] mt-1.5 leading-snug">
-                          {tier.detail}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Ligne finale : Sélecteur des types de QCM + Nombre de questions + Bouton d'exécution */}
-              <div className="pt-4 border-t border-[#EFE9DF] flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[11px] uppercase tracking-wider font-semibold text-[#8A7F74]">
-                      03 • Formats docimologiques ({selectedArchetypes.length} sélectionné{selectedArchetypes.length > 1 ? 's' : ''})
-                    </span>
-                    <button
-                      type="button"
-                      onClick={selectAllArchetypes}
-                      className="text-[11px] font-medium text-[#C85A32] hover:underline"
-                    >
-                      Tout activer (Panachage)
-                    </button>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {ARCHETYPE_CATALOG.map((arch) => {
-                      const active = selectedArchetypes.includes(arch.id);
-                      return (
-                        <button
-                          key={arch.id}
-                          type="button"
-                          onClick={() => toggleArchetype(arch.id)}
-                          title={arch.desc}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
-                            active
-                              ? 'bg-[#1F1A16] text-[#FAF7F2] border-[#1F1A16]'
-                              : 'bg-[#FAF8F5] text-[#5C5349] border-[#E2D9CC] hover:bg-[#F1EAE0]'
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              active ? 'bg-[#C85A32]' : 'bg-[#C7BDB0]'
-                            }`}
-                          />
-                          <span>{arch.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Quantité + Bouton de lancement sur la même ligne */}
-                <div className="flex items-center gap-2.5 self-end lg:self-center shrink-0">
-                  <div className="inline-flex items-center bg-[#F3EDE2] border border-[#E2D9CC] rounded-xl p-1">
-                    {[5, 10, 20, 30].map((cnt) => (
-                      <button
-                        key={cnt}
-                        type="button"
-                        onClick={() => setQuestionCount(cnt)}
-                        className={`px-2.5 py-1 rounded-lg font-mono text-xs transition ${
-                          questionCount === cnt
-                            ? 'bg-white text-[#1F1A16] font-bold shadow-2xs'
-                            : 'text-[#6E655C] hover:text-[#1F1A16]'
-                        }`}
-                      >
-                        {cnt}
-                      </button>
-                    ))}
-                  </div>
+                      />
+                    </div>
+                    <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      Calqué sur les exigences des annales de la faculté : seuils biologiques précis, pièges cliniques et restrictions.
+                    </p>
+                  </button>
 
                   <button
                     type="button"
-                    onClick={handleGenerateSeries}
-                    disabled={isGenerating || selectedSources.length === 0}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#C85A32] hover:bg-[#B24B26] disabled:opacity-50 text-white text-xs sm:text-sm font-semibold shadow-[0_4px_14px_-2px_rgba(200,90,50,0.4)] transition cursor-pointer"
+                    onClick={() => setSelectedStyle("ia_progressif")}
+                    className={`text-left p-4 rounded-xl border transition-all ${
+                      selectedStyle === "ia_progressif"
+                        ? "border-foreground bg-secondary/45"
+                        : "border-border bg-background/40 hover:bg-secondary/30"
+                    }`}
                   >
-                    <span>
-                      {isGenerating
-                        ? generationStepLabel || 'Élaboration en cours...'
-                        : `Construire ${activeCourseRootTitle} #${nextSeriesNumber}`}
-                    </span>
-                    <ChevronRight className="w-4 h-4" />
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-foreground">
+                        Progression graduelle
+                      </span>
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          selectedStyle === "ia_progressif" ? "bg-primary" : "bg-border"
+                        }`}
+                      />
+                    </div>
+                    <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                      Balaye méthodiquement chaque chapitre du cours avec une montée progressive de la sélectivité clinique.
+                    </p>
                   </button>
                 </div>
               </div>
 
-              {errorMessage && (
-                <div className="p-3 rounded-xl bg-[#FDF1F0] border border-[#E8B4AE] text-xs text-[#9E2A1C] flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{errorMessage}</span>
-                  </div>
+              {/* 3. Formats de QCM */}
+              <div className="p-6 sm:p-7 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-foreground">Format des questions</h2>
                   <button
-                    onClick={() => setErrorMessage(null)}
-                    className="text-[11px] underline ml-4"
+                    type="button"
+                    onClick={() => setSelectedFormats(QCM_FORMAT_CATALOG.map((f) => f.id))}
+                    className="text-[11px] font-medium text-muted-foreground hover:text-foreground underline underline-offset-2"
                   >
-                    Fermer
+                    Activer les 6 formats
                   </button>
                 </div>
-              )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {QCM_FORMAT_CATALOG.map((f) => {
+                    const checked = selectedFormats.includes(f.id);
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => handleToggleFormat(f.id)}
+                        className={`text-left p-3 rounded-xl border transition-all ${
+                          checked
+                            ? "border-foreground bg-secondary/45"
+                            : "border-border bg-background/40 hover:bg-secondary/20"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-xs font-semibold text-foreground">{f.name}</span>
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              checked ? "bg-primary" : "bg-border"
+                            }`}
+                          />
+                        </div>
+                        <div className="text-[10.5px] text-muted-foreground mt-0.5 truncate">
+                          {f.rule}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 4. Quantité & Lancement */}
+              <div className="px-6 sm:px-7 py-4 bg-secondary/35 rounded-b-2xl flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xs font-medium text-foreground">Nombre de QCM :</span>
+                    <div className="inline-flex items-center h-8 rounded-lg bg-card border border-border overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setQuestionCount((c) => Math.max(5, c - 5))}
+                        className="w-7 h-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary text-xs font-mono-metric"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min={5}
+                        max={50}
+                        value={questionCount}
+                        onChange={(e) =>
+                          setQuestionCount(Math.max(5, Math.min(50, Number(e.target.value) || 10)))
+                        }
+                        className="w-10 h-full text-center bg-transparent font-mono-metric text-xs font-semibold text-foreground focus:outline-none border-x border-border/60"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQuestionCount((c) => Math.min(50, c + 5))}
+                        className="w-7 h-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary text-xs font-mono-metric"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  <label className="inline-flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground select-none">
+                    <input
+                      type="checkbox"
+                      checked={infiniteMode}
+                      onChange={(e) => setInfiniteMode(e.target.checked)}
+                      className="rounded border-border text-primary focus:ring-0"
+                    />
+                    <span>Mode infini</span>
+                  </label>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isGenerating}
+                  onClick={handleGenerateSeries}
+                  className="h-9 px-4 rounded-xl bg-foreground text-background hover:opacity-90 text-xs font-medium transition-all flex items-center gap-2 shadow-sm"
+                >
+                  <span>{isGenerating ? "Génération en cours..." : "Générer la série"}</span>
+                  <span>→</span>
+                </button>
+              </div>
             </div>
           </section>
         )}
 
-        {/* FLUX DE DÉFILEMENT VERTICAL DES QCM (ESTHÉTIQUE ÉDITORIALE PAPIER CHAUD) */}
-        {activeSeries && activeSeries.questions.length > 0 ? (
-          <div className="space-y-6">
-            {/* Bandeau récapitulatif de la série en cours */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-xl bg-[#F3EDE2] border border-[#E2D9CC]">
-              <div className="flex items-center gap-3">
-                <span className="font-serif font-bold text-base text-[#1F1A16]">
-                  {activeSeries.displayTitle}
-                </span>
-                <span className="font-mono text-[11px] uppercase px-2.5 py-0.5 rounded-full bg-white border border-[#DCD3C6] text-[#5C5349]">
-                  {COGNITIVE_TIERS.find((t) => t.id === activeSeries.cognitiveTier)?.title}
-                </span>
-                <span className="text-xs text-[#6E655C] hidden sm:inline">
-                  • Navigation clavier : touches <kbd className="px-1.5 py-0.5 bg-white rounded border border-[#D5CBBF] font-mono text-[10px]">A</kbd>–<kbd className="px-1.5 py-0.5 bg-white rounded border border-[#D5CBBF] font-mono text-[10px]">E</kbd> et <kbd className="px-1.5 py-0.5 bg-white rounded border border-[#D5CBBF] font-mono text-[10px]">↑</kbd><kbd className="px-1.5 py-0.5 bg-white rounded border border-[#D5CBBF] font-mono text-[10px]">↓</kbd>
-                </span>
+        {/* ================================================================= */}
+        {/* VOLET 2 : LIBRAIRIE DE QCM (Mosaïque / Alignement + Menu •••)     */}
+        {/* ================================================================= */}
+        {activeStage === "library" && (
+          <section className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="relative flex-1 min-w-[220px] max-w-sm">
+                <input
+                  type="text"
+                  value={librarySearch}
+                  onChange={(e) => setLibrarySearch(e.target.value)}
+                  placeholder="Filtrer vos séries par cours ou date..."
+                  className="w-full h-9 px-3.5 rounded-xl bg-card border border-border text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground/40"
+                />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="inline-flex items-center p-1 rounded-xl bg-secondary border border-border/80">
+                  <button
+                    type="button"
+                    onClick={() => setLibraryViewMode("mosaic")}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                      libraryViewMode === "mosaic"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Mosaïque
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLibraryViewMode("alignment")}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                      libraryViewMode === "alignment"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Alignement
+                  </button>
+                </div>
+
                 <button
                   type="button"
-                  onClick={resetCurrentSeriesAnswers}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-[#FAF7F2] border border-[#DCD3C6] text-xs text-[#4A423A] transition"
+                  onClick={() => setActiveStage("studio")}
+                  className="h-9 px-3.5 rounded-xl bg-foreground text-background text-xs font-medium hover:opacity-90 transition-opacity"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Réinitialiser</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleGenerateSeries}
-                  disabled={isGenerating}
-                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#1F1A16] hover:bg-[#342C26] text-white text-xs font-medium transition"
-                >
-                  <Plus className="w-3.5 h-3.5 text-[#C85A32]" />
-                  <span>Nouvelle série ({activeCourseRootTitle} #{nextSeriesNumber})</span>
+                  + Nouvelle série
                 </button>
               </div>
             </div>
 
-            {/* Cartes de QCM en mode Défilement Vertical */}
-            {activeSeries.questions.map((q, qIdx) => {
-              const userChoice = userAnswers[q.id];
-              const isRevealed = (instantFeedback && !!userChoice) || examValidated;
-              const isFocused = activeQuestionIdx === qIdx;
+            {libraryViewMode === "mosaic" ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredSeries.map((s) => {
+                  const st = computeSeriesStats(s);
+                  const menuOpen = openDropdownSeriesId === s.id;
+                  return (
+                    <article
+                      key={s.id}
+                      onClick={() => {
+                        setActiveSeriesId(s.id);
+                        setExamMode(false);
+                        setActiveStage("reading");
+                      }}
+                      className={`group craft-surface craft-card-interactive rounded-2xl p-5 flex flex-col justify-between gap-5 cursor-pointer relative ${
+                        menuOpen ? "z-30" : "z-10"
+                      }`}
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono-metric text-[11px] font-semibold px-2.5 py-0.5 rounded-lg bg-secondary text-foreground border border-border/80">
+                              {s.displayTitle}
+                            </span>
+                            <span className="font-mono-metric text-[10.5px] text-muted-foreground">
+                              {s.createdAt}
+                            </span>
+                          </div>
+                          {renderThreeDotsMenu(s)}
+                        </div>
 
-              return (
-                <article
-                  key={q.id}
-                  ref={(el) => (questionCardRefs.current[qIdx] = el)}
-                  onClick={() => setActiveQuestionIdx(qIdx)}
-                  className={`rounded-2xl bg-white border transition-all duration-200 p-6 sm:p-7 ${
-                    isFocused
-                      ? 'border-[#C85A32]/60 shadow-[0_8px_30px_-8px_rgba(31,26,22,0.1)] ring-1 ring-[#C85A32]/20'
-                      : 'border-[#E6DFD3] shadow-[0_2px_10px_-4px_rgba(31,26,22,0.04)] opacity-90 hover:opacity-100'
-                  }`}
-                >
-                  {/* En-tête de la question */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-[#F1ECE2]">
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-serif font-bold text-sm px-2.5 py-1 rounded-lg bg-[#1F1A16] text-[#FAF7F2]">
-                        Q.{String(qIdx + 1).padStart(2, '0')}
-                      </span>
-                      <span className="font-mono text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-[#FDF3EE] text-[#C85A32] border border-[#C85A32]/25">
-                        {ARCHETYPE_CATALOG.find((a) => a.id === q.archetype)?.shortTag || q.archetype}
-                      </span>
-                      {q.archetype === 'censure' && (
-                        <span className="font-mono text-[11px] font-semibold px-2 py-0.5 rounded bg-[#FDF1F0] text-[#B83B2B] border border-[#E8B4AE]">
-                          COCHER LA PROPOSITION FAUSSE
-                        </span>
-                      )}
-                      <span className="text-xs text-[#7A7067] hidden sm:inline">
-                        • {q.conceptTag}
-                      </span>
+                        <div className="space-y-1">
+                          <h3 className="text-[15px] font-semibold text-foreground group-hover:text-primary transition-colors leading-snug line-clamp-2">
+                            {s.courseRootTitle}
+                          </h3>
+                          <p className="text-xs text-muted-foreground">
+                            {s.questions.length} questions docimologiques
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Piste segmentée question par question (Zéro symbole V/X rudimentaire) */}
+                      <div className="space-y-2.5 pt-3.5 border-t border-border/60">
+                        <div className="grid grid-flow-col auto-cols-fr gap-1 w-full h-1.5">
+                          {s.questions.map((q, qIdx) => {
+                            const a = s.userAnswers?.[q.id];
+                            let cls = "bg-secondary border border-border/60";
+                            if (a?.validated) {
+                              cls = a.isCorrect ? "bg-emerald-500" : "bg-rose-500";
+                            } else if (a?.picked) {
+                              cls = "bg-primary/60";
+                            }
+                            return (
+                              <span
+                                key={q.id || qIdx}
+                                className={`rounded-full transition-all duration-300 ${cls}`}
+                              />
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] pt-0.5">
+                          <div className="flex items-center gap-3 text-muted-foreground">
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              <span className="font-medium text-foreground">{st.found}</span>
+                              <span>trouvée{st.found > 1 ? "s" : ""}</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                              <span className="font-medium text-foreground">{st.missed}</span>
+                              <span>faussée{st.missed > 1 ? "s" : ""}</span>
+                            </span>
+                          </div>
+                          <span className="font-mono-metric text-[10.5px] text-muted-foreground group-hover:text-primary transition-colors">
+                            {st.answered}/{st.total} →
+                          </span>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="craft-surface rounded-2xl divide-y divide-border/80">
+                {filteredSeries.map((s) => {
+                  const st = computeSeriesStats(s);
+                  const menuOpen = openDropdownSeriesId === s.id;
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => {
+                        setActiveSeriesId(s.id);
+                        setExamMode(false);
+                        setActiveStage("reading");
+                      }}
+                      className={`group px-5 py-4 flex items-center justify-between gap-4 hover:bg-secondary/35 transition-colors cursor-pointer relative ${
+                        menuOpen ? "z-30" : "z-10"
+                      } first:rounded-t-2xl last:rounded-b-2xl`}
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                        <div className="w-9 h-9 rounded-xl bg-secondary border border-border/80 font-mono-metric text-xs font-semibold text-foreground flex items-center justify-center shrink-0">
+                          S{s.seriesNumber}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                              {s.courseRootTitle}
+                            </span>
+                            <span className="font-mono-metric text-[11px] px-2 py-0.2 rounded-md bg-secondary text-foreground border border-border/70">
+                              {s.displayTitle}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 font-mono-metric">
+                            <span>{s.createdAt}</span>
+                            <span>•</span>
+                            <span className="font-sans">{s.questions.length} questions</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-5 shrink-0">
+                        <div className="hidden sm:flex flex-col items-end gap-1.5 w-36">
+                          <div className="flex items-center justify-between w-full text-[10.5px] text-muted-foreground">
+                            <span className="inline-flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              <strong className="text-foreground font-mono-metric">{st.found}</strong>
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                              <strong className="text-foreground font-mono-metric">{st.missed}</strong>
+                            </span>
+                            <span className="font-mono-metric">
+                              {st.answered}/{st.total}
+                            </span>
+                          </div>
+                          <div className="grid grid-flow-col auto-cols-fr gap-1 w-full h-1.5">
+                            {s.questions.map((q, qIdx) => {
+                              const a = s.userAnswers?.[q.id];
+                              let cls = "bg-secondary border border-border/60";
+                              if (a?.validated) {
+                                cls = a.isCorrect ? "bg-emerald-500" : "bg-rose-500";
+                              } else if (a?.picked) {
+                                cls = "bg-primary/60";
+                              }
+                              return <span key={q.id || qIdx} className={`rounded-full ${cls}`} />;
+                            })}
+                          </div>
+                        </div>
+
+                        {renderThreeDotsMenu(s)}
+                      </div>
                     </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
 
-                    <span className="font-mono text-[11px] text-[#8A7F74]">
-                      {activeSeries.displayTitle}
+        {/* ================================================================= */}
+        {/* VOLET 3 : LECTURE EN DÉFILEMENT (Zéro bouton "Voir le cours")     */}
+        {/* ================================================================= */}
+        {activeStage === "reading" && activeSeries && (
+          <section className="space-y-5 max-w-3xl mx-auto relative">
+            <div className="craft-surface rounded-2xl px-5 py-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center font-mono-metric text-xs font-semibold text-foreground shrink-0">
+                  S{activeSeries.seriesNumber}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-[15px] sm:text-base font-semibold text-foreground truncate">
+                      {activeSeries.courseRootTitle}
+                    </h2>
+                    <span
+                      className={`font-mono-metric text-[10px] px-2 py-0.5 rounded-md font-medium ${
+                        examMode
+                          ? "bg-primary/15 text-primary font-semibold"
+                          : "bg-secondary text-muted-foreground"
+                      }`}
+                    >
+                      {examMode ? "Mode examen" : "Lecture"}
                     </span>
                   </div>
-
-                  {/* Énoncé principal */}
-                  <h2 className="font-serif text-base sm:text-[18px] font-medium leading-relaxed text-[#1F1A16] mb-5">
-                    {q.stem}
-                  </h2>
-
-                  {/* CAS 1 : ASSOCIATION — AFFICHAGE OBLIGATOIRE DES 2 COLONNES (1-5 et A-E) AVANT LES PROPOSITIONS */}
-                  {q.archetype === 'association' && q.matchingColumns && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 rounded-xl bg-[#FAF7F2] border border-[#E2D9CC]">
-                      <div>
-                        <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-[#C85A32] pb-2 mb-2.5 border-b border-[#E2D9CC]">
-                          {q.matchingColumns.leftColumnTitle || 'Colonne 1 (Éléments 1 à 5)'}
-                        </div>
-                        <ul className="space-y-2">
-                          {q.matchingColumns.leftItems.map((item) => (
-                            <li
-                              key={item.id}
-                              className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-[#E6DFD3] text-xs sm:text-sm text-[#1F1A16]"
-                            >
-                              <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-[#1F1A16] text-white shrink-0">
-                                {item.id}
-                              </span>
-                              <span className="leading-snug">{item.text}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div>
-                        <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-[#28664B] pb-2 mb-2.5 border-b border-[#E2D9CC]">
-                          {q.matchingColumns.rightColumnTitle || 'Colonne 2 (Éléments A à E)'}
-                        </div>
-                        <ul className="space-y-2">
-                          {q.matchingColumns.rightItems.map((item) => (
-                            <li
-                              key={item.id}
-                              className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-[#E6DFD3] text-xs sm:text-sm text-[#1F1A16]"
-                            >
-                              <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-[#28664B] text-white shrink-0">
-                                {item.id}
-                              </span>
-                              <span className="leading-snug">{item.text}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* CAS 2 : GROUPAGE — ASSERTIONS NUMÉROTÉES DE I À V BIEN SÉPARÉES DES CHOIX A-E */}
-                  {q.archetype === 'groupage' &&
-                    q.groupageStatements &&
-                    q.groupageStatements.length > 0 && (
-                      <div className="mb-6 pl-4 border-l-2 border-[#C85A32] space-y-2">
-                        {q.groupageStatements.map((stmt) => (
-                          <div
-                            key={stmt.numeral}
-                            className="flex items-start gap-3 p-3 rounded-xl bg-[#FAF7F2] border border-[#E6DFD3] text-xs sm:text-sm text-[#1F1A16]"
-                          >
-                            <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-[#F3EDE2] border border-[#D8CFC2] text-[#1F1A16] shrink-0">
-                              {stmt.numeral}
-                            </span>
-                            <span className="leading-relaxed flex-1">{stmt.text}</span>
-                            {isRevealed && typeof stmt.isTrue === 'boolean' && (
-                              <span
-                                className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
-                                  stmt.isTrue
-                                    ? 'bg-[#EEF6F1] text-[#28664B] border border-[#B7DFC7]'
-                                    : 'bg-[#FDF1F0] text-[#B83B2B] border border-[#E8B4AE]'
-                                }`}
-                              >
-                                {stmt.isTrue ? 'VRAI' : 'FAUX'}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                  {/* CAS 3 : JUMELAGE — PROPOSITION 1 + CONNECTEUR LOGIQUE + PROPOSITION 2 */}
-                  {q.archetype === 'jumelage' && q.jumelageData && (
-                    <div className="mb-6 p-4 rounded-xl bg-[#FAF7F2] border border-[#E2D9CC] space-y-2.5">
-                      <div className="p-3 rounded-lg bg-white border border-[#E6DFD3] text-xs sm:text-sm text-[#1F1A16]">
-                        <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#C85A32] block mb-1">
-                          Première assertion
-                        </span>
-                        {q.jumelageData.statementOne}
-                      </div>
-
-                      <div className="flex justify-center">
-                        <span className="font-mono text-[11px] font-bold tracking-widest px-3.5 py-0.5 rounded-full bg-[#FCF6EB] text-[#B67B24] border border-[#E6CE9E]">
-                          {q.jumelageData.connector || 'PARCE QUE'}
-                        </span>
-                      </div>
-
-                      <div className="p-3 rounded-lg bg-white border border-[#E6DFD3] text-xs sm:text-sm text-[#1F1A16]">
-                        <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#28664B] block mb-1">
-                          Seconde assertion
-                        </span>
-                        {q.jumelageData.statementTwo}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* LES 5 CHOIX DE RÉPONSE (A, B, C, D, E) */}
-                  <div className="space-y-2">
-                    {q.options.map((opt) => {
-                      const isSelected = userChoice === opt.letter;
-                      const isCorrect = opt.letter === q.correctLetter;
-
-                      let rowClasses =
-                        'bg-[#FAF8F5] hover:bg-[#F3EDE2] border-[#E6DFD3] text-[#1F1A16]';
-                      let letterBadgeClasses =
-                        'bg-white border border-[#D8CFC2] text-[#4A423A]';
-
-                      if (isRevealed) {
-                        if (isCorrect) {
-                          rowClasses =
-                            'bg-[#EEF6F1] border-[#28664B] text-[#153D2B] shadow-2xs';
-                          letterBadgeClasses = 'bg-[#28664B] text-white border-[#28664B] font-bold';
-                        } else if (isSelected && !isCorrect) {
-                          rowClasses = 'bg-[#FDF1F0] border-[#B83B2B] text-[#6E1C12]';
-                          letterBadgeClasses = 'bg-[#B83B2B] text-white border-[#B83B2B] font-bold';
-                        } else {
-                          rowClasses = 'bg-[#FAF8F5]/60 border-[#EFE9DF] text-[#8A7F74]';
-                          letterBadgeClasses = 'bg-[#F3EDE2] text-[#9C9288] border-[#E6DFD3]';
-                        }
-                      } else if (isSelected) {
-                        rowClasses = 'bg-[#FDF3EE] border-[#C85A32] text-[#1F1A16]';
-                        letterBadgeClasses = 'bg-[#C85A32] text-white border-[#C85A32] font-bold';
-                      }
-
-                      return (
-                        <button
-                          key={opt.letter}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectOption(q.id, opt.letter, qIdx);
-                          }}
-                          className={`w-full text-left p-3.5 rounded-xl border transition-all flex items-start gap-3.5 cursor-pointer ${rowClasses}`}
-                        >
-                          <span
-                            className={`w-7 h-7 rounded-lg font-mono text-xs flex items-center justify-center shrink-0 transition ${letterBadgeClasses}`}
-                          >
-                            {opt.letter}
-                          </span>
-
-                          <div className="flex-1 text-xs sm:text-sm leading-relaxed">
-                            <div className="font-medium">{opt.text}</div>
-                            {isRevealed && opt.rationale && (
-                              <p className="mt-1.5 text-xs text-[#5C5349] font-normal">
-                                {opt.rationale}
-                              </p>
-                            )}
-                          </div>
-
-                          {isRevealed && isCorrect && (
-                            <CheckCircle2 className="w-4 h-4 text-[#28664B] shrink-0 mt-1" />
-                          )}
-                          {isRevealed && isSelected && !isCorrect && (
-                            <XCircle className="w-4 h-4 text-[#B83B2B] shrink-0 mt-1" />
-                          )}
-                        </button>
-                      );
-                    })}
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 font-mono-metric">
+                    <span>{activeSeries.displayTitle}</span>
+                    <span>•</span>
+                    <span>{activeSeries.createdAt}</span>
+                    <span>•</span>
+                    <span>{activeSeries.questions.length} questions</span>
                   </div>
+                </div>
+              </div>
 
-                  {/* TIROIR DE CORRECTION DOCIMOLOGIQUE & PREUVE DU COURS */}
-                  {isRevealed && (
-                    <div className="mt-5 pt-4 border-t border-[#EAE2D6] space-y-3">
-                      <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E2D9CC]">
-                        <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-[#C85A32] mb-1">
-                          Synthèse Docimologique • Réponse exacte : {q.correctLetter}
+              <button
+                type="button"
+                onClick={() => setExamMode((m) => !m)}
+                className="h-8 px-3.5 rounded-xl border border-border bg-background hover:bg-secondary text-xs font-medium text-foreground transition-colors"
+              >
+                {examMode ? "Passer en mode Lecture" : "Activer le Mode examen"}
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {activeSeries.questions.map((q, idx) => {
+                const nextQ = activeSeries.questions[idx + 1];
+                const ans = activeSeries.userAnswers?.[q.id] || {
+                  picked: null,
+                  validated: false,
+                  isCorrect: false,
+                };
+
+                return (
+                  <article
+                    key={q.id}
+                    id={`card-${q.id}`}
+                    className="craft-surface rounded-2xl p-6 sm:p-7 transition-all"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-3.5 mb-4 border-b border-border/70">
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-mono-metric text-xs font-semibold text-foreground">
+                          Question {idx + 1}{" "}
+                          <span className="text-muted-foreground font-normal">
+                            / {activeSeries.questions.length}
+                          </span>
+                        </span>
+                        {q.conceptTag && (
+                          <>
+                            <span className="text-muted-foreground/30">•</span>
+                            <span className="text-xs text-muted-foreground">{q.conceptTag}</span>
+                          </>
+                        )}
+                      </div>
+
+                      {ans.validated ? (
+                        ans.isCorrect ? (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span>Réponse trouvée</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/25 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                            <span>Réponse faussée</span>
+                          </span>
+                        )
+                      ) : ans.picked ? (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-0.5 rounded-full bg-secondary text-foreground font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                          <span>Proposition {ans.picked} retenue</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <span className="w-1.5 h-1.5 rounded-full bg-border" />
+                          <span>En attente</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="text-[15px] sm:text-[16px] font-medium text-foreground leading-relaxed mb-4">
+                      {q.stem}
+                    </h3>
+
+                    <div className="space-y-2.5">
+                      {q.options.map((opt) => {
+                        const isPicked = ans.picked === opt.letter;
+                        let rowClass = "qcm-option-card border-border/85 bg-background/45";
+                        let badgeClass = "border-border bg-card text-foreground";
+
+                        if (!ans.validated && isPicked) {
+                          rowClass = "qcm-option-card qcm-option-picked";
+                          badgeClass = "border-primary bg-primary text-primary-foreground";
+                        } else if (ans.validated) {
+                          if (opt.letter === q.correctLetter) {
+                            rowClass = "qcm-option-card qcm-option-locked qcm-option-correct";
+                            badgeClass = "border-emerald-600 bg-emerald-600 text-white";
+                          } else if (isPicked && !ans.isCorrect) {
+                            rowClass = "qcm-option-card qcm-option-locked qcm-option-wrong";
+                            badgeClass = "border-rose-600 bg-rose-600 text-white";
+                          } else {
+                            rowClass =
+                              "qcm-option-card qcm-option-locked border-border/50 bg-background/20 opacity-70";
+                          }
+                        }
+
+                        return (
+                          <button
+                            key={opt.letter}
+                            type="button"
+                            onClick={() => handlePickOption(q.id, opt.letter)}
+                            className={`w-full text-left p-3.5 rounded-xl border flex items-start gap-3.5 ${rowClass}`}
+                          >
+                            <span
+                              className={`w-7 h-7 rounded-lg border font-mono-metric text-xs font-semibold flex items-center justify-center shrink-0 mt-0.5 transition-colors ${badgeClass}`}
+                            >
+                              {opt.letter}
+                            </span>
+                            <span className="text-[13.5px] text-foreground leading-relaxed">
+                              {opt.text}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {ans.validated && (
+                      <div
+                        className={`mt-4 p-4 rounded-xl border space-y-1.5 ${
+                          ans.isCorrect
+                            ? "border-emerald-500/30 bg-emerald-500/5"
+                            : "border-rose-500/30 bg-rose-500/5"
+                        }`}
+                      >
+                        <div
+                          className={`flex items-center justify-between text-xs font-semibold ${
+                            ans.isCorrect
+                              ? "text-emerald-700 dark:text-emerald-300"
+                              : "text-rose-700 dark:text-rose-300"
+                          }`}
+                        >
+                          <span>
+                            {ans.isCorrect
+                              ? `Proposition exacte (${q.correctLetter})`
+                              : `Correction — La proposition exacte est ${q.correctLetter}`}
+                          </span>
                         </div>
-                        <p className="text-xs sm:text-sm text-[#2B2520] leading-relaxed">
+                        <p className="text-xs text-foreground/90 leading-relaxed">
                           {q.globalExplanation}
                         </p>
                       </div>
+                    )}
 
-                      {q.courseExcerpt && (
-                        <blockquote className="px-4 py-2.5 rounded-r-xl bg-[#EEF6F1]/70 border-l-3 border-[#28664B] text-xs text-[#234837] italic">
-                          <span className="not-italic font-semibold block mb-0.5">
-                            Référence exacte dans le support de cours :
+                    <div className="mt-5 pt-4 border-t border-border/60 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        {!examMode ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={!ans.picked || ans.validated}
+                              onClick={() => handleValidateQuestion(q)}
+                              className={`h-8 px-4 rounded-xl text-xs font-medium transition-all ${
+                                ans.validated
+                                  ? "bg-secondary text-foreground cursor-default"
+                                  : ans.picked
+                                  ? "bg-primary text-primary-foreground hover:opacity-95 shadow-sm"
+                                  : "bg-secondary text-muted-foreground opacity-60 cursor-not-allowed"
+                              }`}
+                            >
+                              {ans.validated ? "Réponse validée" : "Valider ma réponse"}
+                            </button>
+                            {ans.validated && !ans.isCorrect && (
+                              <button
+                                type="button"
+                                onClick={() => handleRetryQuestion(q.id)}
+                                className="h-8 px-3 rounded-xl border border-border bg-background hover:bg-secondary text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                Corriger ma réponse
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">
+                            Mode examen : validation en fin de série
                           </span>
-                          « {q.courseExcerpt} »
-                        </blockquote>
-                      )}
-                    </div>
-                  )}
-                </article>
-              );
-            })}
+                        )}
+                      </div>
 
-            {/* Validation globale si l'étudiant est en Mode Examen */}
-            {!instantFeedback && !examValidated && (
-              <div className="flex justify-center pt-4">
+                      <div>
+                        {nextQ ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              document
+                                .getElementById(`card-${nextQ.id}`)
+                                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                            }}
+                            className="h-8 px-3.5 rounded-xl border border-border bg-background hover:bg-secondary text-xs font-medium text-foreground transition-colors"
+                          >
+                            Suivant ↓
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleFinishSeries}
+                            className="h-8 px-4 rounded-xl bg-foreground text-background text-xs font-medium hover:opacity-90"
+                          >
+                            Terminer →
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="craft-surface rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-xs font-semibold text-foreground">
+                  Poursuivre en Mode Infini
+                </div>
+                <p className="text-[11.5px] text-muted-foreground">
+                  Génère de nouvelles questions sur l'ensemble du cours sans suite monotone.
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
                 <button
                   type="button"
-                  onClick={() => setExamValidated(true)}
-                  className="px-6 py-3 rounded-xl bg-[#1F1A16] hover:bg-[#332B25] text-white font-semibold text-sm shadow-md transition"
+                  onClick={handleAppendInfiniteQuestions}
+                  className="h-9 px-3.5 rounded-xl border border-border bg-background hover:bg-secondary text-xs font-medium text-foreground transition-colors"
                 >
-                  Remettre ma copie et afficher le corrigé ({sessionStats.answered}/{sessionStats.total})
+                  + 5 questions
+                </button>
+                <button
+                  type="button"
+                  onClick={handleFinishSeries}
+                  className="h-9 px-4 rounded-xl bg-foreground text-background text-xs font-medium hover:opacity-90 transition-opacity"
+                >
+                  Terminer la série
                 </button>
               </div>
-            )}
-          </div>
-        ) : (
-          /* ÉTAT D'ACCUEIL ÉDITORIAL QUAND AUCUNE SÉRIE N'EST ENCORE LANCÉE */
-          <div className="rounded-2xl border border-dashed border-[#D8CFC2] bg-[#FBF9F5] p-10 text-center">
-            <div className="w-11 h-11 rounded-xl bg-[#FDF3EE] border border-[#C85A32]/25 flex items-center justify-center mx-auto mb-3">
-              <GraduationCap className="w-5 h-5 text-[#C85A32]" />
             </div>
-            <h3 className="font-serif text-lg font-semibold text-[#1F1A16] mb-1">
-              Prêt à forger la série {activeCourseRootTitle} #{nextSeriesNumber}
-            </h3>
-            <p className="text-xs text-[#6E655C] max-w-md mx-auto mb-5 leading-relaxed">
-              Sélectionnez votre cours, votre palier cognitif et vos formats ci-dessus. Les tableaux d’Association à 2 colonnes (1–5 ↔ A–E) et la distribution aléatoire des réponses sont garantis.
-            </p>
-            <button
-              type="button"
-              onClick={handleGenerateSeries}
-              disabled={isGenerating || selectedSources.length === 0}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1F1A16] hover:bg-[#332B25] disabled:opacity-50 text-white text-xs font-semibold transition cursor-pointer"
-            >
-              <span>Lancer {activeCourseRootTitle} #{nextSeriesNumber}</span>
-              <ChevronRight className="w-4 h-4 text-[#C85A32]" />
-            </button>
-          </div>
+          </section>
         )}
       </main>
 
-      {/* MODAL CONFIGURATION CLÉ API */}
-      {showApiKeyModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-[#E6DFD3] shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-[#EAE2D6] pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[#FDF3EE] border border-[#C85A32]/25 flex items-center justify-center">
-                  <Key className="w-4 h-4 text-[#C85A32]" />
-                </div>
-                <div>
-                  <h4 className="font-serif font-bold text-sm text-[#1F1A16]">Configuration Clé API</h4>
-                  <p className="text-[11px] text-[#7A7067]">OpenRouter (Sonnet & Gemini), Claude ou Google Gemini</p>
-                </div>
+      {/* =================================================================== */}
+      {/* WIDGET FLÈCHE RÉTRACTABLE TEMPS RÉEL (‹) & MATRICE D'AVANCEMENT     */}
+      {/* =================================================================== */}
+      {activeStage === "reading" && activeSeries && (
+        <div
+          ref={widgetRootRef}
+          className="fixed right-0 top-1/2 -translate-y-1/2 z-40 select-none"
+        >
+          {!widgetExpanded ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setWidgetExpanded(true);
+              }}
+              title="Ouvrir la jauge d'avancement et la matrice des QCM"
+              className="glass-arrow-tab rounded-l-2xl py-3.5 pl-2.5 pr-2 flex flex-col items-center gap-2.5 cursor-pointer group"
+            >
+              <span className="w-6 h-6 rounded-full bg-secondary group-hover:bg-primary group-hover:text-primary-foreground text-foreground flex items-center justify-center transition-colors">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </span>
+
+              <div className="w-1.5 h-16 flex flex-col gap-[2px] justify-between">
+                {activeSeries.questions.map((q, i) => {
+                  const a = activeSeries.userAnswers?.[q.id];
+                  let c = "bg-border";
+                  if (a?.validated) c = a.isCorrect ? "bg-emerald-500" : "bg-rose-500";
+                  else if (a?.picked) c = "bg-primary";
+                  return <span key={q.id || i} className={`w-full flex-1 rounded-full ${c}`} />;
+                })}
               </div>
-              <button
-                type="button"
-                onClick={() => setShowApiKeyModal(false)}
-                className="w-6 h-6 rounded-full hover:bg-[#F5EFE6] flex items-center justify-center text-[#7A7067]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            <div className="space-y-2">
-              <label className="block text-xs font-medium text-[#1F1A16]">
-                Clé API (OpenRouter <code className="text-[10px] bg-[#F3EDE2] px-1 py-0.5 rounded">sk-or-...</code>, Anthropic <code className="text-[10px] bg-[#F3EDE2] px-1 py-0.5 rounded">sk-ant-...</code> ou Gemini) :
-              </label>
-              <input
-                type="password"
-                value={customApiKey}
-                onChange={(e) => setCustomApiKey(e.target.value)}
-                placeholder="Collez votre clé API ici..."
-                className="w-full px-3 py-2 rounded-xl bg-[#FAF8F5] border border-[#DCD3C6] text-xs text-[#1F1A16] font-mono focus:outline-none focus:border-[#C85A32]"
-              />
-              <p className="text-[11px] text-[#7A7067] leading-relaxed">
-                Cette clé est stockée localement dans votre navigateur pour alimenter Claude Sonnet et Gemini 2.5 sans dépendre des limites ou pannes de l'Edge Function Supabase.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#EAE2D6]">
-              {customApiKey && (
+              <div className="flex flex-col items-center font-mono-metric text-[10px] leading-tight gap-1 pt-0.5">
+                <span className="inline-flex items-center gap-1 text-foreground font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span>{activeStats.found}</span>
+                </span>
+                <span className="inline-flex items-center gap-1 text-foreground font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                  <span>{activeStats.missed}</span>
+                </span>
+              </div>
+            </button>
+          ) : (
+            <aside
+              onClick={(e) => e.stopPropagation()}
+              className="glass-expanded-drawer w-80 rounded-l-2xl p-4 sm:p-5 flex flex-col gap-4"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-border/70">
+                <div>
+                  <div className="text-xs font-semibold text-foreground">
+                    Progression de la session
+                  </div>
+                  <div className="text-[11px] font-mono-metric text-muted-foreground">
+                    {activeSeries.displayTitle} • {activeStats.total} questions
+                  </div>
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    localStorage.removeItem('dawjang_openrouter_api_key');
-                    localStorage.removeItem('dawjang_claude_api_key');
-                    localStorage.removeItem('dawjang_gemini_api_key');
-                    setCustomApiKey('');
-                  }}
-                  className="px-3 py-1.5 rounded-lg border border-[#E6DFD3] text-xs text-[#9E2A1C] hover:bg-[#FDF1F0] transition"
+                  onClick={() => setWidgetExpanded(false)}
+                  title="Replier"
+                  className="w-7 h-7 rounded-lg bg-secondary/80 hover:bg-secondary text-foreground flex items-center justify-center transition-colors"
                 >
-                  Effacer
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  const trimmed = customApiKey.trim();
-                  if (trimmed.startsWith('sk-ant-')) {
-                    localStorage.setItem('dawjang_claude_api_key', trimmed);
-                  } else if (trimmed.startsWith('AIza')) {
-                    localStorage.setItem('dawjang_gemini_api_key', trimmed);
-                  } else if (trimmed) {
-                    localStorage.setItem('dawjang_openrouter_api_key', trimmed);
-                  }
-                  setShowApiKeyModal(false);
-                }}
-                className="px-4 py-2 rounded-xl bg-[#C85A32] text-white text-xs font-semibold hover:bg-[#B24B26] transition shadow-xs cursor-pointer"
-              >
-                Enregistrer
-              </button>
-            </div>
-          </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-medium text-foreground">Jauge d'avancement</span>
+                  <span className="font-mono-metric font-semibold text-foreground">
+                    {activeStats.answered} sur {activeStats.total} ({activeStats.pct}%)
+                  </span>
+                </div>
+
+                <div className="grid grid-flow-col auto-cols-fr gap-1 h-2">
+                  {activeSeries.questions.map((q, i) => {
+                    const a = activeSeries.userAnswers?.[q.id];
+                    let c = "bg-secondary border border-border/60";
+                    if (a?.validated) c = a.isCorrect ? "bg-emerald-500" : "bg-rose-500";
+                    else if (a?.picked) c = "bg-primary/60";
+                    return <span key={q.id || i} className={`h-full rounded-full ${c}`} />;
+                  })}
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                  <div className="p-2 rounded-xl bg-emerald-500/8 border border-emerald-500/20 flex flex-col">
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span>Trouvées</span>
+                    </span>
+                    <strong className="font-mono-metric text-sm font-semibold text-emerald-700 dark:text-emerald-300 mt-0.5">
+                      {activeStats.found}
+                    </strong>
+                  </div>
+                  <div className="p-2 rounded-xl bg-rose-500/8 border border-rose-500/20 flex flex-col">
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                      <span>Faussées</span>
+                    </span>
+                    <strong className="font-mono-metric text-sm font-semibold text-rose-700 dark:text-rose-300 mt-0.5">
+                      {activeStats.missed}
+                    </strong>
+                  </div>
+                  <div className="p-2 rounded-xl bg-secondary/70 border border-border/80 flex flex-col">
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50" />
+                      <span>Restantes</span>
+                    </span>
+                    <strong className="font-mono-metric text-sm font-semibold text-foreground mt-0.5">
+                      {Math.max(0, activeStats.total - activeStats.answered)}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-[10.5px] font-medium text-muted-foreground flex items-center justify-between">
+                  <span>Accès direct aux questions</span>
+                  <span className="font-mono-metric text-[10px]">1 → N</span>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {activeSeries.questions.map((q, idx) => {
+                    const a = activeSeries.userAnswers?.[q.id];
+                    let tileCls =
+                      "bg-secondary/80 text-foreground hover:bg-secondary border-border/80";
+                    if (a?.validated) {
+                      tileCls = a.isCorrect
+                        ? "bg-emerald-600 text-white border-emerald-600 font-semibold"
+                        : "bg-rose-600 text-white border-rose-600 font-semibold";
+                    } else if (a?.picked) {
+                      tileCls = "bg-primary/15 text-primary border-primary/40 font-semibold";
+                    }
+                    return (
+                      <button
+                        key={q.id}
+                        type="button"
+                        onClick={() => {
+                          setWidgetExpanded(false);
+                          document
+                            .getElementById(`card-${q.id}`)
+                            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }}
+                        className={`h-8 rounded-lg border font-mono-metric text-xs flex items-center justify-center transition-all ${tileCls}`}
+                      >
+                        {idx + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </aside>
+          )}
+        </div>
+      )}
+
+      {toastMessage && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-foreground text-background text-xs font-medium shadow-xl border border-border/20">
+          {toastMessage}
         </div>
       )}
     </div>
   );
 };
 
-// Exportations multiples pour compatibilité immédiate avec toutes les routes de App.tsx / Sidebar
-export const QuizWorkspace = ConstructeurQCM;
-export const QuizBuilder = ConstructeurQCM;
-export const QuizConstructor = ConstructeurQCM;
 export default ConstructeurQCM;
+
+export { ConstructeurQCM as QuizWorkspace, ConstructeurQCM as QuizBuilder, ConstructeurQCM as QuizConstructor };
