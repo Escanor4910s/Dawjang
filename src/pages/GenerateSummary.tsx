@@ -1037,17 +1037,19 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
 
       if (selectedMode === "atlas_magistral") {
         setCurrentStepIndex(1);
-        setTotalStepsCount(3);
-        setProgressLabel("Analyse du cours magistral diapo-par-diapo (Claude Sonnet 4.6)...");
+        setTotalStepsCount(7);
+        setProgressLabel("Étape 1/7 : Cartographie des chapitres Romains (Mode Atlas)...");
 
         const atlasResult = await generateAtlasMagistralSummary({
           rawCourseText: effectiveCourseText,
           courseTitle: title,
           courseAuthor: "Faculté de Médecine",
+          onProgress: (step, total, label) => {
+            setCurrentStepIndex(step);
+            setTotalStepsCount(total);
+            setProgressLabel(label);
+          },
         });
-
-        setCurrentStepIndex(2);
-        setProgressLabel("Compilation des chapitres Romains & tableaux .course-table...");
 
         const atlasHtml = compileAtlasSummaryToHtml(atlasResult);
         generatedMarkdown = atlasHtml;
@@ -1314,17 +1316,17 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
               {[
                 {
                   id: "atlas_magistral" as PureSynthesisMode,
-                  label: "✨ Mode Atlas Magistral (Diapo-par-Diapo)",
+                  label: "Mode Atlas",
                   icon: Layers,
                 },
                 {
                   id: "objectives_verbatim" as PureSynthesisMode,
-                  label: "1. Fidèle aux Objectifs",
+                  label: "Fidèle aux Objectifs",
                   icon: Target,
                 },
                 {
                   id: "drive_objective_strategy" as PureSynthesisMode,
-                  label: "2. Objectifs & Audit d'Annales (Argon)",
+                  label: "Objectifs & Audit d'Annales",
                   icon: ShieldCheck,
                 },
               ].map((tab) => {
@@ -1377,10 +1379,10 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
             {[
               {
                 id: "atlas_magistral" as PureSynthesisMode,
-                title: "Mode Atlas Magistral",
-                desc: "Synthèse intégrale diapo-par-diapo • Chapitres I à VI, tableaux comparatifs .course-table, seuils chiffrés & protocoles exacts sans coupure.",
+                title: "Mode Atlas",
+                desc: "Restitution intégrale du cours en chapitres Romains • Tableaux comparatifs .course-table, seuils chiffrés & protocoles sans coupure.",
                 icon: Layers,
-                badge: "INTÉGRAL 100%",
+                badge: "ATLAS",
                 isHighlight: true,
               },
               {
@@ -1388,14 +1390,15 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
                 title: "Fidèle aux Objectifs",
                 desc: "Extrait la diapositive officielle « Objectifs » du professeur et consacre 1 passe dédiée à chaque objectif du 1er au dernier.",
                 icon: Target,
-                badge: "MODE 1",
+                badge: "OBJECTIFS",
+                isHighlight: false,
               },
               {
                 id: "drive_objective_strategy" as PureSynthesisMode,
                 title: "Objectifs & Audit d'Annales",
                 desc: "Synthèse Unifiée en 4 Parties : Audit d'incidence par sous-partie, Cours exhaustif complet, 5 Pièges Majeurs & Démarche Cas Clinique.",
                 icon: ShieldCheck,
-                badge: "PROTOCOLE ARGON",
+                badge: "AUDIT D'ANNALES",
                 isHighlight: false,
               },
             ].map((modeCard) => {

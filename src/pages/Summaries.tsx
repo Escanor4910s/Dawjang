@@ -286,7 +286,7 @@ export default function Summaries() {
     if (atlasData) {
       exportAtlasMagistralToPDF(atlasData);
       toast({
-        title: "Export PDF Atlas Magistral lancé",
+        title: "Export PDF Mode Atlas lancé",
         description: `Le document PDF vectoriel haute définition « ${item.title} » est prêt.`,
       });
       return;

@@ -163,7 +163,7 @@ export const AtlasMagistralViewer: React.FC<AtlasMagistralViewerProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <aside className="lg:col-span-3 craft-surface rounded-2xl p-4 lg:sticky lg:top-24 space-y-3">
           <div className="text-[11px] font-mono-metric uppercase tracking-wider text-muted-foreground font-semibold px-1">
-            Plan du cours magistral
+            Sommaire de l'Atlas
           </div>
           <nav className="space-y-1 text-xs">
             {course.chapters.map((ch) => (

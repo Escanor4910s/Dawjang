@@ -43,25 +43,24 @@ export interface DoctrineDefinition {
 export const DOCTRINE_CONFIG: Record<Doctrine, DoctrineDefinition> = {
   atlas_magistral: {
     id: "atlas_magistral",
-    label: "Mode Atlas Magistral (Diapo-par-Diapo)",
-    title: "Mode Atlas Magistral",
-    shortLabel: "Atlas Magistral",
-    badge: "Intégral 100% • Diapo par Diapo",
-    subtitle: "Synthèse intégrale diapo-par-diapo • Tableaux comparatifs, seuils chiffrés & protocoles exacts",
+    label: "Mode Atlas",
+    title: "Mode Atlas",
+    shortLabel: "Atlas",
+    badge: "Mode Atlas",
+    subtitle: "Synthèse structurée en chapitres Romains • Tableaux comparatifs, seuils chiffrés & protocoles exacts",
     tooltip:
-      "Transforme l'intégralité des diapositives du cours magistral en un atlas structuré (Chapitres I à VI, badges de diapositives, tableaux comparatifs .course-table, seuils en évidence et export PDF A4 avec filigranes DawJang).",
-    buttonText: "Générer le Résumé en Mode Atlas Magistral",
-    loadingText: "Construction de l'Atlas Magistral diapo par diapo (Claude Sonnet 4.6)...",
-    inputLabel: "Support de cours magistral (PDF, DOCX ou Texte)",
-    inputHelper: "Toutes les diapositives sont couvertes de la 1re à la dernière sans aucune perte de chiffre",
-    inputPlaceholder: "Importez votre cours magistral pour générer l'Atlas Magistral...",
+      "Transforme l'intégralité du cours en un atlas structuré (Chapitres I à VI, badges de diapositives, tableaux comparatifs .course-table, seuils en évidence et export PDF A4).",
+    buttonText: "Générer la Synthèse en Mode Atlas",
+    loadingText: "Construction du Mode Atlas en cours...",
+    inputLabel: "Support de cours médical (PDF, DOCX ou Texte)",
+    inputHelper: "Toutes les diapositives et sections sont couvertes sans aucune omission de chiffre",
+    inputPlaceholder: "Importez votre cours pour générer le Mode Atlas...",
     promptDescription: ATLAS_MAGISTRAL_SONNET_4_6_SYSTEM_PROMPT,
     editorComponent: AtlasMagistralViewer,
     rendererComponent: AtlasMagistralViewer,
     promptBuilder: () => ATLAS_MAGISTRAL_SONNET_4_6_SYSTEM_PROMPT,
     buildPrompt: () => ATLAS_MAGISTRAL_SONNET_4_6_SYSTEM_PROMPT,
   },
-
   objectives_verbatim: {
     id: "objectives_verbatim",
     label: "Objectifs du Cours (Verbatim)",
@@ -177,7 +176,7 @@ export const doctrineConfig = DOCTRINE_CONFIG;
 export const DOCTRINES_LIST: DoctrineDefinition[] = Object.values(DOCTRINE_CONFIG);
 
 export const DOCTRINE_LABELS: Record<Doctrine, string> = {
-  atlas_magistral: "Mode Atlas Magistral (Diapo-par-Diapo)",
+  atlas_magistral: "Mode Atlas",
   objectives_verbatim: "Objectifs du Cours (Verbatim)",
   harvard_method: "Méthode de Harvard",
   arva: "Méthode ARVA Excellence",
