@@ -498,10 +498,10 @@ export const QuizLibrary = () => {
                 >
                   <CardHeader className="p-5 pb-3 space-y-3">
                     {/* Ligne supérieure : Badge de type + Menu 3 points "..." */}
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2 min-w-0">
                       <Badge
                         variant="secondary"
-                        className="text-[11px] font-semibold px-2.5 py-0.5 bg-foreground/10 text-foreground border border-foreground/15"
+                        className="text-[11px] font-semibold px-2.5 py-0.5 bg-foreground/10 text-foreground border border-foreground/15 truncate max-w-[200px]"
                       >
                         {qTypeLabel}
                       </Badge>
@@ -512,7 +512,7 @@ export const QuizLibrary = () => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-lg hover:bg-foreground/10 text-foreground"
+                            className="h-8 w-8 rounded-lg hover:bg-foreground/10 text-foreground shrink-0"
                             title="Options du QCM"
                           >
                             <MoreHorizontal className="h-4 w-4" />

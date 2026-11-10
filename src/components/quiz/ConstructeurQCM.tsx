@@ -30,6 +30,7 @@ import {
   X,
   Layers,
   Sparkles,
+  MoreHorizontal,
 } from "lucide-react";
 
 const LETTERS: OptionLetter[] = ["A", "B", "C", "D", "E"];
@@ -148,6 +149,25 @@ function formatMinuteTimestamp(date = new Date()): string {
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} à ${pad(
     date.getHours()
   )}:${pad(date.getMinutes())}`;
+}
+
+function formatSeriesDate(rawDate?: string): string {
+  if (!rawDate) return "Aujourd'hui";
+  const str = String(rawDate).trim();
+  // Format déjà concis de type "09 nov à 14h38" ou "Aujourd'hui"
+  if (str.length <= 16 && (str.includes(" à ") || str.includes("h"))) return str;
+  try {
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return str;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const day = pad(d.getDate());
+    const month = d.toLocaleDateString("fr-FR", { month: "short" }).replace(".", "");
+    const hours = pad(d.getHours());
+    const mins = pad(d.getMinutes());
+    return `${day} ${month} à ${hours}h${mins}`;
+  } catch {
+    return str;
+  }
 }
 
 function extractCleanRootName(rawTitle: string): string {
@@ -1001,7 +1021,7 @@ export const ConstructeurQCM: React.FC = () => {
   const renderThreeDotsMenu = (series: QuizSeriesSession) => {
     const isOpen = openDropdownSeriesId === series.id;
     return (
-      <div className="relative shrink-0" data-dropdown-container={series.id}>
+      <div className="relative shrink-0 flex items-center" data-dropdown-container={series.id}>
         <button
           type="button"
           onClick={(e) => {
@@ -1009,19 +1029,15 @@ export const ConstructeurQCM: React.FC = () => {
             setOpenDropdownSeriesId(isOpen ? null : series.id);
           }}
           title="Options de la série"
-          className="h-8 w-8 rounded-xl border border-transparent hover:border-border/80 hover:bg-secondary/90 flex items-center justify-center text-muted-foreground hover:text-foreground transition-all"
+          className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg sm:rounded-xl border border-transparent hover:border-border/80 hover:bg-secondary/90 flex items-center justify-center text-muted-foreground hover:text-foreground transition-all shrink-0 cursor-pointer"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="1" />
-            <circle cx="19" cy="12" r="1" />
-            <circle cx="5" cy="12" r="1" />
-          </svg>
+          <MoreHorizontal className="w-4 h-4" />
         </button>
 
         {isOpen && (
           <div
             onClick={(e) => e.stopPropagation()}
-            className="craft-popover absolute right-0 top-10 w-52 rounded-2xl p-1.5 z-50 select-none"
+            className="craft-popover absolute right-0 top-9 w-48 sm:w-52 rounded-2xl p-1.5 z-50 select-none shadow-xl border border-border/80 bg-card/95 backdrop-blur-xl"
           >
             <button
               type="button"
@@ -1741,21 +1757,29 @@ export const ConstructeurQCM: React.FC = () => {
                         menuOpen ? "z-30" : "z-10"
                       }`}
                     >
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono-metric text-[11px] font-semibold px-2.5 py-0.5 rounded-lg bg-secondary text-foreground border border-border/80">
+                      <div className="space-y-3 min-w-0 w-full">
+                        <div className="flex items-center justify-between gap-2 w-full min-w-0">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span
+                              className="font-mono-metric text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-secondary text-foreground border border-border/80 truncate max-w-[130px] sm:max-w-[160px] shrink-0"
+                              title={s.displayTitle}
+                            >
                               {s.displayTitle}
                             </span>
-                            <span className="font-mono-metric text-[10.5px] text-muted-foreground">
-                              {s.createdAt}
+                            <span
+                              className="font-mono-metric text-[10.5px] text-muted-foreground truncate min-w-0"
+                              title={s.createdAt}
+                            >
+                              {formatSeriesDate(s.createdAt)}
                             </span>
                           </div>
-                          {renderThreeDotsMenu(s)}
+                          <div className="shrink-0 flex items-center -mr-1">
+                            {renderThreeDotsMenu(s)}
+                          </div>
                         </div>
 
-                        <div className="space-y-1">
-                          <h3 className="text-[15px] font-semibold text-foreground group-hover:text-primary transition-colors leading-snug line-clamp-2">
+                        <div className="space-y-1 min-w-0">
+                          <h3 className="text-[14.5px] font-semibold text-foreground group-hover:text-primary transition-colors leading-snug line-clamp-2">
                             {s.courseRootTitle}
                           </h3>
                           <p className="text-xs text-muted-foreground">
@@ -1828,16 +1852,16 @@ export const ConstructeurQCM: React.FC = () => {
                           S{s.seriesNumber}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2.5 flex-wrap">
-                            <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                          <div className="flex items-center gap-2.5 flex-wrap min-w-0">
+                            <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate max-w-[200px] sm:max-w-md">
                               {s.courseRootTitle}
                             </span>
-                            <span className="font-mono-metric text-[11px] px-2 py-0.2 rounded-md bg-secondary text-foreground border border-border/70">
+                            <span className="font-mono-metric text-[11px] px-2 py-0.2 rounded-md bg-secondary text-foreground border border-border/70 truncate max-w-[130px] shrink-0" title={s.displayTitle}>
                               {s.displayTitle}
                             </span>
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 font-mono-metric">
-                            <span>{s.createdAt}</span>
+                            <span>{formatSeriesDate(s.createdAt)}</span>
                             <span>•</span>
                             <span className="font-sans">{s.questions.length} questions</span>
                           </div>
@@ -1911,7 +1935,7 @@ export const ConstructeurQCM: React.FC = () => {
                   <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 font-mono-metric">
                     <span>{activeSeries.displayTitle}</span>
                     <span>•</span>
-                    <span>{activeSeries.createdAt}</span>
+                    <span>{formatSeriesDate(activeSeries.createdAt)}</span>
                     <span>•</span>
                     <span>{activeSeries.questions.length} questions</span>
                   </div>
