@@ -206,14 +206,16 @@ export const ExamenBlanc: React.FC = () => {
     if (!files || files.length === 0) return;
     setIsReading(true);
     let ok = 0;
-    const failed: string[] = [];
+    const failed: Array<{ name: string; reason: string }> = [];
     const newLessons: EBLesson[] = [];
     const newAnnales: EBAnnale[] = [];
     for (const file of Array.from(files)) {
       try {
         const res = await readFile(file);
         if (!res.success || !res.content || res.content.trim().length < 40) {
-          failed.push(file.name);
+          const isPdf = file.name.toLowerCase().endsWith(".pdf");
+          const reason = res.error || (isPdf ? "PDF scanné / image sans texte numérique" : "Fichier vide ou illisible");
+          failed.push({ name: file.name, reason });
           continue;
         }
         const id = `${target === "courses" ? "c" : "a"}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -230,8 +232,8 @@ export const ExamenBlanc: React.FC = () => {
           });
         }
         ok++;
-      } catch {
-        failed.push(file.name);
+      } catch (err: any) {
+        failed.push({ name: file.name, reason: err?.message || "Erreur de lecture" });
       }
     }
     if (newLessons.length) setLessons((prev) => flagDuplicateLessons([...prev, ...newLessons]));
@@ -242,12 +244,16 @@ export const ExamenBlanc: React.FC = () => {
         title: `${ok} fichier(s) lu(s)`,
         description: target === "courses" ? "Cours extraits et prêts pour l'analyse." : "Épreuves extraites et prêtes pour l'analyse.",
       });
-    if (failed.length)
+    if (failed.length) {
+      const hasScanned = failed.some((f) => f.reason.toLowerCase().includes("scann") || f.reason.toLowerCase().includes("image"));
       toast({
-        title: "Lecture impossible",
-        description: `Fichier(s) illisible(s) ou vide(s) : ${failed.join(", ")}`,
+        title: hasScanned ? "Document(s) scanné(s) sans texte numérique" : "Lecture impossible",
+        description: hasScanned
+          ? `${failed.length} fichier(s) sont des photos ou scans sans couche texte numérique (${failed.map((f) => f.name).slice(0, 3).join(", ")}${failed.length > 3 ? "..." : ""}). Appliquez-leur un OCR (ex: iLovePDF OCR, Adobe OCR) ou copiez leur texte dans un fichier Word (.docx).`
+          : `Fichier(s) illisible(s) ou vide(s) : ${failed.map((f) => f.name).join(", ")}`,
         variant: "destructive",
       });
+    }
   };
 
   const openLibraryPicker = () => {
