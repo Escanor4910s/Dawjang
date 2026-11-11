@@ -232,3 +232,29 @@ async function callClaudeSonnet46Engine(
 
   return null;
 }
+
+
+/**
+ * Variante "brute" de callDawiaEngine : n'ajoute PAS la doctrine de diversification
+ * syntaxique des propositions. Utilisée par le moteur Examen Blanc, qui doit cloner
+ * fidèlement le style exact des professeurs (syntaxe, longueurs, formulations).
+ *  - dawia2 (rédacteur) : Claude Sonnet, avec bascule de sécurité vers Gemini.
+ *  - dawia1 (relecteur) : Gemini 2.5.
+ */
+export async function callDawiaEngineRaw(
+  engine: DawiaEngine,
+  systemInstruction: string,
+  userPrompt: string,
+  temperature = 0.35
+): Promise<string | null> {
+  if (engine === "dawia1") {
+    return await callGeminiAcademicEngine(systemInstruction, userPrompt, temperature);
+  }
+  try {
+    const sonnetResult = await callClaudeSonnet46Engine(systemInstruction, userPrompt, temperature);
+    if (sonnetResult && sonnetResult.trim().length > 0) return sonnetResult;
+  } catch (err) {
+    console.warn("[dawiaQcmEngine] Relais DAWIA 2 -> DAWIA 1 (mode brut) :", err);
+  }
+  return await callGeminiAcademicEngine(systemInstruction, userPrompt, temperature);
+}
