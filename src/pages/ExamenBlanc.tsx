@@ -66,7 +66,7 @@ const detectYearFromName = (name: string) => (/\b(20[12]\d)\b/.exec(name) || [])
 
 export const ExamenBlanc: React.FC = () => {
   const { toast } = useToast();
-  const { readFile } = useFileReader();
+  const { readFile, readingProgress } = useFileReader();
 
   const [activeView, setActiveView] = useState<"studio" | "library" | "exam">("studio");
   const [ueInput, setUeInput] = useState("");
@@ -245,12 +245,9 @@ export const ExamenBlanc: React.FC = () => {
         description: target === "courses" ? "Cours extraits et prêts pour l'analyse." : "Épreuves extraites et prêtes pour l'analyse.",
       });
     if (failed.length) {
-      const hasScanned = failed.some((f) => f.reason.toLowerCase().includes("scann") || f.reason.toLowerCase().includes("image"));
       toast({
-        title: hasScanned ? "Document(s) scanné(s) sans texte numérique" : "Lecture impossible",
-        description: hasScanned
-          ? `${failed.length} fichier(s) sont des photos ou scans sans couche texte numérique (${failed.map((f) => f.name).slice(0, 3).join(", ")}${failed.length > 3 ? "..." : ""}). Appliquez-leur un OCR (ex: iLovePDF OCR, Adobe OCR) ou copiez leur texte dans un fichier Word (.docx).`
-          : `Fichier(s) illisible(s) ou vide(s) : ${failed.map((f) => f.name).join(", ")}`,
+        title: "Lecture impossible",
+        description: `Fichier(s) non lisible(s) : ${failed.map((f) => f.name).join(", ")}. Vérifiez qu'ils ne sont pas protégés ou corrompus.`,
         variant: "destructive",
       });
     }
@@ -588,7 +585,7 @@ export const ExamenBlanc: React.FC = () => {
         ref={coursesInputRef}
         type="file"
         multiple
-        accept=".pdf,.docx,.doc,.txt,.pptx,.ppt,.md,.rtf,.odt"
+        accept=".pdf,.docx,.doc,.txt,.pptx,.ppt,.md,.rtf,.odt,.png,.jpg,.jpeg,.webp"
         onChange={(e) => {
           ingestFiles(e.target.files, "courses");
           e.target.value = "";
@@ -599,7 +596,7 @@ export const ExamenBlanc: React.FC = () => {
         ref={annalesInputRef}
         type="file"
         multiple
-        accept=".pdf,.docx,.doc,.txt,.rtf,.odt,.md"
+        accept=".pdf,.docx,.doc,.txt,.rtf,.odt,.md,.png,.jpg,.jpeg,.webp"
         onChange={(e) => {
           ingestFiles(e.target.files, "annales");
           e.target.value = "";
@@ -796,6 +793,21 @@ export const ExamenBlanc: React.FC = () => {
                 Une UE peut contenir plusieurs matières : seule la partie de vos fichiers qui concerne la matière indiquée est analysée.
               </p>
             </section>
+
+            {/* BANNIÈRE DE PROGRESSION OCR / LECTURE */}
+            {readingProgress && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-950 flex items-center justify-between text-xs font-medium shadow-xs animate-pulse">
+                <span className="flex items-center gap-2.5">
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-600 shrink-0" />
+                  <span className="font-semibold">{readingProgress.stage}</span>
+                </span>
+                {readingProgress.pct !== undefined && (
+                  <span className="font-mono font-bold text-amber-700 bg-white/80 px-2 py-0.5 rounded-md border border-amber-500/20">
+                    {readingProgress.pct}%
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* ÉTAPE 2 */}
             <section className="grid grid-cols-1 md:grid-cols-2 gap-6">

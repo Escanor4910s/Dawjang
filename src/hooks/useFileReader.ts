@@ -1,9 +1,17 @@
 import { useState } from 'react';
 import * as pdfjs from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { ocrPdfDocument, ocrImageFile, isLikelyScannedText, OcrProgress } from '@/lib/ocrEngine';
 
 // Worker PDF local servi directement par Vite (aucune dépendance réseau externe vers unpkg)
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+
+export interface FileReaderProgress {
+  stage: string;
+  page?: number;
+  total?: number;
+  pct?: number;
+}
 
 export interface FileReaderResult {
   content: string;
@@ -64,9 +72,19 @@ export function normalizeMedicalSlideText(raw: string): string {
 
 export const useFileReader = () => {
   const [isReading, setIsReading] = useState(false);
+  const [readingProgress, setReadingProgress] = useState<FileReaderProgress | null>(null);
 
-  const readFile = async (file: File): Promise<FileReaderResult> => {
+  const notifyProgress = (prog: FileReaderProgress, callback?: (p: FileReaderProgress) => void) => {
+    setReadingProgress(prog);
+    callback?.(prog);
+  };
+
+  const readFile = async (
+    file: File,
+    onProgress?: (progress: FileReaderProgress) => void
+  ): Promise<FileReaderResult> => {
     setIsReading(true);
+    notifyProgress({ stage: `Lecture de ${file.name}...`, pct: 5 }, onProgress);
 
     try {
       let content = '';
@@ -74,8 +92,20 @@ export const useFileReader = () => {
       const type = file?.type || "";
 
       if (type === 'application/pdf' || name.endsWith('.pdf')) {
-        // Lecture document PDF
-        content = await readPDF(file);
+        // Lecture document PDF (avec bascule automatique OCR si scanné)
+        content = await readPDF(file, (p) => notifyProgress(p, onProgress));
+      } else if (
+        name.match(/\.(png|jpe?g|webp|bmp)$/i) ||
+        type.startsWith('image/')
+      ) {
+        // Lecture image directe (scan / photo d'examen) par OCR
+        notifyProgress({ stage: `OCR de l'image ${file.name}...`, pct: 20 }, onProgress);
+        content = await ocrImageFile(file, (p) => {
+          notifyProgress(
+            { stage: p.stage, page: p.page, total: p.total, pct: p.pct },
+            onProgress
+          );
+        });
       } else if (
         name.endsWith('.docx') ||
         type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -147,11 +177,16 @@ export const useFileReader = () => {
       };
     } finally {
       setIsReading(false);
+      setReadingProgress(null);
     }
   };
 
   // 1. Extraction PDF géométrique haute précision (préserve les mots scindés par kerning, les tableaux et les listes)
-  const readPDF = async (file: File): Promise<string> => {
+  // Bascule automatiquement sur l'OCR haute fidélité si le document est scanné / image.
+  const readPDF = async (
+    file: File,
+    onProgress?: (progress: FileReaderProgress) => void
+  ): Promise<string> => {
     return new Promise((resolve, reject) => {
       const fileReader = new FileReader();
 
@@ -244,12 +279,41 @@ export const useFileReader = () => {
             }
           }
 
-          const finalOutput = slidesText.join("\n\n");
-          if (!finalOutput.trim()) {
-            reject(new Error("Aucun texte n'a pu être extrait du PDF (document peut-être scanné)."));
-          } else {
-            resolve(finalOutput.trim());
+          const finalOutput = slidesText.join("\n\n").trim();
+
+          // Détection automatique : Si le PDF ne contient aucun texte ou est un scan
+          if (!finalOutput || isLikelyScannedText(finalOutput, pdf.numPages)) {
+            console.log(
+              `[FileReader] Document scanné / image détecté (${pdf.numPages} pages, texte extrait quasi-nul). Activation de l'OCR automatique...`
+            );
+            try {
+              onProgress?.({
+                stage: `Scan détecté : transcription OCR de ${file.name}...`,
+                page: 1,
+                total: pdf.numPages,
+                pct: 10,
+              });
+              const ocrResult = await ocrPdfDocument(file, (p) => {
+                onProgress?.({
+                  stage: `OCR automatique : page ${p.page}/${p.total}...`,
+                  page: p.page,
+                  total: p.total,
+                  pct: p.pct,
+                });
+              });
+              resolve(ocrResult);
+              return;
+            } catch (ocrErr: any) {
+              reject(
+                new Error(
+                  `Document scanné détecté mais l'OCR n'a pas pu extraire le texte : ${ocrErr?.message || "Erreur OCR"}`
+                )
+              );
+              return;
+            }
           }
+
+          resolve(finalOutput);
         } catch (error) {
           reject(new Error(`Erreur lors de l'analyse du PDF: ${error instanceof Error ? error.message : "Inconnue"}`));
         }
@@ -669,6 +733,7 @@ export const useFileReader = () => {
   return {
     readFile,
     isReading,
+    readingProgress,
   };
 };
 
