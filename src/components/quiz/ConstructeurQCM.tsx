@@ -154,20 +154,31 @@ function formatMinuteTimestamp(date = new Date()): string {
 function formatSeriesDate(rawDate?: string): string {
   if (!rawDate) return "Aujourd'hui";
   const str = String(rawDate).trim();
-  // Format déjà concis de type "09 nov à 14h38" ou "Aujourd'hui"
-  if (str.length <= 16 && (str.includes(" à ") || str.includes("h"))) return str;
+  // Si déjà formaté court en français
+  if (str.includes(" à ") && str.length <= 25) return str;
   try {
     const d = new Date(str);
-    if (isNaN(d.getTime())) return str;
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const day = pad(d.getDate());
-    const month = d.toLocaleDateString("fr-FR", { month: "short" }).replace(".", "");
-    const hours = pad(d.getHours());
-    const mins = pad(d.getMinutes());
-    return `${day} ${month} à ${hours}h${mins}`;
+    if (!isNaN(d.getTime())) {
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const day = pad(d.getDate());
+      const month = d.toLocaleDateString("fr-FR", { month: "short" }).replace(".", "");
+      const hours = pad(d.getHours());
+      const mins = pad(d.getMinutes());
+      return `${day} ${month} à ${hours}h${mins}`;
+    }
   } catch {
-    return str;
+    // fallback
   }
+  // Si format JJ/MM/AAAA ou JJ-MM-AAAA
+  const match = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:\s*à\s*(\d{1,2})[h:](\d{1,2}))?/);
+  if (match) {
+    const [, d, m, , h, min] = match;
+    const months = ["janv", "févr", "mars", "avr", "mai", "juin", "juil", "août", "sept", "oct", "nov", "déc"];
+    const mName = months[parseInt(m, 10) - 1] || m;
+    const timeStr = h && min ? ` à ${h}h${min}` : "";
+    return `${d.padStart(2, "0")} ${mName}${timeStr}`;
+  }
+  return str.length > 20 ? str.slice(0, 16) : str;
 }
 
 function extractCleanRootName(rawTitle: string): string {
@@ -1759,15 +1770,15 @@ export const ConstructeurQCM: React.FC = () => {
                     >
                       <div className="space-y-3 min-w-0 w-full">
                         <div className="flex items-center justify-between gap-2 w-full min-w-0">
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                             <span
-                              className="font-mono-metric text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-secondary text-foreground border border-border/80 truncate max-w-[130px] sm:max-w-[160px] shrink-0"
+                              className="inline-flex items-center font-mono-metric text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-secondary text-foreground border border-border/80 whitespace-nowrap truncate max-w-[140px] sm:max-w-[170px] shrink-0"
                               title={s.displayTitle}
                             >
                               {s.displayTitle}
                             </span>
                             <span
-                              className="font-mono-metric text-[10.5px] text-muted-foreground truncate min-w-0"
+                              className="inline-flex items-center font-mono-metric text-[10.5px] text-muted-foreground whitespace-nowrap shrink-0"
                               title={s.createdAt}
                             >
                               {formatSeriesDate(s.createdAt)}
@@ -1856,14 +1867,14 @@ export const ConstructeurQCM: React.FC = () => {
                             <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate max-w-[200px] sm:max-w-md">
                               {s.courseRootTitle}
                             </span>
-                            <span className="font-mono-metric text-[11px] px-2 py-0.2 rounded-md bg-secondary text-foreground border border-border/70 truncate max-w-[130px] shrink-0" title={s.displayTitle}>
+                            <span className="inline-flex items-center font-mono-metric text-[11px] px-2 py-0.5 rounded-md bg-secondary text-foreground border border-border/70 whitespace-nowrap truncate max-w-[140px] shrink-0" title={s.displayTitle}>
                               {s.displayTitle}
                             </span>
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 font-mono-metric">
-                            <span>{formatSeriesDate(s.createdAt)}</span>
+                            <span className="inline-flex items-center whitespace-nowrap">{formatSeriesDate(s.createdAt)}</span>
                             <span>•</span>
-                            <span className="font-sans">{s.questions.length} questions</span>
+                            <span className="font-sans whitespace-nowrap">{s.questions.length} questions</span>
                           </div>
                         </div>
                       </div>

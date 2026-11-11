@@ -275,11 +275,18 @@ export const QuizLibrary = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("fr-FR", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
+    if (!dateString) return "";
+    try {
+      const d = new Date(dateString);
+      if (isNaN(d.getTime())) return dateString;
+      return d.toLocaleDateString("fr-FR", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return dateString;
+    }
   };
 
   const filteredSessions = useMemo(() => {
@@ -501,7 +508,7 @@ export const QuizLibrary = () => {
                     <div className="flex items-center justify-between gap-2 min-w-0">
                       <Badge
                         variant="secondary"
-                        className="text-[11px] font-semibold px-2.5 py-0.5 bg-foreground/10 text-foreground border border-foreground/15 truncate max-w-[200px]"
+                        className="inline-flex items-center text-[11px] font-semibold px-2.5 py-0.5 bg-foreground/10 text-foreground border border-foreground/15 whitespace-nowrap truncate max-w-[200px]"
                       >
                         {qTypeLabel}
                       </Badge>
@@ -573,8 +580,8 @@ export const QuizLibrary = () => {
 
                     {/* Métadonnées : Date, Nombre de QCM, Score */}
                     <CardDescription className="flex flex-wrap items-center gap-2 text-xs pt-0.5">
-                      <span className="inline-flex items-center gap-1 text-muted-foreground">
-                        <Calendar className="h-3.5 w-3.5" />
+                      <span className="inline-flex items-center gap-1 text-muted-foreground whitespace-nowrap">
+                        <Calendar className="h-3.5 w-3.5 shrink-0" />
                         {formatDate(session.created_at)}
                       </span>
                       <span>•</span>

@@ -140,7 +140,7 @@ const NAVIGATION_DECKS: NavDeck[] = [
       },
       {
         title: "Examens Blancs",
-        url: "/exams",
+        url: "/examen-blanc",
         icon: FileCheck2,
       },
       {
@@ -178,6 +178,8 @@ export function AppSidebar() {
       "/duels",
       "/planning",
       "/exams",
+      "/examen-blanc",
+      "/examens-blancs",
       "/community",
     ].some((p) => location.pathname.startsWith(p));
     return isMemRoute ? 1 : 0;
@@ -193,6 +195,8 @@ export function AppSidebar() {
       "/duels",
       "/planning",
       "/exams",
+      "/examen-blanc",
+      "/examens-blancs",
       "/community",
     ].some((p) => location.pathname.startsWith(p));
     setActiveNavSlide(isMemRoute ? 1 : 0);

@@ -68,6 +68,7 @@ const Ecos = lazy(() => import("./pages/Ecos"));
 const DailyCase = lazy(() => import("./pages/DailyCase"));
 const GapsReport = lazy(() => import("./pages/GapsReport"));
 const Predictions = lazy(() => import("./pages/Predictions"));
+const ExamenBlanc = lazy(() => import("./pages/ExamenBlanc"));
 
 const PageLoader = () => (
   <div className="min-h-screen bg-transparent flex items-center justify-center flex-1 w-full">
@@ -170,6 +171,8 @@ const App = () => {
                 <Route path="/exam" element={<PlanGuard requiredPlan="premium" featureName="Mode Examen"><Exams /></PlanGuard>} />
                 <Route path="/exams" element={<PlanGuard requiredPlan="premium" featureName="Mode Examen"><Exams /></PlanGuard>} />
                 <Route path="/exam/:courseId" element={<PlanGuard requiredPlan="premium" featureName="Mode Examen"><Exams /></PlanGuard>} />
+                <Route path="/examen-blanc" element={<ExamenBlanc />} />
+                <Route path="/examens-blancs" element={<ExamenBlanc />} />
                 <Route path="/generate-summary" element={<GenerateSummary />} />
                 <Route path="/summaries/new" element={<GenerateSummary />} />
                 <Route path="/summaries" element={<Summaries />} />
