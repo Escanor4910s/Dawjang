@@ -1301,12 +1301,26 @@ export function parseBlockJson(raw: string): any {
   }
 }
 
+const STEM_KEYS = ["stem", "question", "enonce", "énoncé", "intitule", "intitulé", "libelle", "libellé", "texte", "text", "statement", "prompt"];
+const OPTION_KEYS = ["options", "choices", "propositions", "reponses", "réponses", "answers", "responses", "items_options", "choix"];
+const pickStem = (o: any): string => {
+  for (const k of STEM_KEYS) if (typeof o?.[k] === "string" && o[k].trim().length >= 8) return o[k];
+  return "";
+};
+const pickOptions = (o: any): any[] => {
+  for (const k of OPTION_KEYS) {
+    const v = o?.[k];
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === "object") return Object.entries(v).map(([key, val]) => (typeof val === "string" ? `${key}. ${val}` : val));
+  }
+  return [];
+};
 const looksLikeQuestion = (o: any): boolean =>
   !!o &&
   typeof o === "object" &&
   !Array.isArray(o) &&
-  (typeof o.stem === "string" || typeof o.question === "string" || typeof o.enonce === "string") &&
-  (Array.isArray(o.options) || Array.isArray(o.propositions) || Array.isArray(o.choices) || Array.isArray(o.statements) || Array.isArray(o.assertions) || o.format === "QNS");
+  !!pickStem(o) &&
+  (pickOptions(o).length >= 2 || Array.isArray(o.statements) || Array.isArray(o.assertions) || o.format === "QNS");
 
 /**
  * Parcourt récursivement une réponse IA de forme imprévue pour en extraire
@@ -1404,7 +1418,7 @@ function validateBlock(
   rawItemsList.forEach((r: any, idx: number) => {
     const expected = spec.formats[idx] || r?.format || "ELECTION";
     const format: EBFormat = expected;
-    const stem = String(r?.stem || r?.question || r?.enonce || "").replace(/\s+/g, " ").trim();
+    const stem = String(pickStem(r) || r?.stem || "").replace(/\s+/g, " ").trim();
     const label = `Question ${idx + 1}`;
     if (stem.length < 10) errors.push(`${label} : énoncé absent ou trop court.`);
 
@@ -1456,13 +1470,7 @@ function validateBlock(
       item.options = [];
       item.correct = [];
     } else {
-      const rawOptions = Array.isArray(r?.options)
-        ? r.options
-        : Array.isArray(r?.choices)
-        ? r.choices
-        : Array.isArray(r?.propositions)
-        ? r.propositions
-        : [];
+      const rawOptions = pickOptions(r);
       let opts: EBOption[] = rawOptions.slice(0, 5).map((o: any, i: number) => {
         let text = "";
         if (typeof o === "string") text = o;
@@ -1487,6 +1495,10 @@ function validateBlock(
         r?.key ??
         r?.cle ??
         r?.bonne_reponse ??
+        r?.correct_answer ??
+        r?.correct_answers ??
+        r?.bonnes_reponses ??
+        r?.reponses_correctes ??
         r?.reponse;
 
       let correct: EBLetter[] = (Array.isArray(rawCorrect) ? rawCorrect : [rawCorrect])
@@ -1643,6 +1655,11 @@ ${schemaFor(spec)}`;
         if (!parsed) parsed = repairAndParseQuizJson(raw);
       } catch (err: any) {
         feedback = `Le JSON était invalide (${err?.message || "erreur"}). Renvoie UNIQUEMENT un JSON valide.`;
+        continue;
+      }
+      if (!parsed) {
+        feedback = "Réponse non-JSON ou tronquée. Renvoie UNIQUEMENT le JSON demandé, compact, sans texte autour.";
+        console.warn(`[ExamenBlanc] Bloc ${i + 1} essai ${attempt} : JSON illisible/tronqué | début :`, String(raw).slice(0, 300), "| fin :", String(raw).slice(-200));
         continue;
       }
       const v = validateBlock(parsed, spec, lessons.map((l) => l.id), style, memorySets, blockId);
