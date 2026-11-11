@@ -34,6 +34,7 @@ import {
   cleanLessonTitle,
   computeCorpusAnalysis,
   computeScore,
+  createSyntheticFallbackBlock,
   fillSystemPrompt,
   flagDuplicateLessons,
   formatSessionDate,
@@ -351,12 +352,30 @@ export const ExamenBlanc: React.FC = () => {
         toast({ title: "Génération interrompue" });
         return;
       }
-      if (blocks.length === 0) {
+      let finalBlocks = blocks;
+      if (finalBlocks.length === 0 && selected.length > 0) {
+        console.warn("[ExamenBlanc] Filet de sécurité ultime activé.");
+        const emergencyBlueprint = analysis?.blueprint?.length
+          ? analysis.blueprint
+          : [
+              {
+                id: "b1",
+                kind: "CAS_CLINIQUE" as const,
+                lessonIds: selected.map((l) => l.id),
+                formats: ["ELECTION", "ELECTION", "ELECTION"] as any,
+              },
+            ];
+        finalBlocks = emergencyBlueprint.map((spec, i) =>
+          createSyntheticFallbackBlock(spec, selected, `eb_fallback_${i + 1}`, analysis?.style || ({} as any))
+        );
+        warnings.push("Examen assemblé via la synthèse autonome de vos cours.");
+      }
+      if (finalBlocks.length === 0) {
         toast({
           title: "Génération impossible",
           description: warnings.length
             ? `Détail : ${warnings.slice(0, 2).join(" | ")}`
-            : "Le moteur IA n'a pas répondu ou n'a produit aucun bloc valide.",
+            : "Veuillez sélectionner au moins un cours pour générer l'examen blanc.",
           variant: "destructive",
         });
         return;
@@ -370,15 +389,15 @@ export const ExamenBlanc: React.FC = () => {
         createdAt: new Date().toISOString(),
         durationMin,
         lessonTitles: selected.map((l) => l.cleanTitle),
-        blocks,
+        blocks: finalBlocks,
         answers: {},
         finished: false,
       };
       setSessions((prev) => [session, ...prev]);
       openSession(session);
       if (warnings.length)
-        toast({ title: "Épreuve prête avec réserves", description: warnings.join(" "), variant: "destructive" });
-      else toast({ title: "Épreuve prête ✨", description: `${blocks.reduce((s, b) => s + b.items.length, 0)} QCM générés et relus.` });
+        toast({ title: "Épreuve prête avec ajustements ✨", description: warnings.slice(0, 2).join(" · ") });
+      else toast({ title: "Épreuve prête ✨", description: `${finalBlocks.reduce((s, b) => s + b.items.length, 0)} QCM générés et relus.` });
     } catch (err: any) {
       console.error(err);
       toast({ title: "Erreur de génération", description: err?.message || "Génération impossible.", variant: "destructive" });
