@@ -332,28 +332,31 @@ export async function callGeminiAcademicEngine(
     import.meta.env?.VITE_GEMINI_API_KEY ||
     localStorage.getItem("dawjang_gemini_api_key");
 
-  // 1. Appel direct à l'API officielle Google Gemini (gemini-2.5-flash) si une clé locale est configurée
+  // 1. Appel direct à l'API officielle Google Gemini si une clé locale est configurée
   if (geminiKey) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-            generationConfig: { temperature, maxOutputTokens: 32768 },
-          }),
+    const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"];
+    for (const model of modelsToTry) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemInstruction }] },
+              contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+              generationConfig: { temperature, maxOutputTokens: 32768 },
+            }),
+          }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) return text;
         }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) return text;
+      } catch {
+        // Essai du modèle suivant
       }
-    } catch {
-      // Bascule sur la fonction serveur Supabase déployée
     }
   }
 
