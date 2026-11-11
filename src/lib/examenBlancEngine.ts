@@ -1301,6 +1301,45 @@ export function parseBlockJson(raw: string): any {
   }
 }
 
+const looksLikeQuestion = (o: any): boolean =>
+  !!o &&
+  typeof o === "object" &&
+  !Array.isArray(o) &&
+  (typeof o.stem === "string" || typeof o.question === "string" || typeof o.enonce === "string") &&
+  (Array.isArray(o.options) || Array.isArray(o.propositions) || Array.isArray(o.choices) || Array.isArray(o.statements) || Array.isArray(o.assertions) || o.format === "QNS");
+
+/**
+ * Parcourt récursivement une réponse IA de forme imprévue pour en extraire
+ * les questions (et la vignette / l'en-tête d'un cas clinique s'il y en a).
+ */
+function deepFindQuestions(node: any): { items: any[]; header?: string; vignette?: string } | null {
+  const items: any[] = [];
+  let header: string | undefined;
+  let vignette: string | undefined;
+  const walk = (n: any, depth: number) => {
+    if (!n || typeof n !== "object" || depth > 8) return;
+    if (Array.isArray(n)) {
+      n.forEach((x) => walk(x, depth + 1));
+      return;
+    }
+    if (looksLikeQuestion(n)) {
+      items.push(n);
+      return;
+    }
+    if (!vignette) {
+      const v = n.vignette ?? n.context ?? n.contexte ?? n.clinical_case ?? n.cas_clinique;
+      if (typeof v === "string" && v.trim().length >= 40) vignette = v.trim();
+    }
+    if (!header) {
+      const h = n.header ?? n.titre ?? n.title;
+      if (typeof h === "string" && /cas\s*clinique/i.test(h)) header = h.trim();
+    }
+    Object.values(n).forEach((x) => walk(x, depth + 1));
+  };
+  walk(node, 0);
+  return items.length ? { items, header, vignette } : null;
+}
+
 function validateBlock(
   rawInput: any,
   spec: BlueprintBlock,
@@ -1336,6 +1375,14 @@ function validateBlock(
       else if (Array.isArray(raw.blocks)) raw.items = raw.blocks;
       else if (raw.items && typeof raw.items === "object") raw.items = Object.values(raw.items);
       else if (raw.stem || raw.question || Array.isArray(raw.options) || Array.isArray(raw.propositions)) raw.items = [raw];
+    }
+  }
+
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.items) || raw.items.length === 0) {
+    // Dernier recours : recherche récursive de la liste de questions, quelle que soit l'enveloppe
+    const found = deepFindQuestions(rawInput);
+    if (found && found.items.length > 0) {
+      raw = { header: found.header, vignette: found.vignette, items: found.items };
     }
   }
 
@@ -1601,13 +1648,14 @@ ${schemaFor(spec)}`;
       const v = validateBlock(parsed, spec, lessons.map((l) => l.id), style, memorySets, blockId);
       if (!v.block) {
         feedback = v.errors.map((e) => `- ${e}`).join("\n");
+        console.warn(`[ExamenBlanc] Bloc ${i + 1} essai ${attempt} rejeté :`, feedback, "| réponse brute :", String(raw).slice(0, 400));
         continue;
       }
       accepted = v.block;
     }
 
     if (!accepted) {
-      warnings.push(`Le bloc ${i + 1} (${label}) n'a pas pu être validé après 3 essais et a été ignoré.`);
+      warnings.push(`Le bloc ${i + 1} (${label}) n'a pas pu être validé après 3 essais et a été ignoré. Dernier motif : ${(feedback || "inconnu").replace(/\s+/g, " ").slice(0, 220)}`);
       continue;
     }
 

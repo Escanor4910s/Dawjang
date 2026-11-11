@@ -354,7 +354,9 @@ export const ExamenBlanc: React.FC = () => {
       if (blocks.length === 0) {
         toast({
           title: "Génération impossible",
-          description: "Le moteur IA n'a pas répondu ou n'a produit aucun bloc valide. Vérifiez votre clé API puis réessayez.",
+          description: warnings.length
+            ? `Détail : ${warnings.slice(0, 2).join(" | ")}`
+            : "Le moteur IA n'a pas répondu ou n'a produit aucun bloc valide.",
           variant: "destructive",
         });
         return;
