@@ -1663,7 +1663,25 @@ ${schemaFor(spec)}`;
         console.warn(`[ExamenBlanc] Bloc ${i + 1} essai ${attempt} : JSON illisible/tronqué | début :`, String(raw).slice(0, 300), "| fin :", String(raw).slice(-200));
         continue;
       }
-      const v = validateBlock(parsed, spec, lessons.map((l) => l.id), style, memorySets, blockId);
+      let v = validateBlock(parsed, spec, lessons.map((l) => l.id), style, memorySets, blockId);
+      if (!v.block) {
+        // Passe de remise en forme : l'IA convertit sa propre réponse au schéma exact
+        onProgress({ phase: "redaction", message: `Bloc ${i + 1}/${total} — remise en forme de la réponse IA`, current: i, total });
+        try {
+          const fixRaw = await callDawiaEngineRaw(
+            "dawia1",
+            "Tu es un convertisseur de format. Tu ne modifies pas le fond médical, tu restructures uniquement. Réponds avec le JSON seul.",
+            `Convertis le contenu ci-dessous au SCHÉMA JSON EXACT suivant (conserve toutes les questions, propositions, bonnes réponses et justifications ; ${spec.formats.length} question(s) attendue(s) dans l'ordre : ${spec.formats.join(", ")}).\n\nSCHÉMA :\n${schemaFor(spec)}\n\nCONTENU À CONVERTIR :\n${String(raw).slice(0, 18000)}`,
+            0.1
+          );
+          if (fixRaw) {
+            const fixParsed = parseBlockJson(fixRaw);
+            if (fixParsed) v = validateBlock(fixParsed, spec, lessons.map((l) => l.id), style, memorySets, blockId);
+          }
+        } catch {
+          /* on retombe sur le rejet normal */
+        }
+      }
       if (!v.block) {
         feedback = v.errors.map((e) => `- ${e}`).join("\n");
         console.warn(`[ExamenBlanc] Bloc ${i + 1} essai ${attempt} rejeté :`, feedback, "| réponse brute :", String(raw).slice(0, 400));
