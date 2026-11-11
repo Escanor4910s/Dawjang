@@ -109,6 +109,23 @@ export function getSavedCourses(): StoredCourse[] {
   return filterOutTombstoned("course", INITIAL_COURSES);
 }
 
+export function formatCourseDate(dateStr?: string): string {
+  if (!dateStr) return "Aujourd'hui";
+  const trimmed = dateStr.trim();
+  if (/^(aujourd['’]hui|hier|il y a|\d{1,2}\s+[a-zà-ÿ]+\.?\s+\d{4})/i.test(trimmed)) {
+    return trimmed;
+  }
+  const d = new Date(trimmed);
+  if (!isNaN(d.getTime())) {
+    return d.toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }
+  return trimmed;
+}
+
 const SUBJECTS = [
   "Tous",
   "Cardiologie",
@@ -485,9 +502,9 @@ export default function Library() {
                       {course.subject}
                     </span>
                     <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-[10.5px] text-[#71717A] flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {course.updatedAt}
+                      <span className="font-mono text-[10.5px] text-[#71717A] flex items-center gap-1 whitespace-nowrap">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        {formatCourseDate(course.updatedAt)}
                       </span>
                       <button
                         type="button"
@@ -586,7 +603,7 @@ export default function Library() {
                       <span>•</span>
                       <span>{(course.wordCount || 0).toLocaleString("fr-FR")} mots</span>
                       <span>•</span>
-                      <span>Ajouté le {course.updatedAt}</span>
+                      <span>Ajouté le {formatCourseDate(course.updatedAt)}</span>
                     </div>
                   </div>
                 </div>

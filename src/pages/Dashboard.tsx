@@ -33,6 +33,7 @@ import {
   getActivePlanBadge,
   PlanTierIconBadge,
 } from "@/components/UserAvatar";
+import { formatCourseDate } from "@/pages/Library";
 import { cn } from "@/lib/utils";
 
 interface ReadyQcmItem {
@@ -909,7 +910,7 @@ export const Dashboard: React.FC = () => {
                           </span>
                           <span className="text-stone-300 dark:text-stone-700">•</span>
                           <span className="text-[11px] font-mono text-stone-400">
-                            {qcm.updatedAt}
+                            {formatCourseDate(qcm.updatedAt)}
                           </span>
                         </div>
 
@@ -958,7 +959,7 @@ export const Dashboard: React.FC = () => {
                             {sum.tablesCount} tableau(x) préservé(s)
                           </span>
                           <span className="text-[11px] font-mono text-stone-400">
-                            • {sum.updatedAt}
+                            • {formatCourseDate(sum.updatedAt)}
                           </span>
                         </div>
                         <h3 className="text-sm sm:text-base font-bold text-[#18181B] dark:text-white truncate">

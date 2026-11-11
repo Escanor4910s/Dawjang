@@ -488,7 +488,76 @@ export const useFileReader = () => {
     });
   };
 
-  // 5. Extraction PowerPoint .pptx
+  // 5. Extraction PowerPoint (.pptx moderne XML et .ppt binaire legacy 97-2003)
+  const extractLegacyPptBinary = (bytes: Uint8Array): string => {
+    const textChunks: string[] = [];
+    const len = bytes.length;
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+    // Parsing des records PowerPoint binaires :
+    // Chaque record possède un en-tête de 8 octets :
+    // - 2 octets : recVer (4 bits) + recInstance (12 bits)
+    // - 2 octets : recType (uint16 little-endian)
+    // - 4 octets : recLen (uint32 little-endian)
+    // RT_TextCharsAtom = 0x0F9E (4000) -> texte UTF-16LE
+    // RT_TextBytesAtom = 0x0FBA (4008) -> texte ANSI/Latin1
+    for (let i = 0; i + 8 <= len; i++) {
+      const recType = view.getUint16(i + 2, true);
+      const recLen = view.getUint32(i + 4, true);
+
+      if (recType === 4000 && recLen > 0 && recLen < 100000 && i + 8 + recLen <= len) {
+        // UTF-16LE
+        const chars: string[] = [];
+        for (let j = 0; j + 1 < recLen; j += 2) {
+          chars.push(String.fromCharCode(view.getUint16(i + 8 + j, true)));
+        }
+        const str = chars.join('').replace(/\r\n|\r/g, '\n').trim();
+        if (str.length >= 3 && /[a-zA-ZÀ-ÿ]/.test(str)) {
+          if (!/^(?:cliquez pour modifier le style|modifiez le style du titre|modifiez les styles du texte|deuxième niveau|espace réservé)/i.test(str)) {
+            textChunks.push(str);
+          }
+          i += 7 + recLen;
+        }
+      } else if (recType === 4008 && recLen > 0 && recLen < 100000 && i + 8 + recLen <= len) {
+        // Latin1 / Windows-1252
+        const latinChars: string[] = [];
+        for (let j = 0; j < recLen; j++) {
+          latinChars.push(String.fromCharCode(bytes[i + 8 + j]));
+        }
+        const str = latinChars.join('').replace(/\r\n|\r/g, '\n').trim();
+        if (str.length >= 3 && /[a-zA-ZÀ-ÿ]/.test(str)) {
+          if (!/^(?:cliquez pour modifier le style|modifiez le style du titre|modifiez les styles du texte|deuxième niveau|espace réservé)/i.test(str)) {
+            textChunks.push(str);
+          }
+          i += 7 + recLen;
+        }
+      }
+    }
+
+    // Fallback supplémentaire si aucun record strict n'a été trouvé : balayage des chaînes continues
+    if (textChunks.length === 0) {
+      const win1252Decoder = new TextDecoder('windows-1252');
+      let runStart = -1;
+      for (let i = 0; i < len; i++) {
+        const b = bytes[i];
+        const isPrintable = (b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13 || b >= 160;
+        if (isPrintable) {
+          if (runStart === -1) runStart = i;
+        } else {
+          if (runStart !== -1 && i - runStart >= 8) {
+            const seg = win1252Decoder.decode(bytes.subarray(runStart, i)).trim();
+            if (/[a-zA-ZÀ-ÿ]{3,}/.test(seg) && !/^(?:Root Entry|PowerPoint Document|Current User|SummaryInformation)/i.test(seg)) {
+              textChunks.push(seg);
+            }
+          }
+          runStart = -1;
+        }
+      }
+    }
+
+    return textChunks.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+  };
+
   const readPowerPoint = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const fileReader = new FileReader();
@@ -496,48 +565,66 @@ export const useFileReader = () => {
       fileReader.onload = async function () {
         try {
           const arrayBuffer = this.result as ArrayBuffer;
-          const JSZip = (await import('jszip')).default;
-          const zip = await JSZip.loadAsync(arrayBuffer);
+          const bytes = new Uint8Array(arrayBuffer);
 
-          let fullText = '';
-          const slideFiles: string[] = [];
+          // Cas A : Fichier .pptx moderne (archive ZIP PK\x03\x04)
+          const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
 
-          zip.forEach((relativePath) => {
-            if (relativePath.match(/ppt\/slides\/slide\d+\.xml$/)) {
-              slideFiles.push(relativePath);
-            }
-          });
+          if (isZip) {
+            try {
+              const JSZip = (await import('jszip')).default;
+              const zip = await JSZip.loadAsync(arrayBuffer);
 
-          slideFiles.sort((a, b) => {
-            const numA = parseInt(a.match(/slide(\d+)\.xml$/)?.[1] || '0');
-            const numB = parseInt(b.match(/slide(\d+)\.xml$/)?.[1] || '0');
-            return numA - numB;
-          });
+              let fullText = '';
+              const slideFiles: string[] = [];
 
-          for (const slidePath of slideFiles) {
-            const slideContent = await zip.file(slidePath)?.async('text');
-            if (slideContent) {
-              const parser = new DOMParser();
-              const xmlDoc = parser.parseFromString(slideContent, 'text/xml');
-              const textElements = xmlDoc.getElementsByTagName('a:t');
-              const slideTexts: string[] = [];
+              zip.forEach((relativePath) => {
+                if (relativePath.match(/ppt\/slides\/slide\d+\.xml$/)) {
+                  slideFiles.push(relativePath);
+                }
+              });
 
-              for (let i = 0; i < textElements.length; i++) {
-                const text = textElements[i].textContent?.trim();
-                if (text) slideTexts.push(text);
+              slideFiles.sort((a, b) => {
+                const numA = parseInt(a.match(/slide(\d+)\.xml$/)?.[1] || '0');
+                const numB = parseInt(b.match(/slide(\d+)\.xml$/)?.[1] || '0');
+                return numA - numB;
+              });
+
+              for (const slidePath of slideFiles) {
+                const slideContent = await zip.file(slidePath)?.async('text');
+                if (slideContent) {
+                  const parser = new DOMParser();
+                  const xmlDoc = parser.parseFromString(slideContent, 'text/xml');
+                  const textElements = xmlDoc.getElementsByTagName('a:t');
+                  const slideTexts: string[] = [];
+
+                  for (let i = 0; i < textElements.length; i++) {
+                    const text = textElements[i].textContent?.trim();
+                    if (text) slideTexts.push(text);
+                  }
+
+                  if (slideTexts.length > 0) {
+                    const slideNum = slidePath.match(/slide(\d+)\.xml$/)?.[1];
+                    fullText += `\n\n--- Diapositive ${slideNum} ---\n${slideTexts.join('\n')}`;
+                  }
+                }
               }
 
-              if (slideTexts.length > 0) {
-                const slideNum = slidePath.match(/slide(\d+)\.xml$/)?.[1];
-                fullText += `\n\n--- Diapositive ${slideNum} ---\n${slideTexts.join('\n')}`;
+              if (fullText.trim().length > 30) {
+                resolve(fullText.trim());
+                return;
               }
+            } catch {
+              // Continuer vers l'analyseur binaire si JSZip échoue
             }
           }
 
-          if (!fullText.trim()) {
-            reject(new Error("Aucun texte n'a pu être extrait du PowerPoint."));
+          // Cas B : Fichier .ppt binaire legacy (PowerPoint 97-2003 OLE2)
+          const legacyText = extractLegacyPptBinary(bytes);
+          if (legacyText && legacyText.length > 30) {
+            resolve(legacyText);
           } else {
-            resolve(fullText.trim());
+            reject(new Error("Aucun texte n'a pu être extrait du PowerPoint. Si vos diapositives sont des images scannées sans texte, veuillez les exporter en PDF avec OCR."));
           }
         } catch (error) {
           reject(new Error(`Erreur analyse PowerPoint: ${error instanceof Error ? error.message : 'Inconnue'}`));
