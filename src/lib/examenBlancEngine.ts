@@ -1312,6 +1312,15 @@ function validateBlock(
   const errors: string[] = [];
   let raw = rawInput;
 
+  // Déballage des enveloppes fréquentes (« bloc_examen », « bloc », « data »…)
+  if (raw && typeof raw === "object" && !Array.isArray(raw) && !Array.isArray(raw.items)) {
+    for (const w of ["bloc_examen", "bloc_examen_blanc", "bloc", "exam", "examen", "quiz", "data", "result"]) {
+      if (raw[w] && typeof raw[w] === "object") {
+        raw = raw[w];
+        break;
+      }
+    }
+  }
   // Normalisation automatique des variantes de réponses IA
   if (Array.isArray(raw)) {
     if (raw.length === 1 && raw[0] && (Array.isArray(raw[0].items) || Array.isArray(raw[0].questions))) {
@@ -1325,6 +1334,8 @@ function validateBlock(
       if (Array.isArray(raw.questions)) raw.items = raw.questions;
       else if (Array.isArray(raw.qcm)) raw.items = raw.qcm;
       else if (Array.isArray(raw.blocks)) raw.items = raw.blocks;
+      else if (raw.items && typeof raw.items === "object") raw.items = Object.values(raw.items);
+      else if (raw.stem || raw.question || Array.isArray(raw.options) || Array.isArray(raw.propositions)) raw.items = [raw];
     }
   }
 

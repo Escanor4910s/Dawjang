@@ -328,9 +328,11 @@ export async function callGeminiAcademicEngine(
   userPrompt: string,
   temperature = 0.4
 ): Promise<string | null> {
-  const geminiKey =
+  const geminiKey = (
     import.meta.env?.VITE_GEMINI_API_KEY ||
-    localStorage.getItem("dawjang_gemini_api_key");
+    (typeof localStorage !== "undefined" && localStorage.getItem("dawjang_gemini_api_key")) ||
+    ""
+  ).trim().replace(/^"|"$/g, "");
 
   // 1. Appel direct à l'API officielle Google Gemini si une clé locale est configurée
   if (geminiKey) {
@@ -352,7 +354,10 @@ export async function callGeminiAcademicEngine(
         if (res.ok) {
           const data = await res.json();
           const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) return text;
+          if (text) {
+            console.log(`[Gemini Academic] Réponse reçue via ${model} (${text.length} car.)`);
+            return text;
+          }
         }
       } catch {
         // Essai du modèle suivant
@@ -360,7 +365,7 @@ export async function callGeminiAcademicEngine(
     }
   }
 
-  // Construction des messages (jusqu'à 10 segments de 14 000 car. pour couvrir 100+ diapositives sans troncature)
+  // Construction des messages
   const CHUNK_LIMIT = 44000;
   const userMessages: Array<{ role: "user"; content: string }> = [];
   if (userPrompt.length <= CHUNK_LIMIT) {
@@ -384,41 +389,76 @@ export async function callGeminiAcademicEngine(
     ...userMessages,
   ];
 
-  // 2. Appel direct OpenRouter avec le modèle officiel google/gemini-2.5-flash (ultra-rapide ~800ms)
-  try {
-    const orKey =
-      (typeof localStorage !== "undefined" &&
-        localStorage.getItem("dawjang_openrouter_api_key")) ||
-      (import.meta as any).env?.VITE_OPENROUTER_API_KEY ||
-      "";
+  // 2. Clé OpenRouter personnalisée si fournie
+  const orKey = (
+    (typeof localStorage !== "undefined" &&
+      localStorage.getItem("dawjang_openrouter_api_key")) ||
+    (import.meta as any).env?.VITE_OPENROUTER_API_KEY ||
+    ""
+  ).trim().replace(/^"|"$/g, "");
 
-    const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  if (orKey && orKey.startsWith("sk-or-")) {
+    try {
+      const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${orKey}`,
+          "HTTP-Referer": "https://dawjang.app",
+          "X-Title": "DawJang Academic Studio — DAWIA 1",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          temperature,
+          max_tokens: 8192,
+          messages: messagesPayload,
+        }),
+      });
+      if (orRes.ok) {
+        const data = await orRes.json();
+        const reply = data?.choices?.[0]?.message?.content;
+        if (typeof reply === "string" && reply.trim().length > 0) {
+          console.log(`[OpenRouter Academic] Réponse reçue (${reply.length} car.)`);
+          return reply.trim();
+        }
+      }
+    } catch {
+      // Tentative de relais
+    }
+  }
+
+  // 3. Appel direct vers Supabase Edge Function « mor-chat » avec la clé anon nettoyée
+  const supabaseUrl = (import.meta.env?.VITE_SUPABASE_URL || "https://vhzdbhdyytvaipkbcsvs.supabase.co").trim().replace(/^"|"$/g, "");
+  const anonKey = (
+    import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoemRiaGR5eXR2YWlwa2Jjc3ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NzU0ODMsImV4cCI6MjA3MjM1MTQ4M30.7PRgMDBgf8ZSPbsgmfmBTqS46r5b0dIhxNSL97KWb7A"
+  ).trim().replace(/^"|"$/g, "");
+
+  try {
+    const directRes = await fetch(`${supabaseUrl}/functions/v1/mor-chat`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${orKey}`,
-        "HTTP-Referer": "https://dawjang.app",
-        "X-Title": "DawJang Academic Studio — DAWIA 1",
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey,
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        temperature,
-        max_tokens: 8192,
-        messages: messagesPayload,
-      }),
+      body: JSON.stringify({ messages: messagesPayload, max_tokens: 8192 }),
     });
-    if (orRes.ok) {
-      const data = await orRes.json();
-      const reply = data?.choices?.[0]?.message?.content;
+    if (directRes.ok) {
+      const data = await directRes.json();
+      const reply = data?.reply || data?.text || data?.content;
       if (typeof reply === "string" && reply.trim().length > 0) {
+        console.log(`[Mor-Chat Academic] Réponse reçue via Edge Function (${reply.length} car.)`);
         return reply.trim();
       }
+    } else {
+      console.warn(`[Mor-Chat Academic] Erreur HTTP ${directRes.status}`);
     }
-  } catch {
-    // Tentative de relais sur le serveur Supabase
+  } catch (err) {
+    console.warn("[Mor-Chat Academic] Échec de la requête direct fetch:", err);
   }
 
-  // 3. Relais de secours via la fonction serveur Supabase déployée « mor-chat »
+  // 4. Relais via supabase.functions.invoke
   try {
     const { data, error } = await supabase.functions.invoke("mor-chat", {
       body: { messages: messagesPayload, max_tokens: 8192 },
@@ -427,35 +467,9 @@ export async function callGeminiAcademicEngine(
     if (!error && typeof reply === "string" && reply.trim().length > 0) {
       return reply.trim();
     }
-  } catch {
-    // Tentative fetch direct ci-dessous
-  }
+  } catch {}
 
-  // 3. Appel fetch direct vers functions/v1/mor-chat avec la clé publique
-  try {
-    const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL;
-    const anonKey = import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY;
-    if (supabaseUrl && anonKey) {
-      const directRes = await fetch(`${supabaseUrl}/functions/v1/mor-chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${anonKey}`,
-          apikey: anonKey,
-        },
-        body: JSON.stringify({ messages: messagesPayload, max_tokens: 8192 }),
-      });
-      if (directRes.ok) {
-        const data = await directRes.json();
-        const reply = data?.reply || data?.text || data?.content;
-        if (typeof reply === "string" && reply.trim().length > 0) {
-          return reply.trim();
-        }
-      }
-    }
-  } catch {
-    // Tentative suivante
-  }
+  return null;
 
   // 4. Appel direct OpenRouter avec la clé vérifiée DawJang
   try {
