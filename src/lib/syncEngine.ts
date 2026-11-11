@@ -323,6 +323,9 @@ export async function syncEntityToBackend(
  * Découpe automatiquement les longs cours en segments de 11 500 caractères pour transmettre
  * l'intégralité d'un polycopié de 50+ diapositives sans troncature.
  */
+/** Dernier motif d'échec du moteur IA (diagnostic affiché à l'utilisateur). */
+export let lastAcademicEngineError = "";
+
 export async function callGeminiAcademicEngine(
   systemInstruction: string,
   userPrompt: string,
@@ -427,35 +430,48 @@ export async function callGeminiAcademicEngine(
     }
   }
 
-  // 3. Appel direct vers Supabase Edge Function « mor-chat » avec la clé anon nettoyée
+  // 3. Appel direct vers Supabase Edge Function « mor-chat » (avec relances sur erreurs transitoires)
   const supabaseUrl = (import.meta.env?.VITE_SUPABASE_URL || "https://vhzdbhdyytvaipkbcsvs.supabase.co").trim().replace(/^"|"$/g, "");
   const anonKey = (
     import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoemRiaGR5eXR2YWlwa2Jjc3ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NzU0ODMsImV4cCI6MjA3MjM1MTQ4M30.7PRgMDBgf8ZSPbsgmfmBTqS46r5b0dIhxNSL97KWb7A"
   ).trim().replace(/^"|"$/g, "");
 
-  try {
-    const directRes = await fetch(`${supabaseUrl}/functions/v1/mor-chat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${anonKey}`,
-        apikey: anonKey,
-      },
-      body: JSON.stringify({ messages: messagesPayload, max_tokens: 8192 }),
-    });
-    if (directRes.ok) {
-      const data = await directRes.json();
-      const reply = data?.reply || data?.text || data?.content;
-      if (typeof reply === "string" && reply.trim().length > 0) {
-        console.log(`[Mor-Chat Academic] Réponse reçue via Edge Function (${reply.length} car.)`);
-        return reply.trim();
+  lastAcademicEngineError = "";
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 120000);
+      const directRes = await fetch(`${supabaseUrl}/functions/v1/mor-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${anonKey}`,
+          apikey: anonKey,
+        },
+        body: JSON.stringify({ messages: messagesPayload, max_tokens: 8192 }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      if (directRes.ok) {
+        const data = await directRes.json();
+        const reply = data?.reply || data?.text || data?.content;
+        if (typeof reply === "string" && reply.trim().length > 0) {
+          console.log(`[Mor-Chat Academic] Réponse reçue via Edge Function (${reply.length} car.)`);
+          return reply.trim();
+        }
+        lastAcademicEngineError = "réponse vide du serveur IA";
+      } else {
+        const body = await directRes.text().catch(() => "");
+        lastAcademicEngineError = `serveur IA HTTP ${directRes.status} ${body.slice(0, 140)}`;
+        console.warn(`[Mor-Chat Academic] ${lastAcademicEngineError}`);
+        if (directRes.status < 429 && directRes.status !== 408) break; // erreur définitive (400/401/403…)
       }
-    } else {
-      console.warn(`[Mor-Chat Academic] Erreur HTTP ${directRes.status}`);
+    } catch (err: any) {
+      lastAcademicEngineError = `réseau/CORS/délai : ${err?.name === "AbortError" ? "délai de 120 s dépassé" : err?.message || err}`;
+      console.warn("[Mor-Chat Academic] Échec de la requête :", err);
     }
-  } catch (err) {
-    console.warn("[Mor-Chat Academic] Échec de la requête direct fetch:", err);
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 2500 * attempt));
   }
 
   // 4. Relais via supabase.functions.invoke
@@ -467,7 +483,10 @@ export async function callGeminiAcademicEngine(
     if (!error && typeof reply === "string" && reply.trim().length > 0) {
       return reply.trim();
     }
-  } catch {}
+    if (error) lastAcademicEngineError += ` | invoke : ${(error as any)?.message || error}`;
+  } catch (err: any) {
+    lastAcademicEngineError += ` | invoke : ${err?.message || err}`;
+  }
 
   return null;
 

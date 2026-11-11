@@ -15,6 +15,7 @@
 // ============================================================================
 
 import { callDawiaEngineRaw } from "@/lib/dawiaQcmEngine";
+import { lastAcademicEngineError } from "@/lib/syncEngine";
 import { repairAndParseQuizJson } from "@/lib/jsonRepair";
 
 // ----------------------------------------------------------------------------
@@ -1646,7 +1647,7 @@ ${feedback ? `CORRECTIONS OBLIGATOIRES SUITE À LA VALIDATION PRÉCÉDENTE :\n${
 ${schemaFor(spec)}`;
       const raw = await callDawiaEngineRaw("dawia2", system, userPrompt, 0.55 + (attempt - 1) * 0.1);
       if (!raw) {
-        feedback = "Aucune réponse du moteur : recommence en respectant le schéma.";
+        feedback = `Aucune réponse du moteur (${lastAcademicEngineError || "cause inconnue"}) : recommence en respectant le schéma.`;
         continue;
       }
       let parsed: any;
