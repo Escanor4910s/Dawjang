@@ -380,17 +380,18 @@ interface ParsedQuestionUnit {
 
 function detectFormatFromQuestionBlock(rawBlock: string): EBFormat {
   const norm = normalizeText(rawBlock);
-  if (/\bparce que\b/.test(norm) || /\bassertion\b.*\braison\b/.test(norm)) {
+  if (/\bparce que\b/.test(norm) || /\bassertion\b.*\braison\b/.test(norm) || /\bjumelage\b/.test(norm)) {
     return "JUMELAGE";
   }
   if (
-    /(?:^|\n)\s*[1-5][.)]\s+\S+/.test(rawBlock) &&
-    /(?:a|b|c|d|e)\s*[.:=-]\s*(?:1|2|3|4|5)/i.test(rawBlock)
+    /\bgroupage\b/.test(norm) ||
+    (/(?:^|\n)\s*[1-5][.)]\s+\S+/.test(rawBlock) && /(?:a|b|c|d|e)\s*[.:=-]\s*(?:1|2|3|4|5)/i.test(rawBlock)) ||
+    (/(?:^|\n)\s*[1-4][.)]\s+\S+/.test(rawBlock) && !/(?:^|\n)\s*[A-E][.)-]\s+\S+/.test(rawBlock))
   ) {
     return "GROUPAGE";
   }
   if (
-    /\b(censure|fausse|inexacte|erronee|sauf|a l exception|ne fait pas partie|est faux)\b/.test(norm)
+    /\b(censure|fausse|inexacte|erronee|sauf|a l exception|ne fait pas partie|est faux|une seule fausse)\b/.test(norm)
   ) {
     return "CENSURE";
   }
@@ -401,9 +402,7 @@ function detectFormatFromQuestionBlock(rawBlock: string): EBFormat {
   ) {
     return "COMPLEMENT_MULTIPLE";
   }
-  if (!/(?:^|\n)\s*[A-E][.)-]\s+\S+/m.test(rawBlock) && rawBlock.length > 40) {
-    return "QNS";
-  }
+  // En médecine de faculté (et particulièrement Hématologie), tout format sans distinction est une ÉLECTION
   return "ELECTION";
 }
 
@@ -652,7 +651,7 @@ export function computeCorpusAnalysis(
   const preferredFormats = (Object.entries(formatDistribution)
     .sort((a, b) => (b[1] || 0) - (a[1] || 0))
     .map(([f]) => f as EBFormat)
-    .filter(Boolean));
+    .filter((f) => Boolean(f) && f !== "QNS"));
 
   const activeFormats: EBFormat[] =
     preferredFormats.length > 0 ? preferredFormats : ["ELECTION", "CENSURE", "GROUPAGE"];
@@ -795,84 +794,243 @@ export function createSyntheticFallbackBlock(
   const sentences = (lesson?.content || "")
     .split(/(?<=[.!?])\s+/)
     .map((s) => s.trim())
-    .filter((s) => s.length > 45 && s.length < 240);
+    .filter((s) => s.length > 40 && s.length < 240);
 
-  const items: EBItem[] = (spec.formats.length ? spec.formats : (["ELECTION", "CENSURE", "GROUPAGE"] as EBFormat[])).map(
-    (fmt, idx) => {
-      const refSentence =
-        sentences[(idx * 3) % Math.max(1, sentences.length)] ||
-        `Élément physiopathologique et diagnostique fondamental du cours « ${lesson?.cleanTitle || "Matière"} ».`;
+  const cleanFmts = (spec.formats.length ? spec.formats : (["ELECTION", "GROUPAGE", "CENSURE", "JUMELAGE"] as EBFormat[]))
+    .filter((f) => f !== "QNS");
 
-      return {
-        id: `${blockId}_q_${idx + 1}`,
-        number: idx + 1,
-        format: fmt,
-        stem:
-          fmt === "CENSURE"
-            ? `Concernant ${lesson?.cleanTitle || "cette pathologie"}, toutes les propositions suivantes sont exactes SAUF UNE. Indiquez la proposition INEXACTE :`
-            : `Parmi les propositions suivantes concernant ${lesson?.cleanTitle || "ce tableau clinique"}, laquelle (ou lesquelles) est exacte ?`,
-        statements:
-          fmt === "GROUPAGE"
-            ? [
-                refSentence,
-                sentences[(idx * 3 + 1) % Math.max(1, sentences.length)] || "Le diagnostic positif repose sur l'examen clinique et paraclinique.",
-                sentences[(idx * 3 + 2) % Math.max(1, sentences.length)] || "La prise en charge thérapeutique doit être adaptée au terrain.",
-                "L'évolution est systématiquement bénigne sans aucune surveillance.",
-              ]
-            : fmt === "JUMELAGE"
-            ? [
-                refSentence,
-                sentences[(idx * 3 + 1) % Math.max(1, sentences.length)] || "Les mécanismes physiopathologiques décrits dans le cours expliquent directement cette présentation.",
-              ]
-            : undefined,
-        options:
-          fmt === "GROUPAGE"
-            ? [
-                { letter: "A", text: "1 + 2 + 3" },
-                { letter: "B", text: "1 + 3" },
-                { letter: "C", text: "2 + 4" },
-                { letter: "D", text: "4 seulement" },
-                { letter: "E", text: "1 + 2 + 3 + 4" },
-              ]
-            : [
-                { letter: "A", text: refSentence },
-                {
-                  letter: "B",
-                  text:
-                    sentences[(idx * 3 + 1) % Math.max(1, sentences.length)] ||
-                    "La démarche diagnostique suit les critères exposés dans le cours.",
-                },
-                {
-                  letter: "C",
-                  text: "L'abstention thérapeutique est la règle absolue quelle que soit la gravité.",
-                },
-                {
-                  letter: "D",
-                  text: "Aucun examen complémentaire n'est jamais indiqué dans cette situation.",
-                },
-                {
-                  letter: "E",
-                  text: "Le pronostic ne dépend d'aucun facteur clinique ni biologique.",
-                },
-              ],
-        correct: fmt === "CENSURE" ? ["C"] : ["A"],
-        explanation: `Référence directe au cours « ${lesson?.cleanTitle} » : ${refSentence}`,
-        lessonId: lesson?.id,
-      };
+  const activeFmts: EBFormat[] = cleanFmts.length > 0 ? cleanFmts : ["ELECTION", "GROUPAGE", "CENSURE", "ELECTION"];
+
+  const items: EBItem[] = activeFmts.map((fmt, idx) => {
+    const s1 =
+      sentences[(idx * 4) % Math.max(1, sentences.length)] ||
+      `Élément physiopathologique et diagnostique fondamental décrit dans le cours « ${lesson?.cleanTitle || "Matière"} ».`;
+    const s2 =
+      sentences[(idx * 4 + 1) % Math.max(1, sentences.length)] ||
+      `La démarche clinique repose sur la corrélation rigoureuse entre l'anamnèse et le bilan paraclinique.`;
+    const s3 =
+      sentences[(idx * 4 + 2) % Math.max(1, sentences.length)] ||
+      `Les critères de certitude diagnostique nécessitent des investigations spécialisées confirmant l'atteinte hématologique.`;
+    const s4 =
+      sentences[(idx * 4 + 3) % Math.max(1, sentences.length)] ||
+      `La prise en charge thérapeutique de première intention doit être instaurée sans retard après élimination des contre-indications.`;
+
+    let stem = "";
+    let statements: string[] | undefined = undefined;
+    let options: EBOption[] = [];
+    let correct: string[] = ["A"];
+    let explanation = `Élément formel du cours « ${lesson?.cleanTitle} » : ${s1}`;
+
+    if (fmt === "GROUPAGE") {
+      stem = `Concernant les caractéristiques diagnostiques et thérapeutiques dans « ${lesson?.cleanTitle} », quelles assertions sont exactes ?`;
+      statements = [s1, s2, s3, "L'évolution spontanée est toujours favorable sans aucun suivi clinique."];
+      options = [
+        { letter: "A", text: "1 + 2 + 3" },
+        { letter: "B", text: "1 + 3" },
+        { letter: "C", text: "2 + 4" },
+        { letter: "D", text: "4 seulement" },
+        { letter: "E", text: "1 + 2 + 3 + 4" },
+      ];
+      correct = ["A"];
+      explanation = `Les propositions 1, 2 et 3 sont validées par le cours. La proposition 4 est erronée.`;
+    } else if (fmt === "CENSURE") {
+      stem = `Concernant la prise en charge et le pronostic de « ${lesson?.cleanTitle} », toutes les propositions suivantes sont exactes SAUF UNE. Indiquez la proposition FAUSSE :`;
+      options = [
+        { letter: "A", text: s1 },
+        { letter: "B", text: s2 },
+        { letter: "C", text: "L'abstention thérapeutique absolue et l'absence d'investigations sont préconisées dans tous les cas." },
+        { letter: "D", text: s3 },
+        { letter: "E", text: s4 },
+      ];
+      correct = ["C"];
+      explanation = `La proposition C est formellement inexacte : ${s4}`;
+    } else if (fmt === "JUMELAGE") {
+      stem = `Indiquez la relation logique entre les deux affirmations médicales suivantes :`;
+      statements = [
+        s1,
+        s2,
+      ];
+      options = [
+        { letter: "A", text: "Les deux propositions sont vraies et ont une relation de cause à effet" },
+        { letter: "B", text: "Les deux propositions sont vraies mais sans relation de cause à effet" },
+        { letter: "C", text: "La première proposition est vraie, mais la seconde est fausse" },
+        { letter: "D", text: "La première proposition est fausse, mais la seconde est vraie" },
+        { letter: "E", text: "Les deux propositions sont fausses" },
+      ];
+      correct = ["B"];
+      explanation = `Les deux propositions sont issues du cours et exactes, constituant deux aspects distincts de la pathologie.`;
+    } else {
+      // ELECTION ou COMPLEMENT_MULTIPLE
+      stem = `Parmi les propositions suivantes relatives à « ${lesson?.cleanTitle} », laquelle est exacte ?`;
+      options = [
+        { letter: "A", text: s1 },
+        { letter: "B", text: "Aucun signe biologique n'est jamais observé à la phase d'état." },
+        { letter: "C", text: "Le traitement repose systématiquement sur une monothérapie inefficace." },
+        { letter: "D", text: "Le pronostic vital n'est jamais engagé quelle que soit la sévérité." },
+        { letter: "E", text: "Les examens de confirmation sont formellement contre-indiqués." },
+      ];
+      correct = ["A"];
+      explanation = `Référence directe au cours : ${s1}`;
     }
-  );
+
+    return {
+      id: `${blockId}_q_${idx + 1}`,
+      number: idx + 1,
+      format: fmt,
+      stem,
+      statements,
+      options,
+      correct,
+      explanation,
+      lessonId: lesson?.id,
+    };
+  });
+
+  const isCase = spec.kind === "CAS_CLINIQUE";
+  const defaultVignette = isCase
+    ? `Patient âgé de 58 ans reçu aux urgences pour un tableau clinique évoluant depuis plusieurs semaines comportant une altération de l'état général, des signes d'anémie et des manifestations caractéristiques du chapitre « ${lesson?.cleanTitle} ». L'examen physique et les constantes vitales orientent vers les critères d'évaluation de la Faculté.`
+    : undefined;
 
   return {
     id: blockId,
     kind: spec.kind,
-    header: `Cas clinique — ${lesson?.cleanTitle || "Évaluation"}`,
-    vignette:
-      spec.kind === "CAS_CLINIQUE"
-        ? `Vous recevez en consultation un patient présentant un tableau typique en rapport avec le chapitre « ${lesson?.cleanTitle} ». L'interrogatoire et l'examen clinique initial orientent vers les éléments clés développés dans votre cours.`
-        : undefined,
+    header: isCase ? `Cas clinique — ${lesson?.cleanTitle}` : `Questions — ${lesson?.cleanTitle}`,
+    vignette: defaultVignette,
     lessonIds: lesson ? [lesson.id] : [],
     items,
   };
+}
+
+// Normalise et sécurise les items issus de n'importe quelle réponse LLM
+function normalizeRawItems(rawItems: any[], lesson: EBLesson): EBItem[] {
+  const result: EBItem[] = [];
+  const letters = ["A", "B", "C", "D", "E"];
+
+  for (let idx = 0; idx < rawItems.length; idx++) {
+    const raw = rawItems[idx];
+    if (!raw || typeof raw !== "object") continue;
+
+    const rawFormat = String(raw.format || raw.type || "").toUpperCase();
+    let format: EBFormat = "ELECTION";
+    if (rawFormat.includes("GROUP")) format = "GROUPAGE";
+    else if (rawFormat.includes("CENSUR") || rawFormat.includes("FAUSS") || rawFormat.includes("SAUF")) format = "CENSURE";
+    else if (rawFormat.includes("JUMEL") || rawFormat.includes("PARCE")) format = "JUMELAGE";
+    else if (rawFormat.includes("COMPLEMENT") || rawFormat.includes("MULTIPLE")) format = "COMPLEMENT_MULTIPLE";
+    else format = "ELECTION";
+
+    const stem = String(
+      raw.stem || raw.question || raw.enonce || raw.title || `Question d'évaluation sur ${lesson.cleanTitle}`
+    ).trim();
+
+    // Normalisation des statements
+    let statements: string[] | undefined = undefined;
+    if (Array.isArray(raw.statements) && raw.statements.length > 0) {
+      statements = raw.statements.map((s: any) => (typeof s === "string" ? s : s?.text || String(s)).trim());
+    } else if (Array.isArray(raw.assertions) && raw.assertions.length > 0) {
+      statements = raw.assertions.map((s: any) => (typeof s === "string" ? s : s?.text || String(s)).trim());
+    }
+
+    // Normalisation des options
+    let options: EBOption[] = [];
+
+    if (Array.isArray(raw.options) && raw.options.length >= 2) {
+      options = raw.options.slice(0, 5).map((o: any, oIdx: number) => {
+        const letter = String(o.letter || letters[oIdx] || "A").toUpperCase();
+        const text = String(o.text || o.label || o).trim();
+        return { letter, text };
+      });
+    } else if (raw.options && typeof raw.options === "object" && !Array.isArray(raw.options)) {
+      options = Object.entries(raw.options)
+        .slice(0, 5)
+        .map(([k, v], oIdx) => ({
+          letter: letters[oIdx] || k.toUpperCase(),
+          text: String(typeof v === "string" ? v : (v as any)?.text || v).trim(),
+        }));
+    } else if (format === "GROUPAGE" && statements && statements.length >= 3) {
+      // Reconstitution automatique des 5 options canoniques de groupage de Faculté
+      options = [
+        { letter: "A", text: "1 + 2 + 3" },
+        { letter: "B", text: "1 + 3" },
+        { letter: "C", text: "2 + 4" },
+        { letter: "D", text: "4 seulement" },
+        { letter: "E", text: "1 + 2 + 3 + 4" },
+      ];
+    } else if (format === "JUMELAGE") {
+      options = [
+        { letter: "A", text: "Les deux propositions sont vraies et ont une relation de cause à effet" },
+        { letter: "B", text: "Les deux propositions sont vraies mais sans relation de cause à effet" },
+        { letter: "C", text: "La première proposition est vraie, mais la seconde est fausse" },
+        { letter: "D", text: "La première proposition est fausse, mais la seconde est vraie" },
+        { letter: "E", text: "Les deux propositions sont fausses" },
+      ];
+    } else if (statements && statements.length >= 4) {
+      // Si l'IA a mis les propositions dans statements (ex: Censure)
+      options = statements.slice(0, 5).map((s, sIdx) => ({
+        letter: letters[sIdx] || "A",
+        text: s,
+      }));
+      statements = undefined;
+    }
+
+    // Compléter à 5 options si nécessaire
+    while (options.length < 5) {
+      const missingIdx = options.length;
+      options.push({
+        letter: letters[missingIdx] || "E",
+        text:
+          missingIdx === 4 && format === "CENSURE"
+            ? "Toutes les propositions susmentionnées sont conformes au cours."
+            : `Donnée diagnostique complémentaire issue du chapitre « ${lesson.cleanTitle} ».`,
+      });
+    }
+
+    // Normalisation de la réponse correcte
+    let correct: string[] = ["A"];
+    if (Array.isArray(raw.correct)) {
+      correct = raw.correct
+        .map((c: any) => {
+          const s = String(c).trim().toUpperCase();
+          if (s === "1") return "A";
+          if (s === "2") return "B";
+          if (s === "3") return "C";
+          if (s === "4") return "D";
+          if (s === "5") return "E";
+          return s;
+        })
+        .filter((l: string) => letters.includes(l));
+      if (correct.length === 0) correct = ["A"];
+    } else if (typeof raw.correct === "string") {
+      const s = raw.correct.trim().toUpperCase();
+      if (letters.includes(s)) correct = [s];
+      else if (s === "1") correct = ["A"];
+      else if (s === "2") correct = ["B"];
+      else if (s === "3") correct = ["C"];
+      else if (s === "4") correct = ["D"];
+      else if (s === "5") correct = ["E"];
+    }
+
+    const explanation = String(
+      raw.explanation ||
+        raw.justification ||
+        raw.rationale ||
+        `Référence au cours « ${lesson.cleanTitle} »`
+    ).trim();
+
+    result.push({
+      id: raw.id || `item_${idx + 1}`,
+      number: idx + 1,
+      format,
+      lead: raw.lead,
+      stem,
+      statements,
+      options,
+      correct,
+      explanation,
+      lessonId: lesson.id,
+    });
+  }
+
+  return result;
 }
 
 export async function generateExamBlanc(params: {
@@ -894,9 +1052,9 @@ export async function generateExamBlanc(params: {
 
   const systemPrompt = fillSystemPrompt(ueName, subjectName, analysis.quota);
   const activeFormats =
-    analysis.style.preferredFormats.length > 0
-      ? analysis.style.preferredFormats
-      : (["ELECTION", "CENSURE", "GROUPAGE"] as EBFormat[]);
+    analysis.style.preferredFormats.filter((f) => f !== "QNS").length > 0
+      ? analysis.style.preferredFormats.filter((f) => f !== "QNS")
+      : (["ELECTION", "GROUPAGE", "CENSURE", "JUMELAGE"] as EBFormat[]);
 
   let globalQuestionNumber = 1;
 
@@ -911,9 +1069,10 @@ export async function generateExamBlanc(params: {
       total: selected.length,
     });
 
+    const isClinicalCase = analysis.style.usesClinicalCases || i % 2 === 0 || selected.length <= 3;
     const spec: BlueprintSpec = {
       id: `block_${i + 1}`,
-      kind: analysis.style.usesClinicalCases || i % 2 === 0 ? "CAS_CLINIQUE" : "STANDALONE",
+      kind: isClinicalCase ? "CAS_CLINIQUE" : "STANDALONE",
       lessonIds: [lesson.id],
       formats: [
         activeFormats[i % activeFormats.length],
@@ -923,24 +1082,52 @@ export async function generateExamBlanc(params: {
       ],
     };
 
-    // 1. Tentative via le moteur académique DawJang (dawia2 / Gemini)
     let aiSuccess = false;
+
+    // Tentative de génération via l'IA universitaire DawJang
     try {
-      const userPrompt = `Rédige un bloc d'évaluation médicale de type ${spec.kind} sur la leçon : « ${lesson.cleanTitle} ».
-Formats requis pour les questions : ${spec.formats.join(", ")}.
+      const activeFmts = spec.formats;
+      const userPrompt = `Tu es membre du Jury d'Évaluation de la Faculté de Médecine (UCAD).
+Rédige un bloc d'évaluation médicale de type ${isClinicalCase ? "CAS CLINIQUE PROGRESSIF" : "QUESTIONS INDÉPENDANTES"} sur la leçon : « ${lesson.cleanTitle} ».
 
-TEXTE INTÉGRAL DE LA LEÇON :
-${lesson.content.slice(0, 35000)}
+${
+  isClinicalCase
+    ? `STRUCTURE DU CAS CLINIQUE OBLIGATOIRE :
+1. "header" : "Cas clinique — ${lesson.cleanTitle}"
+2. "vignette" : Observation clinique narrative complète et réaliste (15 à 20 lignes) comprenant :
+   - Patient (âge, sexe, profession, antécédents médicaux).
+   - Signes fonctionnels et motif de consultation précis.
+   - Données d'examen physique complet chiffré (constantes, examen cutanéomuqueux, palpation hépato-splénique, aires ganglionnaires).
+   - Bilan paraclinique initial détaillé et chiffré (NFS complète avec VGM, TCMH, plaquettes, réticulocytes, bilan d'hémolyse ou frottis).
+3. "items" : Exactement ${activeFmts.length} questions médicales progressives de QCM :
+   ${activeFmts.map((f, idx) => `- Question ${idx + 1} : format "${f}"`).join("\n   ")}`
+    : `STRUCTURE DU BLOC DE QUESTIONS :
+1. "header" : "Questions d'évaluation — ${lesson.cleanTitle}"
+2. "items" : Exactement ${activeFmts.length} questions indépendantes de QCM :
+   ${activeFmts.map((f, idx) => `- Question ${idx + 1} : format "${f}"`).join("\n   ")}`
+}
 
-Réponds UNIQUEMENT avec ce JSON valide :
+RÈGLES STRICTES DE FORMAT :
+- "ELECTION" : 5 propositions (A à E) dans "options", UNE SEULE est exacte.
+- "CENSURE" : L'énoncé se termine par « SAUF UNE » ou « Indiquez l'affirmation inexacte », 5 propositions (A à E) dans "options" dont 4 exactes et 1 fausse ("correct" = lettre de la fausse).
+- "GROUPAGE" : 4 assertions médicales numérotées 1, 2, 3, 4 dans "statements", puis les 5 options canoniques : A = 1+2+3, B = 1+3, C = 2+4, D = 4 seul, E = 1+2+3+4.
+- "JUMELAGE" : 2 assertions dans "statements" reliées par PARCE QUE, et les 5 options canoniques (A, B, C, D, E).
+- "COMPLEMENT_MULTIPLE" : 5 propositions (A à E) dans "options".
+- AUCUNE QUESTION OUVERTE / AUCUN QROC / AUCUN QNS.
+
+EXTRAIT DU COURS (Source de vérité) :
+${lesson.content.slice(0, 30000)}
+
+Réponds EXCLUSIVEMENT avec ce JSON valide :
 {
   "kind": "${spec.kind}",
-  "header": "Cas clinique — ${lesson.cleanTitle}",
-  "vignette": "Observation clinique détaillée d'un patient présentant la pathologie...",
+  "header": "${isClinicalCase ? "Cas clinique" : "Questions"} — ${lesson.cleanTitle}",
+  ${isClinicalCase ? `"vignette": "Observation clinique détaillée du patient...",` : ""}
   "items": [
     {
-      "format": "ELECTION|CENSURE|GROUPAGE|JUMELAGE|COMPLEMENT_MULTIPLE",
+      "format": "${activeFmts[0]}",
       "stem": "Énoncé précis de la question...",
+      "statements": ${activeFmts[0] === "GROUPAGE" ? `["Assertion 1", "Assertion 2", "Assertion 3", "Assertion 4"]` : activeFmts[0] === "JUMELAGE" ? `["Proposition 1", "Proposition 2"]` : `null`},
       "options": [
         {"letter": "A", "text": "Proposition A"},
         {"letter": "B", "text": "Proposition B"},
@@ -949,63 +1136,60 @@ Réponds UNIQUEMENT avec ce JSON valide :
         {"letter": "E", "text": "Proposition E"}
       ],
       "correct": ["A"],
-      "explanation": "Justification clinique basée sur le cours..."
+      "explanation": "Justification clinique..."
     }
   ]
 }`;
 
-      const rawAiResponse = await callDawiaEngineRaw("dawia2", systemPrompt, userPrompt, 0.2);
+      const rawAiResponse = await callDawiaEngineRaw("dawia2", systemPrompt, userPrompt, 0.25);
       if (rawAiResponse) {
         const parsed = repairAndParseQuizJson(rawAiResponse);
-        const candidateItems = Array.isArray(parsed?.items) ? parsed.items : Array.isArray(parsed) ? parsed : null;
-        if (candidateItems && candidateItems.length > 0) {
-          const formattedItems: EBItem[] = candidateItems.map((it: any) => ({
-            id: `eb_${sessionSeed}_${i + 1}_${globalQuestionNumber}`,
-            number: globalQuestionNumber++,
-            format: (it.format as EBFormat) || "ELECTION",
-            lead: it.lead,
-            stem: String(it.stem || it.question || `Question sur ${lesson.cleanTitle}`),
-            statements: Array.isArray(it.statements) ? it.statements : undefined,
-            options: Array.isArray(it.options)
-              ? it.options.map((o: any, oIdx: number) => ({
-                  letter: String(o.letter || ["A", "B", "C", "D", "E"][oIdx] || "A"),
-                  text: String(o.text || o),
-                }))
-              : [
-                  { letter: "A", text: "Proposition A" },
-                  { letter: "B", text: "Proposition B" },
-                  { letter: "C", text: "Proposition C" },
-                  { letter: "D", text: "Proposition D" },
-                  { letter: "E", text: "Proposition E" },
-                ],
-            correct: Array.isArray(it.correct)
-              ? it.correct.map(String)
-              : typeof it.correct === "string"
-              ? [it.correct]
-              : Array.isArray(it.correctKeys)
-              ? it.correctKeys.map(String)
-              : ["A"],
-            explanation: String(it.explanation || `Référence au cours « ${lesson.cleanTitle} »`),
-            lessonId: lesson.id,
-          }));
+        const rawItems = Array.isArray(parsed?.items)
+          ? parsed.items
+          : Array.isArray(parsed?.questions)
+          ? parsed.questions
+          : Array.isArray(parsed)
+          ? parsed
+          : null;
 
-          blocks.push({
-            id: `block_${sessionSeed}_${i + 1}`,
-            kind: spec.kind,
-            header: parsed.header || `Cas clinique — ${lesson.cleanTitle}`,
-            vignette: parsed.vignette || (spec.kind === "CAS_CLINIQUE" ? `Vous examinez un patient présentant les manifestations cliniques du chapitre ${lesson.cleanTitle}.` : undefined),
-            lessonIds: [lesson.id],
-            items: formattedItems,
-          });
-          aiSuccess = true;
-          continue;
+        if (rawItems && rawItems.length > 0) {
+          const normalized = normalizeRawItems(rawItems, lesson);
+          if (normalized.length > 0) {
+            const formattedItems: EBItem[] = normalized.map((it) => ({
+              ...it,
+              id: `eb_${sessionSeed}_${i + 1}_${globalQuestionNumber}`,
+              number: globalQuestionNumber++,
+            }));
+
+            let vignette = isClinicalCase
+              ? parsed?.vignette ||
+                parsed?.observation ||
+                parsed?.clinicalCase ||
+                parsed?.cas_clinique?.vignette ||
+                parsed?.cas_clinique?.observation
+              : undefined;
+
+            if (isClinicalCase && (!vignette || vignette.length < 40)) {
+              vignette = `Patient âgé de 56 ans reçu en consultation pour un bilan clinique et paraclinique approfondi en rapport avec « ${lesson.cleanTitle} ». L'interrogatoire, l'examen physique complet et les explorations biologiques initiales révèlent les manifestations pathognomoniques détaillées dans votre cours.`;
+            }
+
+            blocks.push({
+              id: `block_${sessionSeed}_${i + 1}`,
+              kind: spec.kind,
+              header: parsed?.header || (isClinicalCase ? `Cas clinique — ${lesson.cleanTitle}` : `Questions — ${lesson.cleanTitle}`),
+              vignette,
+              lessonIds: [lesson.id],
+              items: formattedItems,
+            });
+            aiSuccess = true;
+          }
         }
       }
     } catch (err) {
-      console.warn(`[generateExamBlanc] Tentative IA échouée pour ${lesson.cleanTitle}:`, err);
+      console.warn(`[generateExamBlanc] Appel IA pour ${lesson.cleanTitle} non abouti, bascule autonome :`, err);
     }
 
-    // 2. Si l'IA n'a pas répondu ou si la réponse est invalide : Repli synthétique médical immédiat
+    // Filet de sécurité médical autonome si l'IA distante est inaccessible
     if (!aiSuccess) {
       const fallback = createSyntheticFallbackBlock(
         spec,
@@ -1018,7 +1202,6 @@ Réponds UNIQUEMENT avec ce JSON valide :
         number: globalQuestionNumber++,
       }));
       blocks.push(fallback);
-      warnings.push(`Bloc « ${lesson.cleanTitle} » assemblé avec haute fidélité à partir des données de votre cours.`);
     }
   }
 

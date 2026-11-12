@@ -90,9 +90,26 @@ export function repairAndParseQuizJson(rawLlmOutput: string): any {
   try {
     const direct = JSON.parse(text);
     if (Array.isArray(direct) && direct.length > 0) return direct;
-    if (direct?.questions && Array.isArray(direct.questions)) return direct.questions;
-    if (direct?.qcm && Array.isArray(direct.qcm)) return direct.qcm;
-    if (isQuestionLikeObject(direct)) return [direct];
+    if (direct && typeof direct === "object") {
+      if (Array.isArray(direct.items) && direct.items.length > 0) return direct;
+      if (Array.isArray(direct.questions) && direct.questions.length > 0) return direct;
+      if (Array.isArray(direct.qcm) && direct.qcm.length > 0) return direct;
+      for (const k of ["bloc", "cas_clinique", "cas", "clinical_case", "data", "result", "payload"]) {
+        if (direct[k] && typeof direct[k] === "object") {
+          const sub = direct[k];
+          if (Array.isArray(sub.items) || Array.isArray(sub.questions) || Array.isArray(sub.qcm)) {
+            return {
+              ...direct,
+              ...sub,
+              items: sub.items || sub.questions || sub.qcm,
+              vignette: sub.vignette || direct.vignette || sub.observation || direct.observation,
+              header: sub.header || direct.header || sub.titre || direct.titre,
+            };
+          }
+        }
+      }
+      if (isQuestionLikeObject(direct)) return [direct];
+    }
   } catch {}
 
   // 3. Détection de l'indice de début du JSON ([ ou {)
@@ -117,10 +134,11 @@ export function repairAndParseQuizJson(rawLlmOutput: string): any {
     try {
       const parsedCandidate = JSON.parse(candidate);
       if (Array.isArray(parsedCandidate) && parsedCandidate.length > 0) return parsedCandidate;
-      if (parsedCandidate?.questions && Array.isArray(parsedCandidate.questions))
-        return parsedCandidate.questions;
-      if (parsedCandidate?.qcm && Array.isArray(parsedCandidate.qcm))
-        return parsedCandidate.qcm;
+      if (parsedCandidate && typeof parsedCandidate === "object") {
+        if (Array.isArray(parsedCandidate.items)) return parsedCandidate;
+        if (Array.isArray(parsedCandidate.questions)) return parsedCandidate;
+        if (Array.isArray(parsedCandidate.qcm)) return parsedCandidate;
+      }
     } catch {}
   }
 
@@ -222,9 +240,14 @@ export function repairAndParseQuizJson(rawLlmOutput: string): any {
 
   try {
     const fullParsed = JSON.parse(closedRepaired);
+    if (fullParsed && typeof fullParsed === "object") {
+      if (Array.isArray(fullParsed.items) && fullParsed.items.length > 0) return fullParsed;
+      if (Array.isArray(fullParsed.questions) && fullParsed.questions.length > 0) return fullParsed;
+      if (Array.isArray(fullParsed.qcm) && fullParsed.qcm.length > 0) return fullParsed;
+    }
     const fullArray = Array.isArray(fullParsed)
       ? fullParsed
-      : fullParsed?.questions || fullParsed?.qcm || [fullParsed];
+      : fullParsed?.items || fullParsed?.questions || fullParsed?.qcm || [fullParsed];
     if (Array.isArray(fullArray) && fullArray.length >= bestExtracted.length) {
       return fullArray;
     }
