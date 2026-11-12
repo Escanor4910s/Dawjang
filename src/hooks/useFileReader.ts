@@ -1,34 +1,65 @@
-import { useState } from 'react';
-import * as pdfjs from 'pdfjs-dist';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { ocrPdfDocument, ocrImageFile, ocrCanvas, isLikelyScannedText, OcrProgress, OcrOptions } from '@/lib/ocrEngine';
+// src/hooks/useFileReader.ts
+import { useState, useCallback } from "react";
+import * as pdfjs from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { supabase } from "@/integrations/supabase/client";
 
-// Worker PDF local servi directement par Vite (aucune dépendance réseau externe vers unpkg)
+// Worker PDF local servi directement par Vite (aucune dépendance réseau externe)
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-export interface FileReaderProgress {
+export interface ReadingProgress {
   stage: string;
+  pct?: number;
   page?: number;
   total?: number;
-  pct?: number;
 }
+export type FileReaderProgress = ReadingProgress;
 
 export interface ReadFileOptions {
-  onProgress?: (progress: FileReaderProgress) => void;
   mode?: "courses" | "annales";
   forceFullExtraction?: boolean;
   stripHandwrittenCorrections?: boolean;
+  onProgress?: (progress: ReadingProgress) => void;
 }
 
-export interface FileReaderResult {
-  content: string;
+export interface ReadFileResult {
   success: boolean;
+  content: string;
+  usedVision?: boolean;
+  pageCount?: number;
+  wordCount?: number;
   fileName?: string;
   fileType?: string;
-  wordCount?: number;
-  usedVision?: boolean;
   error?: string;
 }
+export type FileReaderResult = ReadFileResult;
+
+export const VISION_EXTRACTION_PROMPT_ANNALES = `Tu es un moteur d'extraction docimologique médicale haute précision.
+Ta mission est de transcrire INTÉGRALEMENT (100 % du texte, mot pour mot, sans jamais résumer ni omettre aucune question ou proposition) les pages d'examen photographiées ou scannées ci-jointes.
+
+RÈGLES IMPÉRATIVES :
+1. DÉ-CORRECTION (NETTOYAGE DES COPIES CORRIGÉES) :
+   - Ces photos d'examens contiennent souvent des corrections ajoutées à la main : lettres entourées au stylo, coches, propositions barrées/rayées, surlignages au stabilo, mentions "Vrai/Faux" ou notes manuscrites en marge.
+   - Ignore ces marques dans le corps de la question : restitue l'énoncé et TOUTES les propositions (A, B, C, D, E et/ou 1, 2, 3, 4, 5) exactement tels qu'ils ont été imprimés à l'origine, COMME SI LA FEUILLE D'EXAMEN ÉTAIT VIERGE.
+   - Ne supprime JAMAIS une proposition parce qu'elle a été barrée au stylo.
+   - Si une correction manuscrite est clairement identifiable, note-la uniquement à part sous la question sous la forme :
+     [CORRECTION_MANUSCRITE_DETECTEE: B, D]
+
+2. RESPECT ABSOLU DES FORMATS DE QCM :
+   - Conserve la numérotation exacte (1., Q1, Question 1...).
+   - Conserve les titres et vignettes des "Cas Cliniques" ou "Énoncé commun aux questions X à Y".
+   - Pour un GROUPAGE, garde bien la liste numérotée (1, 2, 3, 4, 5) ET les combinaisons lettrées (A: 1+2+3, B: 1+3, etc.).
+   - Pour un JUMELAGE, garde les deux affirmations séparées par "PARCE QUE" ou "CAR".
+
+3. IMAGES ET TABLEAUX ADJOINTS :
+   - Si un tableau biologique ou clinique est présent, retranscris-le intégralement en texte/Markdown avec toutes ses valeurs.
+   - Si une image médicale (radio, scanner, ECG, schéma) est présente sur la photo, insère :
+     [IMAGE_ADJOINTE: description détaillée des éléments visibles et des légendes].`;
+
+export const VISION_EXTRACTION_PROMPT_COURSES = `Tu es un moteur d'extraction de cours médicaux haute précision.
+Transcris INTÉGRALEMENT (100 % du texte, mot pour mot, sans jamais résumer ni tronquer) le contenu des pages fournies.
+- Conserve toute la hiérarchie des titres, sous-titres, listes à puces, valeurs numériques, posologies et classifications.
+- Retranscris tous les tableaux et schémas annotés sous forme structurée complète.`;
 
 /**
  * Nettoie et reconstitue les formules médicales, fractions sur 2 lignes
@@ -38,7 +69,6 @@ export function normalizeMedicalSlideText(raw: string): string {
   if (!raw) return "";
   return (
     raw
-      // Nettoyage des glyphes parasites et puces Wingdings (❑ ❖ ➢ etc. extraits en 'q', 'v', 'Ø')
       .replace(/[\uE000-\uF8FF]/g, "• ")
       .replace(/[❑▪►●♦]/g, "• ")
       .replace(/˃/g, ">")
@@ -47,747 +77,514 @@ export function normalizeMedicalSlideText(raw: string): string {
       .replace(/ﬂ/g, "fl")
       .replace(/\u00A0/g, " ")
       .replace(/[ \t]+/g, " ")
-      // Reconstitue la formule du VGM coupée sur 2 lignes
       .replace(
         /VGM\s*=\s*Ht\s*\(%\)\s*[x×]\s*10\s*=\s*80\s*[-–]\s*90\s*Femtolitres\s*(?:\n+|\s+)GR\s*\(en millions\)/gi,
         "VGM = [Ht (%) × 10] / GR (en millions) = 80 – 90 fL (Normocytaire : 80–90 fL ; Microcytaire < 80 fL ; Macrocytaire > 90–100 fL)"
       )
-      // Reconstitue la formule de la TCMH coupée sur 2 lignes
       .replace(
         /TCMH\s*=\s*(?:Hb|tb)\s*\(g\/dl\)\s*[x×]\s*10\s*=\s*27\s*[-–]\s*31\s*pg\s*(?:(?:\n+|\s+)GR\s*\(en millions\))?/gi,
         "TCMH = [Hb (g/dL) × 10] / GR (en millions) = 27 – 31 pg (Hypochrome si < 27 pg)"
       )
-      // Reconstitue la formule de la CCMH coupée sur 2 lignes
       .replace(
         /CCMH\s*=\s*(?:Hb|tb)\s*\(g\/dl\)\s*[x×]\s*100\s*=\s*32\s*[-–]\s*36\s*%\s*(?:(?:\n+|\s+)Ht\s*\(en %\))?/gi,
         "CCMH = [Hb (g/dL) × 100] / Ht (%) = 32 – 36 %"
       )
-      // Rattache les catégories démographiques à leur seuil d'Hb situé sur la ligne suivante
       .replace(
         /(Femmes enceintes et enfants|Nouveaux[\s-]nés|Chez l['’]homme|Chez la femme)\s*:?\s*\n+\s*[•-]?\s*(Hb\s*<\s*\d+(?:[.,]\d+)?\s*g\/dl)/gi,
         "$1 : $2"
       )
-      // Restaure le sens physiopathologique du 2,3-DPG lorsque les flèches PowerPoint ont disparu
       .replace(
         /2,3\s*DIPHOSPHOGLYCERATE\s*(?:\n+|\s+)[•-]?\s*affinité de l['’]\s*Hb pour l['’]\s*O2/gi,
         "Augmentation du 2,3-Diphosphoglycérate (2,3-DPG) intra-érythrocytaire → diminue l'affinité de l'Hb pour l'O2 (facilite la libération d'O2 aux tissus)"
       )
-      // Nettoie les lignes multiples excessives
       .replace(/\n{3,}/g, "\n\n")
       .trim()
   );
 }
 
-export const useFileReader = () => {
-  const [isReading, setIsReading] = useState(false);
-  const [readingProgress, setReadingProgress] = useState<FileReaderProgress | null>(null);
+// Convertit un Blob/File image en base64 pur (sans en-tête data:...)
+const blobToBase64 = (blob: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const res = String(reader.result || "");
+      resolve(res.includes(",") ? res.split(",")[1] : res);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 
-  const notifyProgress = (prog: FileReaderProgress, callback?: (p: FileReaderProgress) => void) => {
+// Normalise et redimensionne une image brute avant envoi Vision
+const imageFileToJpegBase64 = async (file: File, maxDim = 2200): Promise<string> => {
+  const bitmap = await createImageBitmap(file);
+  const ratio = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
+  canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D indisponible");
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const blob: Blob = await new Promise((res, rej) =>
+    canvas.toBlob((b) => (b ? res(b) : rej(new Error("Échec encodage JPEG"))), "image/jpeg", 0.86)
+  );
+  return blobToBase64(blob);
+};
+
+// Appelle l'Edge Function Supabase ou l'API Gemini Vision pour transcrire un lot d'images
+async function extractImagesWithVisionAI(
+  base64Jpegs: Array<{ pageNumber: number; base64: string }>,
+  mode: "courses" | "annales"
+): Promise<string> {
+  const systemPrompt =
+    mode === "annales" ? VISION_EXTRACTION_PROMPT_ANNALES : VISION_EXTRACTION_PROMPT_COURSES;
+
+  // 1. Clé Gemini (priorité aux clés configurées par l'utilisateur ou par env)
+  const apiKey =
+    (import.meta as any).env?.VITE_GEMINI_API_KEY ||
+    localStorage.getItem("dawjang_gemini_api_key");
+
+  if (apiKey) {
+    const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+    const parts: any[] = [
+      {
+        text: `${systemPrompt}\n\nTranscris INTÉGRALEMENT les ${base64Jpegs.length} page(s) suivante(s) dans l'ordre exact :`,
+      },
+    ];
+    for (const img of base64Jpegs) {
+      parts.push({ text: `\n--- PAGE ${img.pageNumber} ---` });
+      parts.push({
+        inline_data: {
+          mime_type: "image/jpeg",
+          data: img.base64,
+        },
+      });
+    }
+
+    for (const model of models) {
+      try {
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts }],
+              generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+            }),
+          }
+        );
+
+        if (resp.ok) {
+          const json = await resp.json();
+          const text =
+            json?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || "").join("\n") || "";
+          if (text.trim().length > 10) return text.trim();
+        }
+      } catch (err) {
+        console.warn(`[useFileReader] Essai modèle ${model} échoué:`, err);
+      }
+    }
+  }
+
+  // 2. Tentative via Supabase Edge Function
+  try {
+    const { data, error } = await supabase.functions.invoke("generate-quiz", {
+      body: {
+        action: "vision_ocr_extract",
+        mode,
+        systemPrompt,
+        images: base64Jpegs.map((img) => ({
+          pageNumber: img.pageNumber,
+          mimeType: "image/jpeg",
+          data: img.base64,
+        })),
+      },
+    });
+
+    if (!error && data?.extractedText && String(data.extractedText).trim().length > 20) {
+      return String(data.extractedText).trim();
+    }
+  } catch (err) {
+    console.warn("[useFileReader] Repli après appel Edge Function Vision:", err);
+  }
+
+  // 3. Filet de sécurité local : Tesseract.js (OCR WebAssembly dans le navigateur)
+  try {
+    const { createWorker } = await import("tesseract.js");
+    const worker = await createWorker("fra");
+    try {
+      const chunks: string[] = [];
+      for (const img of base64Jpegs) {
+        const { data } = await worker.recognize(`data:image/jpeg;base64,${img.base64}`);
+        if (data?.text) chunks.push(`--- PAGE ${img.pageNumber} ---\n${data.text.trim()}`);
+      }
+      return chunks.join("\n\n");
+    } finally {
+      await worker.terminate();
+    }
+  } catch (tessErr) {
+    console.warn("[useFileReader] Repli Tesseract échoué:", tessErr);
+    return "";
+  }
+}
+
+export function useFileReader() {
+  const [isReading, setIsReading] = useState(false);
+  const [readingProgress, setReadingProgress] = useState<ReadingProgress | null>(null);
+
+  const notifyProgress = (prog: ReadingProgress, callback?: (p: ReadingProgress) => void) => {
     setReadingProgress(prog);
     callback?.(prog);
   };
 
-  const readFile = async (
-    file: File,
-    optionsOrProgress?: ((progress: FileReaderProgress) => void) | ReadFileOptions
-  ): Promise<FileReaderResult> => {
-    const options: ReadFileOptions =
-      typeof optionsOrProgress === "function"
-        ? { onProgress: optionsOrProgress }
-        : optionsOrProgress || {};
-    const onProgress = options.onProgress;
-    setIsReading(true);
-    notifyProgress({ stage: `Lecture de ${file.name}...`, pct: 5 }, onProgress);
+  const readPdfHybrid = useCallback(
+    async (file: File, options: ReadFileOptions): Promise<ReadFileResult> => {
+      const mode = options.mode || "annales";
+      notifyProgress({ stage: `Ouverture du PDF : ${file.name}…`, pct: 5 }, options.onProgress);
 
-    try {
-      let content = '';
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+      const numPages = pdf.numPages;
+
+      const pageOutputs: string[] = new Array(numPages).fill("");
+      const pagesNeedingVision: Array<{ pageIndex: number; pageNumber: number; base64: string }> = [];
       let usedVision = false;
-      const name = String(file?.name || "").toLowerCase();
-      const type = file?.type || "";
 
-      if (type === 'application/pdf' || name.endsWith('.pdf')) {
-        // Lecture document PDF (avec bascule automatique OCR si scanné)
-        const res = await readPDF(file, options);
-        content = res.text;
-        usedVision = res.usedVision;
-      } else if (
-        name.match(/\.(png|jpe?g|webp|bmp)$/i) ||
-        type.startsWith('image/')
-      ) {
-        // Lecture image directe (scan / photo d'examen) par OCR
-        notifyProgress({ stage: `OCR de l'image ${file.name}...`, pct: 20 }, onProgress);
-        const res = await ocrImageFile(file, (p) => {
+      // Passe 1 : inspection page par page (texte natif vs photo scannée)
+      for (let i = 1; i <= numPages; i++) {
+        notifyProgress(
+          {
+            stage: `Inspection de la page ${i}/${numPages} (${file.name})…`,
+            pct: Math.round((i / numPages) * 40),
+            page: i,
+            total: numPages,
+          },
+          options.onProgress
+        );
+
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const rawPageText = textContent.items
+          .map((item: any) => ("str" in item ? item.str : ""))
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        const isScannedOrPhotoPage = rawPageText.length < 120;
+
+        if (!isScannedOrPhotoPage && !options.forceFullExtraction) {
+          // Reconstruction propre avec sauts de ligne basés sur la coordonnée Y
+          let lastY: number | null = null;
+          const lines: string[] = [];
+          let currentLine = "";
+          for (const item of textContent.items as any[]) {
+            if (!("str" in item)) continue;
+            const y = item.transform ? Math.round(item.transform[5]) : null;
+            if (lastY !== null && y !== null && Math.abs(y - lastY) > 4) {
+              if (currentLine.trim()) lines.push(currentLine.trim());
+              currentLine = item.str;
+            } else {
+              currentLine += (currentLine && !currentLine.endsWith(" ") ? " " : "") + item.str;
+            }
+            if (y !== null) lastY = y;
+          }
+          if (currentLine.trim()) lines.push(currentLine.trim());
+          pageOutputs[i - 1] = `--- PAGE ${i} ---\n${lines.join("\n")}`;
+        } else {
+          // Page photo / scan / copie corrigée -> Rendu Canvas haute résolution pour Vision IA
+          usedVision = true;
+          const viewport = page.getViewport({ scale: 2.2 });
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.floor(viewport.width);
+          canvas.height = Math.floor(viewport.height);
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            const blob: Blob = await new Promise((res, rej) =>
+              canvas.toBlob((b) => (b ? res(b) : rej(new Error("Canvas toBlob error"))), "image/jpeg", 0.85)
+            );
+            const base64 = await blobToBase64(blob);
+            pagesNeedingVision.push({ pageIndex: i - 1, pageNumber: i, base64 });
+          }
+        }
+      }
+
+      // Passe 2 : Extraction Vision par lots de 4 pages pour garantir 100 % d'extraction sans coupure
+      if (pagesNeedingVision.length > 0) {
+        const BATCH_SIZE = 4;
+        for (let b = 0; b < pagesNeedingVision.length; b += BATCH_SIZE) {
+          const batch = pagesNeedingVision.slice(b, b + BATCH_SIZE);
+          const firstP = batch[0].pageNumber;
+          const lastP = batch[batch.length - 1].pageNumber;
+          const pct = 40 + Math.round(((b + batch.length) / pagesNeedingVision.length) * 55);
+
           notifyProgress(
-            { stage: p.stage, page: p.page, total: p.total, pct: p.pct },
-            onProgress
+            {
+              stage:
+                mode === "annales"
+                  ? `Vision IA & Dé-correction manuscrite : pages ${firstP} à ${lastP}/${numPages} (${file.name})…`
+                  : `Extraction Vision 100 % : pages ${firstP} à ${lastP}/${numPages} (${file.name})…`,
+              pct,
+              page: lastP,
+              total: numPages,
+            },
+            options.onProgress
           );
-        }, {
-          stripHandwrittenCorrections: options.stripHandwrittenCorrections,
-        });
-        content = res.text;
-        usedVision = res.usedVision;
-      } else if (
-        name.endsWith('.docx') ||
-        type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ) {
-        // Lecture document Word moderne (.docx) via décompression XML JSZip
-        content = await readDocx(file);
-      } else if (
-        name.endsWith('.doc') ||
-        type === 'application/msword'
-      ) {
-        // Lecture document Word 97-2003 (.doc)
-        content = await readLegacyDoc(file);
-      } else if (
-        name.endsWith('.pptx') ||
-        name.endsWith('.ppt') ||
-        type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-        type === 'application/vnd.ms-powerpoint'
-      ) {
-        // Lecture présentations PowerPoint
-        content = await readPowerPoint(file);
-      } else if (name.endsWith('.odt') || type === 'application/vnd.oasis.opendocument.text') {
-        // Lecture document LibreOffice / OpenDocument (.odt)
-        content = await readOdt(file);
-      } else if (
-        name.endsWith('.txt') ||
-        name.endsWith('.md') ||
-        name.endsWith('.markdown') ||
-        name.endsWith('.csv') ||
-        name.endsWith('.rtf') ||
-        type.startsWith('text/')
-      ) {
-        // Fichiers texte brut / markdown / rtf
-        content = await readTextFile(file);
-        if (name.endsWith('.rtf')) {
-          content = stripRtf(content);
-        }
-      } else {
-        // Tentative de lecture en texte avec fallback
-        try {
-          content = await readTextFile(file);
-        } catch {
-          throw new Error(
-            `Format non supporté (${file.name}). Formats acceptés : PDF, Word (.docx, .doc), PowerPoint (.pptx), Texte (.txt, .md, .rtf, .odt).`
+
+          const extractedBatchText = await extractImagesWithVisionAI(
+            batch.map((x) => ({ pageNumber: x.pageNumber, base64: x.base64 })),
+            mode
           );
+
+          // Répartition dans l'ordre des pages
+          pageOutputs[batch[0].pageIndex] = extractedBatchText;
         }
       }
 
-      const trimmed = normalizeMedicalSlideText(content.trim());
-      if (!trimmed) {
-        throw new Error("Le fichier semble vide ou aucun texte n'a pu être extrait.");
-      }
-
-      const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+      const fullContent = normalizeMedicalSlideText(pageOutputs.filter(Boolean).join("\n\n").trim());
+      const wordCount = fullContent.split(/\s+/).filter(Boolean).length;
 
       return {
-        content: trimmed,
-        success: true,
+        success: fullContent.length >= 20,
+        content: fullContent,
+        usedVision,
+        pageCount: numPages,
+        wordCount,
         fileName: file.name,
         fileType: file.type,
-        wordCount,
-        usedVision,
+        error: fullContent.length < 20 ? "Aucune donnée lisible extraite du PDF" : undefined,
       };
-    } catch (error) {
-      console.error('Erreur lors de la lecture du fichier:', error);
-      return {
-        content: '',
-        success: false,
-        fileName: file.name,
-        error: error instanceof Error ? error.message : 'Erreur inconnue de lecture de document',
-      };
-    } finally {
-      setIsReading(false);
-      setReadingProgress(null);
-    }
-  };
+    },
+    []
+  );
 
-  // 1. Extraction PDF géométrique haute précision (préserve les mots scindés par kerning, les tableaux et les listes)
-  // Bascule automatiquement sur l'OCR haute fidélité si le document est scanné / image.
-  const readPDF = async (
-    file: File,
-    options?: ReadFileOptions
-  ): Promise<{ text: string; usedVision: boolean }> => {
-    const onProgress = options?.onProgress;
-    return new Promise((resolve, reject) => {
-      const fileReader = new FileReader();
-
-      fileReader.onload = async function () {
-        try {
-          const typedArray = new Uint8Array(this.result as ArrayBuffer);
-          const pdf = await pdfjs.getDocument({
-            data: typedArray,
-            verbosity: 0,
-          }).promise;
-
-          const slidesText: string[] = [];
-          let hadVision = false;
-
-          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-            const page = await pdf.getPage(pageNum);
-            const textContent = await page.getTextContent();
-
-            interface PositionedToken {
-              str: string;
-              x: number;
-              y: number;
-              width: number;
-            }
-
-            const tokens: PositionedToken[] = [];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            for (const rawItem of textContent.items as any[]) {
-              if (!rawItem || typeof rawItem.str !== "string") continue;
-              const rawStr = rawItem.str;
-              if (!rawStr.trim()) continue;
-              const tx = Array.isArray(rawItem.transform)
-                ? Number(rawItem.transform[4]) || 0
-                : 0;
-              const ty = Array.isArray(rawItem.transform)
-                ? Number(rawItem.transform[5]) || 0
-                : 0;
-              const w = Number(rawItem.width) || 0;
-              tokens.push({ str: rawStr, x: tx, y: ty, width: w });
-            }
-
-            // Tri vertical (Y décroissant en repère PDF), puis horizontal (X croissant)
-            tokens.sort((a, b) => {
-              if (Math.abs(b.y - a.y) > 4.5) {
-                return b.y - a.y;
-              }
-              return a.x - b.x;
-            });
-
-            // Regroupement par lignes partageant la même ordonnée Y (tolérance 4.5 pt)
-            const lines: Array<{ y: number; parts: PositionedToken[] }> = [];
-            for (const tk of tokens) {
-              const lastLine = lines[lines.length - 1];
-              if (lastLine && Math.abs(lastLine.y - tk.y) <= 4.5) {
-                lastLine.parts.push(tk);
-              } else {
-                lines.push({ y: tk.y, parts: [tk] });
-              }
-            }
-
-            const pageLines = lines
-              .map((line) => {
-                line.parts.sort((a, b) => a.x - b.x);
-                let assembled = "";
-                for (let idx = 0; idx < line.parts.length; idx++) {
-                  const curr = line.parts[idx];
-                  if (idx === 0) {
-                    assembled += curr.str;
-                  } else {
-                    const prev = line.parts[idx - 1];
-                    const gap = curr.x - (prev.x + prev.width);
-                    // Si les deux fragments sont collés (kerning interne d'un même mot), pas d'espace parasite
-                    if (prev.width > 0 && gap >= -2 && gap < 1.3 && !prev.str.endsWith(" ") && !curr.str.startsWith(" ")) {
-                      assembled += curr.str;
-                    } else if (gap > 28) {
-                      // Grand écart horizontal (colonne de tableau dans un PDF)
-                      assembled += "   " + curr.str;
-                    } else {
-                      assembled += " " + curr.str;
-                    }
-                  }
-                }
-                return assembled.replace(/[ \t]{2,}/g, " ").trim();
-              })
-              .filter(Boolean);
-
-            let pageText = pageLines.join("\n").trim();
-
-            // Condition de bascule OCR / Vision page par page :
-            // Si la page a moins de 120 caractères numériques (photo d'examen, scan inséré dans un PDF hybride)
-            if (pageText.length < 120 || (options?.forceFullExtraction && pageText.length < 200)) {
-              try {
-                const viewport = page.getViewport({ scale: 2.2 });
-                const canvas = document.createElement("canvas");
-                canvas.width = Math.floor(viewport.width);
-                canvas.height = Math.floor(viewport.height);
-                const ctx = canvas.getContext("2d", { willReadFrequently: true });
-                if (ctx) {
-                  ctx.fillStyle = "#ffffff";
-                  ctx.fillRect(0, 0, canvas.width, canvas.height);
-                  await page.render({ canvasContext: ctx, viewport }).promise;
-                  const ocrRes = await ocrCanvas(canvas, {
-                    scale: 2.2,
-                    stripHandwrittenCorrections: options?.stripHandwrittenCorrections,
-                  });
-                  if (ocrRes.text && ocrRes.text.length > pageText.length) {
-                    pageText = ocrRes.text;
-                    if (ocrRes.usedVision) hadVision = true;
-                  }
-                }
-              } catch (err) {
-                console.warn(`[FileReader] Fallback page OCR ${pageNum} :`, err);
-              }
-            }
-
-            if (pageText.length > 0) {
-              slidesText.push(`--- Diapositive / Page ${pageNum} ---\n` + pageText);
-            }
-          }
-
-          const finalOutput = slidesText.join("\n\n").trim();
-
-          // Détection automatique : Si le PDF ne contient aucun texte ou est un scan
-          if (!finalOutput || isLikelyScannedText(finalOutput, pdf.numPages)) {
-            console.log(
-              `[FileReader] Document scanné / image détecté (${pdf.numPages} pages, texte extrait quasi-nul). Activation de l'OCR automatique...`
-            );
-            try {
-              onProgress?.({
-                stage: `Scan détecté : transcription OCR de ${file.name}...`,
-                page: 1,
-                total: pdf.numPages,
-                pct: 10,
-              });
-              const ocrResult = await ocrPdfDocument(file, (p) => {
-                onProgress?.({
-                  stage: `OCR automatique : page ${p.page}/${p.total}...`,
-                  page: p.page,
-                  total: p.total,
-                  pct: p.pct,
-                });
-              }, {
-                scale: 2.2,
-                stripHandwrittenCorrections: options?.stripHandwrittenCorrections,
-              });
-              resolve({ text: ocrResult.text, usedVision: ocrResult.usedVision });
-              return;
-            } catch (ocrErr: any) {
-              reject(
-                new Error(
-                  `Document scanné détecté mais l'OCR n'a pas pu extraire le texte : ${ocrErr?.message || "Erreur OCR"}`
-                )
-              );
-              return;
-            }
-          }
-
-          resolve({ text: finalOutput, usedVision: hadVision });
-        } catch (error) {
-          reject(new Error(`Erreur lors de l'analyse du PDF: ${error instanceof Error ? error.message : "Inconnue"}`));
-        }
-      };
-
-      fileReader.onerror = () => reject(new Error("Erreur de lecture du flux binaire PDF"));
-      fileReader.readAsArrayBuffer(file);
-    });
-  };
-
-  // 2. Extraction Word .docx (décompression XML complète : paragraphes, tableaux, en-têtes et notes)
+  // Extraction Word moderne .docx via JSZip
   const readDocx = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const fileReader = new FileReader();
-
-      fileReader.onload = async function () {
-        try {
-          const arrayBuffer = this.result as ArrayBuffer;
-          const JSZip = (await import('jszip')).default;
-          const zip = await JSZip.loadAsync(arrayBuffer);
-
-          const xmlFilesToRead: string[] = [];
-          if (zip.file('word/document.xml')) xmlFilesToRead.push('word/document.xml');
-          zip.forEach((relPath) => {
-            if (/^word\/(header\d+|footer\d+|footnotes|endnotes)\.xml$/i.test(relPath)) {
-              xmlFilesToRead.push(relPath);
-            }
-          });
-
-          if (xmlFilesToRead.length === 0) {
-            throw new Error("Structure Word invalide (fichier word/document.xml introuvable).");
-          }
-
-          const decodeXmlEntities = (str: string) =>
-            str
-              .replace(/&amp;/g, '&')
-              .replace(/&lt;/g, '<')
-              .replace(/&gt;/g, '>')
-              .replace(/&quot;/g, '"')
-              .replace(/&apos;/g, "'");
-
-          const allSections: string[] = [];
-
-          for (const xmlPath of xmlFilesToRead) {
-            const xmlContent = await zip.file(xmlPath)?.async('text');
-            if (!xmlContent) continue;
-
-            // Extraction fidèle paragraphe par paragraphe (<w:p>) en préservant les sauts de ligne (<w:br/>, <w:tab/>)
-            const paragraphMatches = xmlContent.match(/<w:p[\s>][\s\S]*?<\/w:p>/g) || [];
-            const lines: string[] = [];
-
-            for (const pXml of paragraphMatches) {
-              const withTabsAndBreaks = pXml
-                .replace(/<w:tab\b[^>]*\/>/g, ' \t ')
-                .replace(/<w:(?:br|cr)\b[^>]*\/>/g, '\n');
-              const textMatches = Array.from(
-                withTabsAndBreaks.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)
-              );
-              if (textMatches.length > 0) {
-                const lineText = decodeXmlEntities(
-                  textMatches.map((m) => m[1]).join('')
-                )
-                  .replace(/[ \t]+/g, ' ')
-                  .trim();
-                if (lineText) lines.push(lineText);
-              }
-            }
-
-            if (lines.length > 0) {
-              allSections.push(lines.join('\n'));
-            } else {
-              // Fallback universel sur toutes les balises <w:t>
-              const rawMatches = Array.from(
-                xmlContent.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)
-              );
-              const fallbackText = decodeXmlEntities(
-                rawMatches.map((m) => m[1]).join(' ')
-              ).trim();
-              if (fallbackText) allSections.push(fallbackText);
-            }
-          }
-
-          const fullText = allSections.join('\n\n');
-          if (!fullText.trim()) {
-            reject(new Error("Le document Word ne contient aucun texte exploitable."));
-          } else {
-            resolve(fullText.trim());
-          }
-        } catch (error) {
-          reject(new Error(`Erreur lecture Word (.docx): ${error instanceof Error ? error.message : 'Inconnue'}`));
-        }
-      };
-
-      fileReader.onerror = () => reject(new Error('Erreur de lecture du fichier Word'));
-      fileReader.readAsArrayBuffer(file);
-    });
+    const arrayBuffer = await file.arrayBuffer();
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const docXml = await zip.file("word/document.xml")?.async("text");
+    if (!docXml) throw new Error("Document Word corrompu ou illisible.");
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(docXml, "text/xml");
+    const paragraphs = xml.getElementsByTagName("w:p");
+    const lines: string[] = [];
+    for (let i = 0; i < paragraphs.length; i++) {
+      const texts = paragraphs[i].getElementsByTagName("w:t");
+      let line = "";
+      for (let j = 0; j < texts.length; j++) {
+        line += texts[j].textContent || "";
+      }
+      if (line.trim()) lines.push(line.trim());
+    }
+    return lines.join("\n\n");
   };
 
-  // 3. Extraction Word .doc binaire legacy (supporte les .docx renommés, RTF, CP1252 et Unicode UTF-16LE)
+  // Extraction Word 97-2003 binaire (.doc)
   const readLegacyDoc = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const fileReader = new FileReader();
-      fileReader.onload = async function () {
-        try {
-          const arrayBuffer = this.result as ArrayBuffer;
-          const bytes = new Uint8Array(arrayBuffer);
-
-          // Cas A : Fichier .docx (archive ZIP PK\x03\x04) enregistré avec l'extension .doc
-          if (bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b) {
-            try {
-              const docxText = await readDocx(file);
-              if (docxText && docxText.trim().length > 20) {
-                resolve(docxText);
-                return;
-              }
-            } catch {
-              // Continuer sur l'analyse binaire
-            }
-          }
-
-          // Cas B : Fichier RTF enregistré avec l'extension .doc
-          const asciiHeader = String.fromCharCode(...bytes.slice(0, 12));
-          if (asciiHeader.startsWith('{\\rtf')) {
-            const dec = new TextDecoder('windows-1252');
-            const rtfClean = stripRtf(dec.decode(bytes));
-            if (rtfClean.length > 20) {
-              resolve(rtfClean);
-              return;
-            }
-          }
-
-          // Cas C : Extraction hybride Windows-1252 (8 bits) + UTF-16LE (16 bits) pour Word 97-2003 OLE2
-          const win1252Decoder = new TextDecoder('windows-1252');
-          const chunks8Bit: string[] = [];
-          let runStart = -1;
-
-          for (let i = 0; i < bytes.length; i++) {
-            const b = bytes[i];
-            const isPrintableWin1252 =
-              (b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13 || b >= 160;
-            if (isPrintableWin1252) {
-              if (runStart === -1) runStart = i;
-            } else {
-              if (runStart !== -1 && i - runStart >= 5) {
-                const segment = win1252Decoder.decode(bytes.subarray(runStart, i)).trim();
-                if (/[a-zA-ZÀ-ÿ]{3,}/.test(segment) && !/^(?:Root Entry|WordDocument|CompObj|SummaryInformation|Microsoft Word)/i.test(segment)) {
-                  chunks8Bit.push(segment);
-                }
-              }
-              runStart = -1;
-            }
-          }
-
-          // Extraction UTF-16LE (caractères stockés sur 2 octets dans les flux Word Unicode)
-          const chunks16Bit: string[] = [];
-          let uChars: number[] = [];
-          for (let i = 0; i + 1 < bytes.length; i += 2) {
-            const code = bytes[i] | (bytes[i + 1] << 8);
-            const isPrintableUtf16 =
-              (code >= 32 && code <= 126) ||
-              code === 9 ||
-              code === 10 ||
-              code === 13 ||
-              (code >= 160 && code <= 0x024f) ||
-              (code >= 0x2010 && code <= 0x203a);
-            if (isPrintableUtf16) {
-              uChars.push(code);
-            } else {
-              if (uChars.length >= 6) {
-                const seg = String.fromCharCode(...uChars).trim();
-                if (/[a-zA-ZÀ-ÿ]{3,}/.test(seg) && !/^(?:Root Entry|WordDocument|Normal\.dot|Microsoft)/i.test(seg)) {
-                  chunks16Bit.push(seg);
-                }
-              }
-              uChars = [];
-            }
-          }
-
-          const combined = [...chunks8Bit, ...chunks16Bit]
-            .join('\n')
-            .replace(/\r\n|\r/g, '\n')
-            .replace(/[ \t]{2,}/g, ' ')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim();
-
-          if (combined.length > 40) {
-            resolve(combined);
-          } else {
-            reject(
-              new Error(
-                "Le fichier .doc est dans un ancien format binaire difficilement lisible. Veuillez l'enregistrer au format .docx ou .pdf pour une extraction parfaite."
-              )
-            );
-          }
-        } catch (err) {
-          reject(err);
-        }
-      };
-      fileReader.onerror = () => reject(new Error('Erreur de lecture .doc'));
-      fileReader.readAsArrayBuffer(file);
-    });
-  };
-
-  // 4. Extraction OpenDocument .odt
-  const readOdt = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const fileReader = new FileReader();
-      fileReader.onload = async function () {
-        try {
-          const arrayBuffer = this.result as ArrayBuffer;
-          const JSZip = (await import('jszip')).default;
-          const zip = await JSZip.loadAsync(arrayBuffer);
-          const contentXml = await zip.file('content.xml')?.async('text');
-
-          if (!contentXml) {
-            throw new Error("Structure OpenDocument invalide.");
-          }
-
-          const parser = new DOMParser();
-          const xmlDoc = parser.parseFromString(contentXml, 'application/xml');
-          const paragraphs = xmlDoc.getElementsByTagName('text:p');
-          const lines: string[] = [];
-
-          for (let i = 0; i < paragraphs.length; i++) {
-            const t = paragraphs[i].textContent?.trim();
-            if (t) lines.push(t);
-          }
-
-          resolve(lines.join('\n\n'));
-        } catch (e) {
-          reject(e);
-        }
-      };
-      fileReader.onerror = () => reject(new Error('Erreur de lecture .odt'));
-      fileReader.readAsArrayBuffer(file);
-    });
-  };
-
-  // 5. Extraction PowerPoint (.pptx moderne XML et .ppt binaire legacy 97-2003)
-  const extractLegacyPptBinary = (bytes: Uint8Array): string => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const decoder = new TextDecoder("windows-1252");
     const textChunks: string[] = [];
+    let runStart = -1;
     const len = bytes.length;
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-
-    // Parsing des records PowerPoint binaires :
-    // Chaque record possède un en-tête de 8 octets :
-    // - 2 octets : recVer (4 bits) + recInstance (12 bits)
-    // - 2 octets : recType (uint16 little-endian)
-    // - 4 octets : recLen (uint32 little-endian)
-    // RT_TextCharsAtom = 0x0F9E (4000) -> texte UTF-16LE
-    // RT_TextBytesAtom = 0x0FBA (4008) -> texte ANSI/Latin1
-    for (let i = 0; i + 8 <= len; i++) {
-      const recType = view.getUint16(i + 2, true);
-      const recLen = view.getUint32(i + 4, true);
-
-      if (recType === 4000 && recLen > 0 && recLen < 100000 && i + 8 + recLen <= len) {
-        // UTF-16LE
-        const chars: string[] = [];
-        for (let j = 0; j + 1 < recLen; j += 2) {
-          chars.push(String.fromCharCode(view.getUint16(i + 8 + j, true)));
-        }
-        const str = chars.join('').replace(/\r\n|\r/g, '\n').trim();
-        if (str.length >= 3 && /[a-zA-ZÀ-ÿ]/.test(str)) {
-          if (!/^(?:cliquez pour modifier le style|modifiez le style du titre|modifiez les styles du texte|deuxième niveau|espace réservé)/i.test(str)) {
-            textChunks.push(str);
+    for (let i = 0; i < len; i++) {
+      const b = bytes[i];
+      const isPrintable = (b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13 || b >= 160;
+      if (isPrintable) {
+        if (runStart === -1) runStart = i;
+      } else {
+        if (runStart !== -1 && i - runStart >= 12) {
+          const seg = decoder.decode(bytes.subarray(runStart, i)).trim();
+          if (/[a-zA-ZÀ-ÿ]{3,}/.test(seg) && !/^(?:Root Entry|WordDocument|SummaryInformation)/i.test(seg)) {
+            textChunks.push(seg);
           }
-          i += 7 + recLen;
         }
-      } else if (recType === 4008 && recLen > 0 && recLen < 100000 && i + 8 + recLen <= len) {
-        // Latin1 / Windows-1252
-        const latinChars: string[] = [];
-        for (let j = 0; j < recLen; j++) {
-          latinChars.push(String.fromCharCode(bytes[i + 8 + j]));
-        }
-        const str = latinChars.join('').replace(/\r\n|\r/g, '\n').trim();
-        if (str.length >= 3 && /[a-zA-ZÀ-ÿ]/.test(str)) {
-          if (!/^(?:cliquez pour modifier le style|modifiez le style du titre|modifiez les styles du texte|deuxième niveau|espace réservé)/i.test(str)) {
-            textChunks.push(str);
-          }
-          i += 7 + recLen;
-        }
+        runStart = -1;
       }
     }
-
-    // Fallback supplémentaire si aucun record strict n'a été trouvé : balayage des chaînes continues
-    if (textChunks.length === 0) {
-      const win1252Decoder = new TextDecoder('windows-1252');
-      let runStart = -1;
-      for (let i = 0; i < len; i++) {
-        const b = bytes[i];
-        const isPrintable = (b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13 || b >= 160;
-        if (isPrintable) {
-          if (runStart === -1) runStart = i;
-        } else {
-          if (runStart !== -1 && i - runStart >= 8) {
-            const seg = win1252Decoder.decode(bytes.subarray(runStart, i)).trim();
-            if (/[a-zA-ZÀ-ÿ]{3,}/.test(seg) && !/^(?:Root Entry|PowerPoint Document|Current User|SummaryInformation)/i.test(seg)) {
-              textChunks.push(seg);
-            }
-          }
-          runStart = -1;
-        }
-      }
-    }
-
-    return textChunks.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+    return textChunks.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
   };
 
+  // Extraction PowerPoint moderne (.pptx)
   const readPowerPoint = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const fileReader = new FileReader();
-
-      fileReader.onload = async function () {
-        try {
-          const arrayBuffer = this.result as ArrayBuffer;
-          const bytes = new Uint8Array(arrayBuffer);
-
-          // Cas A : Fichier .pptx moderne (archive ZIP PK\x03\x04)
-          const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
-
-          if (isZip) {
-            try {
-              const JSZip = (await import('jszip')).default;
-              const zip = await JSZip.loadAsync(arrayBuffer);
-
-              let fullText = '';
-              const slideFiles: string[] = [];
-
-              zip.forEach((relativePath) => {
-                if (relativePath.match(/ppt\/slides\/slide\d+\.xml$/)) {
-                  slideFiles.push(relativePath);
-                }
-              });
-
-              slideFiles.sort((a, b) => {
-                const numA = parseInt(a.match(/slide(\d+)\.xml$/)?.[1] || '0');
-                const numB = parseInt(b.match(/slide(\d+)\.xml$/)?.[1] || '0');
-                return numA - numB;
-              });
-
-              for (const slidePath of slideFiles) {
-                const slideContent = await zip.file(slidePath)?.async('text');
-                if (slideContent) {
-                  const parser = new DOMParser();
-                  const xmlDoc = parser.parseFromString(slideContent, 'text/xml');
-                  const textElements = xmlDoc.getElementsByTagName('a:t');
-                  const slideTexts: string[] = [];
-
-                  for (let i = 0; i < textElements.length; i++) {
-                    const text = textElements[i].textContent?.trim();
-                    if (text) slideTexts.push(text);
-                  }
-
-                  if (slideTexts.length > 0) {
-                    const slideNum = slidePath.match(/slide(\d+)\.xml$/)?.[1];
-                    fullText += `\n\n--- Diapositive ${slideNum} ---\n${slideTexts.join('\n')}`;
-                  }
-                }
-              }
-
-              if (fullText.trim().length > 30) {
-                resolve(fullText.trim());
-                return;
-              }
-            } catch {
-              // Continuer vers l'analyseur binaire si JSZip échoue
-            }
-          }
-
-          // Cas B : Fichier .ppt binaire legacy (PowerPoint 97-2003 OLE2)
-          const legacyText = extractLegacyPptBinary(bytes);
-          if (legacyText && legacyText.length > 30) {
-            resolve(legacyText);
-          } else {
-            reject(new Error("Aucun texte n'a pu être extrait du PowerPoint. Si vos diapositives sont des images scannées sans texte, veuillez les exporter en PDF avec OCR."));
-          }
-        } catch (error) {
-          reject(new Error(`Erreur analyse PowerPoint: ${error instanceof Error ? error.message : 'Inconnue'}`));
-        }
-      };
-
-      fileReader.onerror = () => reject(new Error('Erreur de lecture du fichier PowerPoint'));
-      fileReader.readAsArrayBuffer(file);
+    const arrayBuffer = await file.arrayBuffer();
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    let fullText = "";
+    const slideFiles: string[] = [];
+    zip.forEach((path) => {
+      if (path.match(/ppt\/slides\/slide\d+\.xml$/)) slideFiles.push(path);
     });
-  };
-
-  // 6. Extraction Texte / Markdown
-  const readTextFile = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const fileReader = new FileReader();
-      fileReader.onload = function () {
-        const text = this.result as string;
-        if (!text.trim()) {
-          reject(new Error('Le fichier texte est vide'));
-        } else {
-          resolve(text);
+    slideFiles.sort((a, b) => {
+      const numA = parseInt(a.match(/slide(\d+)\.xml$/)?.[1] || "0", 10);
+      const numB = parseInt(b.match(/slide(\d+)\.xml$/)?.[1] || "0", 10);
+      return numA - numB;
+    });
+    for (const path of slideFiles) {
+      const content = await zip.file(path)?.async("text");
+      if (content) {
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(content, "text/xml");
+        const texts = xml.getElementsByTagName("a:t");
+        const slideLines: string[] = [];
+        for (let i = 0; i < texts.length; i++) {
+          const t = texts[i].textContent?.trim();
+          if (t) slideLines.push(t);
         }
-      };
-      fileReader.onerror = () => reject(new Error('Erreur de lecture du fichier texte'));
-      try {
-        fileReader.readAsText(file, 'UTF-8');
-      } catch {
-        fileReader.readAsText(file, 'ISO-8859-1');
+        if (slideLines.length > 0) {
+          const slideNum = path.match(/slide(\d+)\.xml$/)?.[1];
+          fullText += `\n\n--- Diapositive ${slideNum} ---\n${slideLines.join("\n")}`;
+        }
       }
-    });
+    }
+    return fullText.trim();
   };
 
-  // Nettoyage basique RTF
-  const stripRtf = (rtf: string): string => {
-    return rtf
-      .replace(/\\par[d]?/g, '\n')
-      .replace(/\{\*?\\[^{}]+;?\}|\\([A-Za-z]+[-?\d]* ?|.)/g, '')
-      .replace(/[\r\n]+/g, '\n')
-      .trim();
-  };
+  const readFile = useCallback(
+    async (
+      file: File,
+      optionsOrProgress: ((progress: ReadingProgress) => void) | ReadFileOptions = {}
+    ): Promise<ReadFileResult> => {
+      const options: ReadFileOptions =
+        typeof optionsOrProgress === "function"
+          ? { onProgress: optionsOrProgress }
+          : optionsOrProgress || {};
+
+      setIsReading(true);
+      notifyProgress({ stage: `Lecture de ${file.name}…`, pct: 5 }, options.onProgress);
+
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      const mode = options.mode || "annales";
+
+      try {
+        // 1. Fichiers PDF (hybride page par page + vision automatique)
+        if (ext === "pdf" || file.type === "application/pdf") {
+          const res = await readPdfHybrid(file, options);
+          setIsReading(false);
+          setReadingProgress(null);
+          return res;
+        }
+
+        // 2. Photos d'examens ou de cours (.png, .jpg, .jpeg, .webp)
+        if (["png", "jpg", "jpeg", "webp"].includes(ext) || file.type.startsWith("image/")) {
+          notifyProgress(
+            {
+              stage:
+                mode === "annales"
+                  ? `Lecture photo & nettoyage des corrections : ${file.name}…`
+                  : `Extraction visuelle complète : ${file.name}…`,
+              pct: 35,
+            },
+            options.onProgress
+          );
+          const base64 = await imageFileToJpegBase64(file);
+          notifyProgress(
+            { stage: `Transcription IA 100 % en cours (${file.name})…`, pct: 75 },
+            options.onProgress
+          );
+          const text = await extractImagesWithVisionAI([{ pageNumber: 1, base64 }], mode);
+          const normalized = normalizeMedicalSlideText(text.trim());
+          const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+          setIsReading(false);
+          setReadingProgress(null);
+          return {
+            success: normalized.length >= 20,
+            content: normalized,
+            usedVision: true,
+            pageCount: 1,
+            wordCount,
+            fileName: file.name,
+            fileType: file.type,
+            error: normalized.length < 20 ? "Photo illisible ou floue" : undefined,
+          };
+        }
+
+        // 3. Documents Word (.docx)
+        if (ext === "docx") {
+          notifyProgress({ stage: `Extraction intégrale Word : ${file.name}…`, pct: 40 }, options.onProgress);
+          const text = normalizeMedicalSlideText(await readDocx(file));
+          setIsReading(false);
+          setReadingProgress(null);
+          return {
+            success: text.length >= 20,
+            content: text,
+            usedVision: false,
+            wordCount: text.split(/\s+/).filter(Boolean).length,
+            fileName: file.name,
+            fileType: file.type,
+          };
+        }
+
+        // 4. Documents Word 97-2003 (.doc)
+        if (ext === "doc") {
+          notifyProgress({ stage: `Extraction binaire Word 97-2003 : ${file.name}…`, pct: 40 }, options.onProgress);
+          const text = normalizeMedicalSlideText(await readLegacyDoc(file));
+          setIsReading(false);
+          setReadingProgress(null);
+          return {
+            success: text.length >= 20,
+            content: text,
+            usedVision: false,
+            wordCount: text.split(/\s+/).filter(Boolean).length,
+            fileName: file.name,
+            fileType: file.type,
+          };
+        }
+
+        // 5. Présentations PowerPoint (.pptx)
+        if (ext === "pptx" || ext === "ppt") {
+          notifyProgress({ stage: `Extraction diapositives PowerPoint : ${file.name}…`, pct: 40 }, options.onProgress);
+          const text = normalizeMedicalSlideText(await readPowerPoint(file));
+          setIsReading(false);
+          setReadingProgress(null);
+          return {
+            success: text.length >= 20,
+            content: text,
+            usedVision: false,
+            wordCount: text.split(/\s+/).filter(Boolean).length,
+            fileName: file.name,
+            fileType: file.type,
+          };
+        }
+
+        // 6. Fichiers texte brut / markdown / rtf
+        notifyProgress({ stage: `Lecture du fichier texte : ${file.name}…`, pct: 60 }, options.onProgress);
+        const rawText = await file.text();
+        const text = normalizeMedicalSlideText(rawText);
+        setIsReading(false);
+        setReadingProgress(null);
+        return {
+          success: text.length >= 20,
+          content: text,
+          usedVision: false,
+          wordCount: text.split(/\s+/).filter(Boolean).length,
+          fileName: file.name,
+          fileType: file.type,
+        };
+      } catch (err: any) {
+        setIsReading(false);
+        setReadingProgress(null);
+        return {
+          success: false,
+          content: "",
+          fileName: file.name,
+          fileType: file.type,
+          error: err?.message || "Erreur lors de l'extraction du fichier",
+        };
+      }
+    },
+    [readPdfHybrid]
+  );
 
   return {
     readFile,
     isReading,
     readingProgress,
   };
-};
+}
 
 export default useFileReader;
