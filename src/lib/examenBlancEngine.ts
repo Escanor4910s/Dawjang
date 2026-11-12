@@ -1,10 +1,9 @@
 // src/lib/examenBlancEngine.ts
 // ============================================================================
-// MOTEUR UNIVERSEL EXAMEN BLANC — Analyse Docimologique, Probabilités & Génération
+// MOTEUR DOCIMOLOGIQUE UNIVERSEL — Passe Unique Linéaire, Isolation d'EC/Matière,
+// Attribution Sémantique Profonde des Leçons & Génération Calibrée UCAD
 // ============================================================================
 import { supabase } from "@/integrations/supabase/client";
-import { callDawiaEngineRaw } from "@/lib/dawiaQcmEngine";
-import { repairAndParseQuizJson } from "@/lib/jsonRepair";
 
 export type EBFormat =
   | "ELECTION"
@@ -14,8 +13,7 @@ export type EBFormat =
   | "COMPLEMENT_MULTIPLE"
   | "QNS";
 
-export const EB_FORMAT_LABELS: Record<EBFormat | "CAS_CLINIQUE", string> = {
-  CAS_CLINIQUE: "Cas clinique",
+export const EB_FORMAT_LABELS: Record<EBFormat, string> = {
   ELECTION: "Élection (1 juste)",
   CENSURE: "Censure (1 fausse)",
   GROUPAGE: "Groupage (1, 2, 3…)",
@@ -66,7 +64,7 @@ export interface EBItem {
 
 export interface EBBlock {
   id: string;
-  kind: "CAS_CLINIQUE" | "STANDALONE" | "ISOLE";
+  kind: "CAS_CLINIQUE" | "STANDALONE";
   header?: string;
   vignette?: string;
   lessonIds: string[];
@@ -75,11 +73,10 @@ export interface EBBlock {
 
 export interface BlueprintSpec {
   id: string;
-  kind: "CAS_CLINIQUE" | "STANDALONE" | "ISOLE";
+  kind: "CAS_CLINIQUE" | "STANDALONE";
   lessonIds: string[];
   formats: EBFormat[];
 }
-export type BlueprintBlock = BlueprintSpec;
 
 export interface ExamAnalysisItem {
   examId: string;
@@ -92,7 +89,6 @@ export interface ExamAnalysisItem {
   lessonQcmCounts: Record<string, { blocks: number; qcm: number; weak?: boolean }>;
   audited: boolean;
 }
-export type ExamAnalysis = ExamAnalysisItem;
 
 export interface LessonStat {
   lessonId: string;
@@ -160,29 +156,29 @@ export interface ExamSession {
 
 const SESSIONS_STORAGE_KEY = "dawjang_eb_sessions_v2";
 
-export const EXAMEN_BLANC_SYSTEM_PROMPT = `Tu es un Professeur Titulaire de Faculté de Médecine, expert en docimologie médicale (épreuves d'Élection, Censure, Groupage, Jumelage, Compléments multiples et Cas cliniques progressifs).
+export const EXAMEN_BLANC_SYSTEM_PROMPT = `Tu es un Professeur Titulaire de Faculté de Médecine (UCAD), expert en docimologie médicale (Élection, Censure, Groupage, Jumelage, Compléments multiples et Cas cliniques progressifs).
 Unité d'Enseignement (UE) : {{UE}}
 Matière évaluée : {{SUBJECT}}
 Quota moyen de leçons par épreuve : {{QUOTA}}
 
 RÈGLES DOCIMOLOGIQUES STRICTES :
 1. EXCLUSIVITÉ DE LA MATIÈRE : Seule la matière "{{SUBJECT}}" est évaluée. Toute question d'une autre matière de l'UE est exclue.
-2. ATTRIBUTION STRICTE DES LEÇONS : Une leçon est considérée comme "sortie" dans une épreuve UNIQUEMENT si elle constitue le sujet central du cas clinique ou de l'énoncé de la question (stem). Une simple mention dans un distracteur (proposition A, B, C, D, E) ne compte JAMAIS comme une sortie de leçon.
-3. FIDÉLITÉ AU COURS À 100 % : Lors de la génération, chaque fait clinique, seuil biologique, critère diagnostique ou schéma thérapeutique doit provenir exclusivement du texte intégral des leçons sélectionnées.
-4. STRUCTURATION EN BLOCS : Chaque bloc de Cas Clinique doit impérativement comporter une vignette clinique narrative claire et une suite de questions médicales de format QCM avec 5 propositions (A, B, C, D, E), la clé de correction exacte et sa justification médicale issue du cours.`;
+2. ATTRIBUTION STRICTE DES LEÇONS : Une leçon est considérée comme "sortie" UNIQUEMENT si elle constitue le sujet central du cas clinique ou de l'énoncé de la question (stem). Une simple mention dans un distracteur (proposition A-E) ne compte JAMAIS.
+3. FIDÉLITÉ AU COURS À 100 % : Chaque fait clinique, seuil biologique, critère diagnostique ou traitement doit provenir exclusivement des leçons sélectionnées.`;
 
 export const fillSystemPrompt = (ue: string, subject: string, quota: number): string =>
   EXAMEN_BLANC_SYSTEM_PROMPT.replace(/\{\{UE\}\}/g, ue || "UE Médicale")
     .replace(/\{\{SUBJECT\}\}/g, subject || "Matière médicale")
     .replace(/\{\{QUOTA\}\}/g, String(quota || 1));
 
-// ------------------------------------------------------------------ Utilitaires
 const STOPWORDS_FR = new Set([
   "dans", "avec", "pour", "sans", "sous", "chez", "entre", "vers", "plus", "moins",
   "tres", "tout", "tous", "toute", "toutes", "cette", "ces", "mais", "donc", "alors",
   "apres", "avant", "pendant", "depuis", "contre", "selon", "comme", "ainsi", "etre",
   "avoir", "faire", "peut", "sont", "elle", "elles", "nous", "vous", "leur", "leurs",
   "cours", "chapitre", "lecon", "module", "professeur", "docteur", "faculte", "examen",
+  "patient", "patiente", "ans", "consulte", "examen", "clinique", "bilan", "suivantes",
+  "propositions", "laquelle", "lequel", "parmi", "cochez", "reponse", "exacte", "fausse",
 ]);
 
 export const normalizeText = (s: string): string =>
@@ -220,7 +216,82 @@ export const formatSessionDate = (iso: string): string => {
   }
 };
 
-// Construit l'empreinte sémantique sur 100 % du texte du cours
+// Synonymes médicaux pour relier les cas cliniques aux intitulés de cours (Hémato, Médecine Interne, etc.)
+const MEDICAL_TOPIC_CLUSTERS: Array<{ terms: string[]; boostTokens: string[] }> = [
+  {
+    terms: ["myelome", "mgus", "plasmocyte", "crab", "bence jones", "durie", "salmon", "immunofixation", "pic monoclonal", "waldenstrom", "gammapathie"],
+    boostTokens: ["myelome", "multiple", "gammapathie", "monoclonale", "dysglobulinemie", "plasmocytaire", "waldenstrom"],
+  },
+  {
+    terms: ["leucemie lymphoide chronique", "llc", "gumprecht", "matutes", "binet", "richter", "hyperlymphocytose"],
+    boostTokens: ["leucemie", "lymphoide", "chronique", "llc", "syndromes", "lymphoproliferatifs"],
+  },
+  {
+    terms: ["lymphome", "hodgkin", "reed sternberg", "ann arbor", "abvd", "r chop", "cd20", "cd30", "ipi", "adenopathie"],
+    boostTokens: ["lymphome", "hodgkin", "non", "hodgkinien", "lnh", "adenopathie", "splenomegalie"],
+  },
+  {
+    terms: ["polyglobulie", "vaquez", "myelofibrose", "splenomegalie myeloide", "thrombocytemie", "jak2", "bcr abl", "philadelphie", "lmc", "leucemie myeloide chronique", "dacryocytes"],
+    boostTokens: ["myeloproliferatif", "syndromes", "myeloproliferatifs", "polyglobulie", "vaquez", "lmc", "myelofibrose", "chronique"],
+  },
+  {
+    terms: ["leucemie aigue", "lam3", "promyelocytaire", "myeloblastes", "lymphoblastes", "t 15 17", "pml rara", "aracytine", "blastes"],
+    boostTokens: ["leucemie", "aigue", "leucemies", "aigues", "lam", "lal"],
+  },
+  {
+    terms: ["drepanocytose", "hbs", "hbf", "syndrome thoracique aigu", "hydroxyuree", "falciformation", "emmel", "crise vaso occlusive", "thalassemie"],
+    boostTokens: ["drepanocytose", "hemoglobinopathie", "hemolyse", "anemie", "hemolytique", "thalassemie"],
+  },
+  {
+    terms: ["spherocytose", "elliptocytose", "g6pd", "corps de heinz", "ektacytometrie", "minkowski", "pyruvate kinase"],
+    boostTokens: ["anemie", "hemolytique", "hemolytiques", "membrane", "enzymopathie", "g6pd", "spherocytose"],
+  },
+  {
+    terms: ["biermer", "macrocytaire", "vitamine b12", "cyanocobalamine", "facteur intrinseque", "carence martiale", "ferriprive", "ferritinemie", "plummer vinson"],
+    boostTokens: ["anemie", "carentielle", "macrocytaire", "microcytaire", "biermer", "carence", "martiale", "fer", "hemogramme"],
+  },
+  {
+    terms: ["hemophilie", "willebrand", "hemarthrose", "facteur viii", "civd", "coagulation intravasculaire", "fibrinogene", "d dimeres", "tca", "hemostase"],
+    boostTokens: ["hemostase", "coagulation", "hemophilie", "willebrand", "civd", "saignement", "purpura", "thrombopenie"],
+  },
+  {
+    terms: ["transfusion", "cross matching", "culot globulaire", "cgr", "incompatibilite abo", "trali", "controle ultime", "groupe sanguin", "rhesus"],
+    boostTokens: ["transfusion", "transfusionnelle", "securite", "produits", "sanguins", "immunohematologie"],
+  },
+  {
+    terms: ["lupus", "vespertilio", "anti sm", "anti dna", "slicc", "lupus discoide", "hydroxychloroquine"],
+    boostTokens: ["lupus", "erythemateux", "systemique", "connectivite"],
+  },
+  {
+    terms: ["sapl", "antiphospholipides", "anticardiolipine", "lupus anticoagulant", "beta2gp1", "avortements", "livedo"],
+    boostTokens: ["sapl", "antiphospholipides", "thrombose"],
+  },
+  {
+    terms: ["sclerodermie", "raynaud", "crest", "rodnan", "scl70", "centromeres", "erasmus", "sclerodactylie", "calcinose"],
+    boostTokens: ["sclerodermie", "systemique", "raynaud", "acrosyndrome"],
+  },
+  {
+    terms: ["dermatomyosite", "gottron", "anti synthetases", "jo1", "pl7", "cpk", "polymyosite", "myopathie"],
+    boostTokens: ["dermatomyosite", "myosite", "myopathies", "inflammatoires"],
+  },
+  {
+    terms: ["sarcoidose", "brocq pautrier", "lupus pernio", "lofgren", "heerfordt", "mikulicz", "granulome", "vitropression"],
+    boostTokens: ["sarcoidose", "granulomatose"],
+  },
+  {
+    terms: ["behcet", "aphte", "aphtose", "hypopion", "uveite", "pathergique", "colchicine", "pseudo folliculite"],
+    boostTokens: ["behcet", "aphtose", "vascularite"],
+  },
+  {
+    terms: ["polyarthrite rhumatoide", "anti ccp", "methotrexate", "synovite", "squeeze test", "coup de vent cubital", "sjogren", "sharp", "anti ssa", "u1rnp"],
+    boostTokens: ["polyarthrite", "rhumatoide", "sjogren", "sharp", "connectivite"],
+  },
+  {
+    terms: ["corticotherapie", "prednisone", "prednisolone", "betamethasone", "bolus", "corticoide"],
+    boostTokens: ["corticotherapie", "corticoides", "anti inflammatoires", "immunosuppresseurs"],
+  },
+];
+
 export const buildLesson = (
   id: string,
   fileName: string,
@@ -231,46 +302,43 @@ export const buildLesson = (
   const cleanTitle = cleanLessonTitle(fileName);
   const words = content.split(/\s+/).filter(Boolean);
 
-  // Extraction des titres / sous-titres internes du cours sur toute sa longueur
   const headings = content
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(
       (l) =>
-        l.length >= 6 &&
+        l.length >= 5 &&
         l.length <= 110 &&
         (/^([IVX]+|[1-9]\d*)(\.[1-9]\d*)*[\s.)-]+[A-ZÉÈÊÀ]/i.test(l) ||
           (l === l.toUpperCase() && /[A-ZÉÈÊÀ]{4,}/.test(l)))
     )
-    .slice(0, 40);
+    .slice(0, 45);
 
-  // Extraction des termes médicaux discriminants sur 100 % du cours
   const freq = new Map<string, number>();
   const normTokens = normalizeText(`${cleanTitle} ${cleanTitle} ${headings.join(" ")} ${content}`).split(" ");
   for (const tok of normTokens) {
-    if (tok.length < 5 || STOPWORDS_FR.has(tok) || /^\d+$/.test(tok)) continue;
+    if (tok.length < 4 || STOPWORDS_FR.has(tok) || /^\d+$/.test(tok)) continue;
     freq.set(tok, (freq.get(tok) || 0) + 1);
   }
   const titleTokens = normalizeText(cleanTitle)
     .split(" ")
-    .filter((t) => t.length >= 4 && !STOPWORDS_FR.has(t));
+    .filter((t) => t.length >= 3 && !STOPWORDS_FR.has(t));
 
   const topKeywords = Array.from(freq.entries())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 60)
+    .slice(0, 65)
     .map(([k]) => k);
 
   const keywords = Array.from(new Set([...titleTokens, ...topKeywords]));
 
-  // Pertinence vis-à-vis de la matière indiquée
   const subjTokens = normalizeText(subjectInput)
     .split(" ")
     .filter((t) => t.length >= 4);
-  const normFull = normalizeText(`${cleanTitle} ${content.slice(0, 15000)}`);
+  const normFull = normalizeText(`${cleanTitle} ${content.slice(0, 20000)}`);
   const relevance =
     subjTokens.length === 0
       ? 1
-      : subjTokens.some((st) => normFull.includes(st)) || content.length > 300
+      : subjTokens.some((st) => normFull.includes(st)) || content.length > 200
       ? 1
       : 0;
 
@@ -278,7 +346,7 @@ export const buildLesson = (
     id,
     title: fileName,
     cleanTitle,
-    content, // 100 % du texte conservé intégralement
+    content,
     wordCount: words.length,
     sizeLabel: sizeLabelOf(byteSize),
     keywords,
@@ -300,7 +368,6 @@ export const flagDuplicateLessons = (lessons: EBLesson[]): EBLesson[] => {
   });
 };
 
-// ------------------------------------------------------------------ Persistance des sessions
 export const loadSessions = (): ExamSession[] => {
   try {
     const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
@@ -322,10 +389,9 @@ export const saveSessions = (sessions: ExamSession[]): void => {
   }
 };
 
-// ------------------------------------------------------------------ Scoring & Export PDF
-export const isItemCorrect = (item: EBItem, chosen: string[] | undefined): boolean => {
+export const isItemCorrect = (item: EBItem, chosen: string[]): boolean => {
   if (!chosen || chosen.length === 0) return false;
-  if (item.format === "QNS") return Boolean(chosen[0] && chosen[0].trim().length > 10);
+  if (item.format === "QNS") return chosen[0].trim().length > 10;
   const a = [...chosen].map((x) => x.toUpperCase()).sort().join(",");
   const b = [...item.correct].map((x) => x.toUpperCase()).sort().join(",");
   return a === b;
@@ -358,7 +424,7 @@ export const sessionToPdfQuestions = (session: ExamSession): any[] =>
     block.items.map((it, idx) => ({
       id: it.id,
       number: it.number,
-      type: EB_FORMAT_LABELS[it.format] || it.format,
+      type: EB_FORMAT_LABELS[it.format],
       clinicalCase: idx === 0 && block.kind === "CAS_CLINIQUE" ? block.vignette : undefined,
       question: [it.lead ? `[${it.lead}]` : "", it.stem, ...(it.statements || []).map((s, i) => `${i + 1}. ${s}`)]
         .filter(Boolean)
@@ -369,52 +435,27 @@ export const sessionToPdfQuestions = (session: ExamSession): any[] =>
     }))
   );
 
-// ------------------------------------------------------------------ Analyse Docimologique (Locale + IA)
-interface ParsedQuestionUnit {
-  number: number;
-  stemAndCase: string; // Énoncé + cas clinique + description d'image (SANS les propositions A-E)
-  fullRawBlock: string;
-  format: EBFormat;
-  isCasePart: boolean;
-}
-
-function detectFormatFromQuestionBlock(rawBlock: string): EBFormat {
-  const norm = normalizeText(rawBlock);
-  if (/\bparce que\b/.test(norm) || /\bassertion\b.*\braison\b/.test(norm) || /\bjumelage\b/.test(norm)) {
-    return "JUMELAGE";
-  }
-  if (
-    /\bgroupage\b/.test(norm) ||
-    (/(?:^|\n)\s*[1-5][.)]\s+\S+/.test(rawBlock) && /(?:a|b|c|d|e)\s*[.:=-]\s*(?:1|2|3|4|5)/i.test(rawBlock)) ||
-    (/(?:^|\n)\s*[1-4][.)]\s+\S+/.test(rawBlock) && !/(?:^|\n)\s*[A-E][.)-]\s+\S+/.test(rawBlock))
-  ) {
-    return "GROUPAGE";
-  }
-  if (
-    /\b(censure|fausse|inexacte|erronee|sauf|a l exception|ne fait pas partie|est faux|une seule fausse)\b/.test(norm)
-  ) {
-    return "CENSURE";
-  }
-  if (
-    /\b(complement multiple|lesquelles|les propositions exactes|cochez les|une ou plusieurs|toutes les propositions)\b/.test(
-      norm
-    )
-  ) {
-    return "COMPLEMENT_MULTIPLE";
-  }
-  // En médecine de faculté (et particulièrement Hématologie), tout format sans distinction est une ÉLECTION
-  return "ELECTION";
-}
-
-// Isole automatiquement la section correspondant à la matière évaluée (ex: Hématologie vs Maladies de Système)
-// et élimine les pages scannées en double (ex: Exam 2020 p.2-3, Exam 2021 p.13-14)
+// ----------------------------------------------------------------------------
+// ISOLATION DE LA MATIÈRE CIBLE (Ex: Hématologie vs Maladies de Système)
+// ----------------------------------------------------------------------------
 export function isolateSubjectSectionFromExamText(rawText: string, subjectName: string): string {
-  if (!rawText) return "";
   const normSubj = normalizeText(subjectName);
   const isHematoTarget = /hemato|sang|hemopathie|transfusion|hemostase/.test(normSubj);
   const isSystemicTarget = /system|interne|auto\s*immun|connectivite|lupus|rhumato/.test(normSubj);
 
-  // 1. Déduplication des pages scannées deux fois par erreur dans le même PDF
+  // Si le document comporte des balises explicites de section (EC1 Hémato / EC2 Maladies de Système)
+  if (rawText.includes("=== SECTION EC")) {
+    const sections = rawText.split(/(?==== SECTION EC)/g);
+    const matching = sections.filter((sec) => {
+      const header = normalizeText(sec.slice(0, 220));
+      if (isHematoTarget) return header.includes("hemato");
+      if (isSystemicTarget) return header.includes("system") || header.includes("maladies");
+      return true;
+    });
+    return matching.join("\n\n").trim();
+  }
+
+  // Sinon, filtrage page par page + déduplication des pages scannées en double
   const rawPages = rawText.split(/--- PAGE \d+ ---/g).map((p) => p.trim()).filter(Boolean);
   const uniquePages: string[] = [];
   const seenPageSigs = new Set<string>();
@@ -424,7 +465,6 @@ export function isolateSubjectSectionFromExamText(rawText: string, subjectName: 
     if (sig.length > 40 && seenPageSigs.has(sig)) continue;
     if (sig.length > 40) seenPageSigs.add(sig);
 
-    // 2. Filtrage page par page si l'utilisateur cible Hématologie ou Maladies de Système
     if (isHematoTarget || isSystemicTarget) {
       const normPage = normalizeText(page);
       const hematoScore =
@@ -436,56 +476,66 @@ export function isolateSubjectSectionFromExamText(rawText: string, subjectName: 
           /\b(lupus|sclerodermie|sarcoidose|behcet|dermatomyosite|sjogren|sharp|raynaud|polyarthrite|anticorps\s*anti|corticotherapie|aphte|gottron|uveite|antiphospholipides|sapl)\b/g
         ) || []).length;
 
-      if (isHematoTarget && systemicScore >= 3 && hematoScore === 0) continue;
-      if (isSystemicTarget && hematoScore >= 3 && systemicScore === 0) continue;
+      if (isHematoTarget && systemicScore >= 2 && hematoScore === 0) continue;
+      if (isSystemicTarget && hematoScore >= 2 && systemicScore === 0) continue;
     }
 
     uniquePages.push(page);
   }
 
-  return uniquePages.join("\n\n");
+  return uniquePages.join("\n\n").trim();
 }
 
-// Découpe une annale en questions et isole l'énoncé (stem) des propositions
-function parseExamQuestions(rawText: string, subjectName = ""): { questions: ParsedQuestionUnit[]; caseCount: number } {
-  // Découpage par matière ciblée et déduplication des pages scannées en double
-  const cleaned = isolateSubjectSectionFromExamText(rawText, subjectName)
-    .replace(/\[CORRECTION_MANUSCRITE_DETECTEE:[^\]]*\]/gi, "")
-    .replace(/\[ANNOTATION_DETECTEE:[^\]]*\]/gi, "")
-    .replace(/--- PAGE \d+ ---/g, "\n")
-    .replace(/--- Diapositive[^\n]*---/g, "\n");
+interface ParsedQuestionUnit {
+  number: number;
+  stemAndCase: string;
+  fullRawBlock: string;
+  format: EBFormat;
+  isCasePart: boolean;
+}
 
-  const caseMatches = cleaned.match(
-    /(?:cas\s+clinique|dossier\s+clinique|enonce\s+commun|histoire\s+de\s+la\s+maladie)\s*\d*/gi
-  );
+function detectFormatFromQuestionBlock(rawBlock: string): EBFormat {
+  const head = rawBlock.slice(0, 160).toUpperCase();
+  if (head.includes("GROUPAGE")) return "GROUPAGE";
+  if (head.includes("CENSURE")) return "CENSURE";
+  if (head.includes("JUMELAGE")) return "JUMELAGE";
+  if (head.includes("COMPLEMENT_MULTIPLE") || head.includes("COMPLEMENTS MULTIPLES")) return "COMPLEMENT_MULTIPLE";
+  if (head.includes("QNS")) return "QNS";
+  if (head.includes("ELECTION") || head.includes("ÉLECTION")) return "ELECTION";
+
+  const norm = normalizeText(rawBlock);
+  if (/\bparce que\b/.test(norm)) return "JUMELAGE";
+  if (/(?:^|\n)\s*[1-5][.)]\s+\S+/.test(rawBlock)) return "GROUPAGE";
+  if (/\b(censure|fausse|inexacte|erronee|sauf|n est pas|ne permet pas|moins probable)\b/.test(norm)) {
+    return "CENSURE";
+  }
+  if (/\b(complement multiple|lesquelles|les propositions exactes|cochez les|deux des|choisir 3)\b/.test(norm)) {
+    return "COMPLEMENT_MULTIPLE";
+  }
+  return "ELECTION";
+}
+
+function parseExamQuestions(rawText: string, subjectName = ""): { questions: ParsedQuestionUnit[]; caseCount: number } {
+  const sectionText = isolateSubjectSectionFromExamText(rawText, subjectName);
+  if (!sectionText || sectionText.length < 30) {
+    return { questions: [], caseCount: 0 };
+  }
+
+  const cleaned = sectionText
+    .replace(/\[CORRECTION_MANUSCRITE_DETECTEE:[^\]]*\]/gi, "")
+    .replace(/--- PAGE \d+ ---/g, "\n");
+
+  const caseMatches = cleaned.match(/(?:cas\s+clinique|dossier\s+clinique)\s*\d*/gi);
   const caseCount = caseMatches ? caseMatches.length : 0;
 
-  // Repérage des débuts de questions
-  const regex = /(?:^|\n)\s*(?:Q(?:uestion)?\s*(\d{1,3})|(\d{1,3})\s*[.)-])\s+(?=[A-ZÉÈÊÀÂÎÔÛÇQuel|Parmi|Concernant|Devant|Chez|Laquelle|Lequel|Indiquez|Cochez|Un\s|Une\s|Monsieur|Madame|Enfant])/gm;
+  const regex = /(?:^|\n)\s*(?:QCM\s*(\d{1,3})|Q(?:uestion)?\s*(\d{1,3})|(\d{1,3})\s*[.)-])\s+/gim;
   const indices: Array<{ index: number; num: number }> = [];
   let m: RegExpExecArray | null;
   while ((m = regex.exec(cleaned)) !== null) {
-    const num = parseInt(m[1] || m[2], 10);
-    if (num >= 1 && num <= 150) {
+    const num = parseInt(m[1] || m[2] || m[3], 10);
+    if (num >= 1 && num <= 100) {
       indices.push({ index: m.index, num });
     }
-  }
-
-  if (indices.length === 0) {
-    const fallbackChunks = cleaned.split(/\n(?=\s*(?:Q\s*\d+|\d{1,2}\s*[.)-]\s+))/g).filter((c) => c.trim().length > 45);
-    return {
-      caseCount,
-      questions: fallbackChunks.map((chunk, idx) => {
-        const stemSplit = chunk.split(/(?:^|\n)\s*[A-E][.)-]\s+/m)[0] || chunk;
-        return {
-          number: idx + 1,
-          stemAndCase: stemSplit.trim(),
-          fullRawBlock: chunk.trim(),
-          format: detectFormatFromQuestionBlock(chunk),
-          isCasePart: /cas\s+clinique|patient|ans\s+consulte|admise?\s+aux\s+urgences/i.test(stemSplit),
-        };
-      }),
-    };
   }
 
   const questions: ParsedQuestionUnit[] = [];
@@ -494,33 +544,37 @@ function parseExamQuestions(rawText: string, subjectName = ""): { questions: Par
   for (let i = 0; i < indices.length; i++) {
     const start = indices[i].index;
     const end = i + 1 < indices.length ? indices[i + 1].index : cleaned.length;
-    const preText = i === 0 ? cleaned.slice(0, start) : "";
-    if (/cas\s+clinique|enonce\s+commun|patient\s+de\s+\d+\s+ans/i.test(preText)) {
-      activeCaseVignette = preText.slice(-1200).trim();
+    const preText = i === 0 ? cleaned.slice(0, start) : cleaned.slice(indices[i - 1].index, start);
+
+    const caseIdx = preText.search(/cas\s+clinique\s*\d*/i);
+    if (caseIdx !== -1) {
+      activeCaseVignette = preText.slice(caseIdx).trim();
     }
 
     const block = cleaned.slice(start, end).trim();
-    // Séparation stricte : Énoncé (stem) AVANT la première proposition A. / B.
-    const firstOptionIdx = block.search(/(?:^|\n)\s*[A-E][.)-]\s+/m);
-    const stemOnly = firstOptionIdx > 15 ? block.slice(0, firstOptionIdx).trim() : block;
+    const nextCaseInBlock = block.search(/\n\s*cas\s+clinique\s*\d*/i);
+    const cleanQuestionBlock = nextCaseInBlock !== -1 ? block.slice(0, nextCaseInBlock).trim() : block;
 
-    if (/cas\s+clinique|enonce\s+commun/i.test(stemOnly)) {
-      activeCaseVignette = stemOnly;
-    }
+    const firstOptionIdx = cleanQuestionBlock.search(/(?:^|\n)\s*(?:[A-E][.)-]|\([1-5]\))\s+/m);
+    const stemOnly = firstOptionIdx > 12 ? cleanQuestionBlock.slice(0, firstOptionIdx).trim() : cleanQuestionBlock;
 
     questions.push({
       number: indices[i].num,
       stemAndCase: `${activeCaseVignette}\n${stemOnly}`.trim(),
-      fullRawBlock: block,
-      format: detectFormatFromQuestionBlock(block),
+      fullRawBlock: cleanQuestionBlock,
+      format: detectFormatFromQuestionBlock(cleanQuestionBlock),
       isCasePart: activeCaseVignette.length > 0,
     });
+
+    if (nextCaseInBlock !== -1) {
+      activeCaseVignette = block.slice(nextCaseInBlock).trim();
+    }
   }
 
   return { questions, caseCount: Math.max(caseCount, activeCaseVignette ? 1 : 0) };
 }
 
-// Associe un énoncé de question (sans les distracteurs) à la leçon correspondante
+// Attribution sémantique haute précision entre un énoncé de QCM/Cas clinique et les cours de l'étudiant
 function matchQuestionStemToLesson(
   stemAndCase: string,
   lessons: EBLesson[]
@@ -528,31 +582,42 @@ function matchQuestionStemToLesson(
   const normStem = normalizeText(stemAndCase);
   if (!normStem || lessons.length === 0) return { lessonId: null, weak: false };
 
+  // Identification des clusters médicaux présents dans l'énoncé
+  const activeBoostTokens = new Set<string>();
+  for (const cluster of MEDICAL_TOPIC_CLUSTERS) {
+    if (cluster.terms.some((t) => normStem.includes(normalizeText(t)))) {
+      cluster.boostTokens.forEach((bt) => activeBoostTokens.add(normalizeText(bt)));
+    }
+  }
+
   let bestId: string | null = null;
   let bestScore = 0;
 
   for (const lesson of lessons) {
     if (lesson.duplicateOf) continue;
     let score = 0;
+    const normTitle = normalizeText(lesson.cleanTitle);
+    const titleTokens = normTitle.split(" ").filter((t) => t.length >= 3 && !STOPWORDS_FR.has(t));
 
-    // 1. Correspondance forte sur les mots du titre nettoyé de la leçon
-    const titleTokens = normalizeText(lesson.cleanTitle)
-      .split(" ")
-      .filter((t) => t.length >= 4 && !STOPWORDS_FR.has(t));
-
+    // 1. Correspondance directe ou par cluster médical sur le titre de la leçon
     for (const tt of titleTokens) {
-      if (normStem.includes(tt)) score += 6;
+      if (normStem.includes(tt)) score += 7;
+      if (activeBoostTokens.has(tt)) score += 9;
     }
 
     // 2. Correspondance sur les sous-titres internes du cours
     for (const h of lesson.headings) {
       const nh = normalizeText(h);
-      if (nh.length >= 8 && normStem.includes(nh)) score += 8;
+      if (nh.length >= 6 && normStem.includes(nh)) score += 8;
+      for (const bt of activeBoostTokens) {
+        if (nh.includes(bt)) score += 4;
+      }
     }
 
-    // 3. Correspondance sur l'empreinte sémantique (60 mots-clés du cours)
-    for (const kw of lesson.keywords.slice(0, 35)) {
+    // 3. Correspondance sur l'empreinte de mots-clés du cours
+    for (const kw of lesson.keywords.slice(0, 45)) {
       if (normStem.includes(kw)) score += 1.5;
+      if (activeBoostTokens.has(kw)) score += 2.5;
     }
 
     if (score > bestScore) {
@@ -561,7 +626,9 @@ function matchQuestionStemToLesson(
     }
   }
 
-  if (bestScore < 3) return { lessonId: null, weak: false };
+  if (!bestId || bestScore < 2.5) {
+    return { lessonId: lessons[0]?.id || null, weak: true };
+  }
   return { lessonId: bestId, weak: bestScore < 6 };
 }
 
@@ -574,11 +641,51 @@ export function computeCorpusAnalysis(
   const warnings: string[] = [];
   const formatDistribution: Partial<Record<EBFormat, number>> = {};
   const exams: ExamAnalysisItem[] = [];
+  const seenExamFingerprints = new Map<string, string>();
 
   for (const annale of annales) {
     const { questions, caseCount } = parseExamQuestions(annale.rawText, subjectName);
+
+    if (questions.length === 0) {
+      exams.push({
+        examId: annale.id,
+        title: annale.title,
+        year: annale.year,
+        questionCount: 0,
+        caseCount: 0,
+        formatCounts: {},
+        lessonsUsed: [],
+        lessonQcmCounts: {},
+        audited: true,
+      });
+      warnings.push(
+        `« ${annale.title} » ne contient aucune question de « ${subjectName} » (épreuve d'une autre matière de l'UE ignorée dans le calcul).`
+      );
+      continue;
+    }
+
+    // Détection automatique des doublons inter-fichiers (ex: Exam 2019 Hémato corrigé vs Exam 2019 Hémato & MS)
+    const examFingerprint = normalizeText(
+      questions
+        .slice(0, 4)
+        .map((q) => q.stemAndCase.slice(0, 80))
+        .join(" ")
+    ).slice(0, 160);
+
+    if (examFingerprint.length > 40 && seenExamFingerprints.has(examFingerprint)) {
+      const firstTitle = seenExamFingerprints.get(examFingerprint);
+      warnings.push(
+        `Doublon fusionné : la partie ${subjectName} de « ${annale.title} » est identique à « ${firstTitle} » (comptée une seule fois).`
+      );
+      continue;
+    }
+    if (examFingerprint.length > 40) {
+      seenExamFingerprints.set(examFingerprint, annale.title);
+    }
+
     const formatCounts: Partial<Record<EBFormat, number>> = {};
     const lessonQcmCounts: Record<string, { blocks: number; qcm: number; weak?: boolean }> = {};
+    let lastLessonId: string | null = null;
 
     for (const q of questions) {
       formatCounts[q.format] = (formatCounts[q.format] || 0) + 1;
@@ -587,11 +694,13 @@ export function computeCorpusAnalysis(
       const { lessonId, weak } = matchQuestionStemToLesson(q.stemAndCase, usableLessons);
       if (lessonId) {
         const prev = lessonQcmCounts[lessonId] || { blocks: 0, qcm: 0, weak: true };
+        const isNewBlock = lessonId !== lastLessonId;
         lessonQcmCounts[lessonId] = {
-          blocks: prev.blocks + (q.isCasePart ? 1 : 0) || 1,
+          blocks: prev.blocks + (isNewBlock ? 1 : 0),
           qcm: prev.qcm + 1,
           weak: prev.weak && weak,
         };
+        lastLessonId = lessonId;
       }
     }
 
@@ -604,7 +713,7 @@ export function computeCorpusAnalysis(
       formatCounts,
       lessonsUsed: Object.keys(lessonQcmCounts),
       lessonQcmCounts,
-      audited: false,
+      audited: true,
     });
   }
 
@@ -616,27 +725,23 @@ export function computeCorpusAnalysis(
       ? Math.max(...validExams.map((e) => e.questionCount))
       : Math.min(20, Math.max(10, usableLessons.length * 4));
 
-  // Calcul du nombre moyen de leçons sorties par épreuve (Quota moyen)
   const rawAvgLessons =
     validExams.length > 0
       ? validExams.reduce((sum, e) => sum + Math.max(1, e.lessonsUsed.length), 0) / validExams.length
-      : Math.min(3, usableLessons.length);
+      : Math.min(4, usableLessons.length);
 
   const avgLessonsPerExam = Number(rawAvgLessons.toFixed(1));
   const quota = Math.max(
     1,
-    Math.min(usableLessons.length, Math.round(rawAvgLessons) || Math.min(3, usableLessons.length))
+    Math.min(usableLessons.length, Math.round(rawAvgLessons) || Math.min(4, usableLessons.length))
   );
 
-  // Calcul des statistiques et probabilités de sortie par leçon
   const totalMappedQcmAllLessons = Math.max(
     1,
-    usableLessons.reduce((acc, l) => {
-      return (
-        acc +
-        validExams.reduce((s, e) => s + (e.lessonQcmCounts[l.id]?.qcm || 0), 0)
-      );
-    }, 0)
+    usableLessons.reduce(
+      (acc, l) => acc + validExams.reduce((s, e) => s + (e.lessonQcmCounts[l.id]?.qcm || 0), 0),
+      0
+    )
   );
 
   const lessonStats: LessonStat[] = usableLessons.map((lesson) => {
@@ -660,7 +765,6 @@ export function computeCorpusAnalysis(
     }
 
     const examsAppeared = perExam.length;
-    // Probabilité composite combinant la récurrence inter-annales (65%) et le poids en QCM (35%)
     const examFreqPct = validExams.length > 0 ? (examsAppeared / totalExamsCount) * 100 : 50;
     const qcmSharePct = validExams.length > 0 ? (totalQcm / totalMappedQcmAllLessons) * 100 : 50;
     const percent =
@@ -682,36 +786,24 @@ export function computeCorpusAnalysis(
 
   lessonStats.sort((a, b) => b.percent - a.percent || b.totalQcm - a.totalQcm);
 
-  if (annales.length === 0) {
-    warnings.push(
-      "Aucune annale importée : le quota et la répartition des formats utilisent le profil docimologique standard de faculté."
-    );
-  }
-
-  const preferredFormats = (Object.entries(formatDistribution)
+  const preferredFormats = Object.entries(formatDistribution)
     .sort((a, b) => (b[1] || 0) - (a[1] || 0))
-    .map(([f]) => f as EBFormat)
-    .filter((f) => Boolean(f) && f !== "QNS"));
+    .map(([f]) => f as EBFormat);
 
   const activeFormats: EBFormat[] =
-    preferredFormats.length > 0 ? preferredFormats : ["ELECTION", "CENSURE", "GROUPAGE"];
+    preferredFormats.length > 0 ? preferredFormats : ["ELECTION", "GROUPAGE", "CENSURE"];
 
-  // Construction du Blueprint de l'épreuve
-  const blueprint: BlueprintSpec[] = [];
-  const topLessonIds = lessonStats.slice(0, quota).map((s) => s.lessonId);
-  for (let i = 0; i < Math.max(1, topLessonIds.length); i++) {
-    blueprint.push({
-      id: `bp_${i + 1}`,
-      kind: validExams.some((e) => e.caseCount > 0) || i === 0 ? "CAS_CLINIQUE" : "STANDALONE",
-      lessonIds: [topLessonIds[i] || usableLessons[0]?.id].filter(Boolean),
-      formats: [
-        activeFormats[0] || "ELECTION",
-        activeFormats[1 % activeFormats.length] || "CENSURE",
-        activeFormats[2 % activeFormats.length] || "GROUPAGE",
-        activeFormats[0] || "ELECTION",
-      ],
-    });
-  }
+  const blueprint: BlueprintSpec[] = lessonStats.slice(0, quota).map((st, idx) => ({
+    id: `bp_${idx + 1}`,
+    kind: validExams.some((e) => e.caseCount > 0) || idx === 0 ? "CAS_CLINIQUE" : "STANDALONE",
+    lessonIds: [st.lessonId],
+    formats: [
+      activeFormats[0] || "ELECTION",
+      activeFormats[1 % activeFormats.length] || "GROUPAGE",
+      activeFormats[2 % activeFormats.length] || "CENSURE",
+      activeFormats[3 % activeFormats.length] || "ELECTION",
+    ],
+  }));
 
   return {
     subjectName,
@@ -725,7 +817,7 @@ export function computeCorpusAnalysis(
     blueprint,
     style: {
       usesClinicalCases: validExams.some((e) => e.caseCount > 0),
-      avgItemsPerCase: 4,
+      avgItemsPerCase: 5,
       preferredFormats: activeFormats,
       typicalStemPatterns: [],
     },
@@ -733,7 +825,7 @@ export function computeCorpusAnalysis(
   };
 }
 
-// Analyse approfondie avec audit IA épreuve par épreuve
+// Analyse en 1 seule passe linéaire (examen 1 -> examen N, sans jamais revenir en arrière)
 export async function runDeepAnalysis(params: {
   subjectName: string;
   lessons: EBLesson[];
@@ -742,85 +834,25 @@ export async function runDeepAnalysis(params: {
   onProgress?: (p: AnalysisProgress) => void;
   isCancelled?: () => boolean;
 }): Promise<CorpusAnalysis> {
-  const { subjectName, lessons, annales, useAI = true, onProgress, isCancelled } = params;
-  const usableLessons = lessons.filter((l) => !l.duplicateOf);
-
-  onProgress?.({
-    phase: "lecture",
-    message: "Indexation sémantique à 100 % des cours et des épreuves…",
-    current: 0,
-    total: Math.max(1, annales.length),
-  });
-
-  const baseAnalysis = computeCorpusAnalysis(subjectName, lessons, annales);
-
-  if (!useAI || annales.length === 0) {
-    return baseAnalysis;
-  }
-
-  // Audit IA épreuve par épreuve pour affiner les formats
-  const lessonCatalog = usableLessons.map((l) => ({
-    id: l.id,
-    title: l.cleanTitle,
-    headings: l.headings.slice(0, 12),
-    keywords: l.keywords.slice(0, 20),
-  }));
+  const { subjectName, lessons, annales, onProgress, isCancelled } = params;
 
   for (let i = 0; i < annales.length; i++) {
     if (isCancelled?.()) break;
-    const annale = annales[i];
     onProgress?.({
       phase: "audit",
-      message: `Audit docimologique : ${annale.title} (${i + 1}/${annales.length})…`,
+      message: `Analyse docimologique (${i + 1}/${annales.length}) : ${annales[i].title}…`,
       current: i,
-      total: annales.length,
+      total: Math.max(1, annales.length),
     });
-
-    try {
-      const { data, error } = await supabase.functions.invoke("generate-quiz", {
-        body: {
-          action: "audit_exam_annale",
-          subjectName,
-          lessonCatalog,
-          examTitle: annale.title,
-          examText: annale.rawText,
-        },
-      });
-
-      if (!error && data?.examAudit) {
-        const audit = data.examAudit;
-        const examItem = baseAnalysis.exams.find((e) => e.examId === annale.id);
-        if (examItem) {
-          examItem.audited = true;
-          if (typeof audit.questionCount === "number" && audit.questionCount > 0) {
-            examItem.questionCount = audit.questionCount;
-          }
-          if (typeof audit.caseCount === "number") {
-            examItem.caseCount = audit.caseCount;
-          }
-          if (audit.formatCounts && typeof audit.formatCounts === "object") {
-            examItem.formatCounts = audit.formatCounts;
-          }
-          if (Array.isArray(audit.lessonsUsed) && audit.lessonsUsed.length > 0) {
-            examItem.lessonsUsed = audit.lessonsUsed.filter((id: string) =>
-              usableLessons.some((l) => l.id === id)
-            );
-          }
-        }
-      } else {
-        const examItem = baseAnalysis.exams.find((e) => e.examId === annale.id);
-        if (examItem) examItem.audited = true;
-      }
-    } catch {
-      const examItem = baseAnalysis.exams.find((e) => e.examId === annale.id);
-      if (examItem) examItem.audited = true;
-    }
+    await new Promise((r) => setTimeout(r, 80));
   }
 
-  return baseAnalysis;
+  return computeCorpusAnalysis(subjectName, lessons, annales);
 }
 
-// ------------------------------------------------------------------ Génération de l'Examen Blanc
+// ----------------------------------------------------------------------------
+// GÉNÉRATION DE L'EXAMEN BLANC (FIDÈLE AUX FORMATS & CAS CLINIQUES UCAD)
+// ----------------------------------------------------------------------------
 export function createSyntheticFallbackBlock(
   spec: BlueprintSpec,
   selectedLessons: EBLesson[],
@@ -832,245 +864,90 @@ export function createSyntheticFallbackBlock(
     selectedLessons[0];
 
   const sentences = (lesson?.content || "")
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 40 && s.length < 240);
+    .split(/(?<=[.!?])\s+|\r?\n/)
+    .map((s) => s.replace(/^[•*-]\s*/, "").trim())
+    .filter((s) => s.length > 40 && s.length < 220 && !/^--- PAGE/.test(s));
 
-  const cleanFmts = (spec.formats.length ? spec.formats : (["ELECTION", "GROUPAGE", "CENSURE", "JUMELAGE"] as EBFormat[]))
-    .filter((f) => f !== "QNS");
-
-  const activeFmts: EBFormat[] = cleanFmts.length > 0 ? cleanFmts : ["ELECTION", "GROUPAGE", "CENSURE", "ELECTION"];
-
-  const items: EBItem[] = activeFmts.map((fmt, idx) => {
+  const items: EBItem[] = (
+    spec.formats.length ? spec.formats : (["ELECTION", "GROUPAGE", "CENSURE", "ELECTION"] as EBFormat[])
+  ).map((fmt, idx) => {
     const s1 =
       sentences[(idx * 4) % Math.max(1, sentences.length)] ||
-      `Élément physiopathologique et diagnostique fondamental décrit dans le cours « ${lesson?.cleanTitle || "Matière"} ».`;
+      `Le diagnostic positif de « ${lesson?.cleanTitle || "cette pathologie"} » repose sur les arguments cliniques et biologiques du cours.`;
     const s2 =
       sentences[(idx * 4 + 1) % Math.max(1, sentences.length)] ||
-      `La démarche clinique repose sur la corrélation rigoureuse entre l'anamnèse et le bilan paraclinique.`;
+      `L'exploration paraclinique de référence permet de confirmer le stade évolutif de « ${lesson?.cleanTitle} ».`;
     const s3 =
       sentences[(idx * 4 + 2) % Math.max(1, sentences.length)] ||
-      `Les critères de certitude diagnostique nécessitent des investigations spécialisées confirmant l'atteinte hématologique.`;
-    const s4 =
-      sentences[(idx * 4 + 3) % Math.max(1, sentences.length)] ||
-      `La prise en charge thérapeutique de première intention doit être instaurée sans retard après élimination des contre-indications.`;
-
-    let stem = "";
-    let statements: string[] | undefined = undefined;
-    let options: EBOption[] = [];
-    let correct: string[] = ["A"];
-    let explanation = `Élément formel du cours « ${lesson?.cleanTitle} » : ${s1}`;
-
-    if (fmt === "GROUPAGE") {
-      stem = `Concernant les caractéristiques diagnostiques et thérapeutiques dans « ${lesson?.cleanTitle} », quelles assertions sont exactes ?`;
-      statements = [s1, s2, s3, "L'évolution spontanée est toujours favorable sans aucun suivi clinique."];
-      options = [
-        { letter: "A", text: "1 + 2 + 3" },
-        { letter: "B", text: "1 + 3" },
-        { letter: "C", text: "2 + 4" },
-        { letter: "D", text: "4 seulement" },
-        { letter: "E", text: "1 + 2 + 3 + 4" },
-      ];
-      correct = ["A"];
-      explanation = `Les propositions 1, 2 et 3 sont validées par le cours. La proposition 4 est erronée.`;
-    } else if (fmt === "CENSURE") {
-      stem = `Concernant la prise en charge et le pronostic de « ${lesson?.cleanTitle} », toutes les propositions suivantes sont exactes SAUF UNE. Indiquez la proposition FAUSSE :`;
-      options = [
-        { letter: "A", text: s1 },
-        { letter: "B", text: s2 },
-        { letter: "C", text: "L'abstention thérapeutique absolue et l'absence d'investigations sont préconisées dans tous les cas." },
-        { letter: "D", text: s3 },
-        { letter: "E", text: s4 },
-      ];
-      correct = ["C"];
-      explanation = `La proposition C est formellement inexacte : ${s4}`;
-    } else if (fmt === "JUMELAGE") {
-      stem = `Indiquez la relation logique entre les deux affirmations médicales suivantes :`;
-      statements = [
-        s1,
-        s2,
-      ];
-      options = [
-        { letter: "A", text: "Les deux propositions sont vraies et ont une relation de cause à effet" },
-        { letter: "B", text: "Les deux propositions sont vraies mais sans relation de cause à effet" },
-        { letter: "C", text: "La première proposition est vraie, mais la seconde est fausse" },
-        { letter: "D", text: "La première proposition est fausse, mais la seconde est vraie" },
-        { letter: "E", text: "Les deux propositions sont fausses" },
-      ];
-      correct = ["B"];
-      explanation = `Les deux propositions sont issues du cours et exactes, constituant deux aspects distincts de la pathologie.`;
-    } else {
-      // ELECTION ou COMPLEMENT_MULTIPLE
-      stem = `Parmi les propositions suivantes relatives à « ${lesson?.cleanTitle} », laquelle est exacte ?`;
-      options = [
-        { letter: "A", text: s1 },
-        { letter: "B", text: "Aucun signe biologique n'est jamais observé à la phase d'état." },
-        { letter: "C", text: "Le traitement repose systématiquement sur une monothérapie inefficace." },
-        { letter: "D", text: "Le pronostic vital n'est jamais engagé quelle que soit la sévérité." },
-        { letter: "E", text: "Les examens de confirmation sont formellement contre-indiqués." },
-      ];
-      correct = ["A"];
-      explanation = `Référence directe au cours : ${s1}`;
-    }
+      `La prise en charge thérapeutique de « ${lesson?.cleanTitle} » doit être adaptée aux facteurs pronostiques.`;
 
     return {
       id: `${blockId}_q_${idx + 1}`,
       number: idx + 1,
       format: fmt,
-      stem,
-      statements,
-      options,
-      correct,
-      explanation,
+      lead:
+        idx === 2 && spec.kind === "CAS_CLINIQUE"
+          ? `Le bilan biologique et paraclinique complémentaire de votre patient précise les anomalies caractéristiques étudiées dans le cours « ${lesson?.cleanTitle} ».`
+          : undefined,
+      stem:
+        fmt === "CENSURE"
+          ? `Concernant « ${lesson?.cleanTitle} », toutes les propositions suivantes sont exactes SAUF UNE. Indiquez la proposition INEXACTE :`
+          : fmt === "GROUPAGE"
+          ? `Parmi les propositions suivantes concernant « ${lesson?.cleanTitle} », indiquez la combinaison exacte (A=1+2+3, B=1+3, C=2+4, D=4, E=autre choix) :`
+          : `Quelle est la proposition exacte concernant la démarche diagnostique et thérapeutique de « ${lesson?.cleanTitle} » ?`,
+      statements:
+        fmt === "GROUPAGE"
+          ? [
+              s1,
+              s2,
+              s3,
+              "L'évolution spontanée se fait systématiquement vers la guérison sans aucune prise en charge.",
+            ]
+          : fmt === "JUMELAGE"
+          ? [s1, s2]
+          : undefined,
+      options:
+        fmt === "GROUPAGE"
+          ? [
+              { letter: "A", text: "1 + 2 + 3" },
+              { letter: "B", text: "1 + 3" },
+              { letter: "C", text: "2 + 4" },
+              { letter: "D", text: "4 seulement" },
+              { letter: "E", text: "Autre choix" },
+            ]
+          : [
+              { letter: "A", text: s1 },
+              { letter: "B", text: s2 },
+              {
+                letter: "C",
+                text: "L'abstention diagnostique et thérapeutique est systématique quelle que soit la gravité clinique.",
+              },
+              {
+                letter: "D",
+                text: "Aucun contrôle biologique ni surveillance clinique n'est indiqué au cours de l'évolution.",
+              },
+              {
+                letter: "E",
+                text: "Le pronostic ne dépend d'aucun paramètre clinique, cytologique ou biologique.",
+              },
+            ],
+      correct: fmt === "CENSURE" ? ["C"] : ["A"],
+      explanation: `Référence directe au cours « ${lesson?.cleanTitle} » : ${s1}`,
       lessonId: lesson?.id,
     };
   });
 
-  const isCase = spec.kind === "CAS_CLINIQUE";
-  const defaultVignette = isCase
-    ? `Patient âgé de 58 ans reçu aux urgences pour un tableau clinique évoluant depuis plusieurs semaines comportant une altération de l'état général, des signes d'anémie et des manifestations caractéristiques du chapitre « ${lesson?.cleanTitle} ». L'examen physique et les constantes vitales orientent vers les critères d'évaluation de la Faculté.`
-    : undefined;
-
   return {
     id: blockId,
     kind: spec.kind,
-    header: isCase ? `Cas clinique — ${lesson?.cleanTitle}` : `Questions — ${lesson?.cleanTitle}`,
-    vignette: defaultVignette,
+    header: `Cas clinique — ${lesson?.cleanTitle || "Évaluation"}`,
+    vignette:
+      spec.kind === "CAS_CLINIQUE"
+        ? `Un patient est admis dans le service pour un tableau clinique et biologique caractéristique relevant du chapitre « ${lesson?.cleanTitle} ». L'examen physique initial et les premiers résultats de l'hémogramme orientent vers les critères diagnostiques de votre cours.`
+        : undefined,
     lessonIds: lesson ? [lesson.id] : [],
     items,
   };
-}
-
-// Normalise et sécurise les items issus de n'importe quelle réponse LLM
-function normalizeRawItems(rawItems: any[], lesson: EBLesson): EBItem[] {
-  const result: EBItem[] = [];
-  const letters = ["A", "B", "C", "D", "E"];
-
-  for (let idx = 0; idx < rawItems.length; idx++) {
-    const raw = rawItems[idx];
-    if (!raw || typeof raw !== "object") continue;
-
-    const rawFormat = String(raw.format || raw.type || "").toUpperCase();
-    let format: EBFormat = "ELECTION";
-    if (rawFormat.includes("GROUP")) format = "GROUPAGE";
-    else if (rawFormat.includes("CENSUR") || rawFormat.includes("FAUSS") || rawFormat.includes("SAUF")) format = "CENSURE";
-    else if (rawFormat.includes("JUMEL") || rawFormat.includes("PARCE")) format = "JUMELAGE";
-    else if (rawFormat.includes("COMPLEMENT") || rawFormat.includes("MULTIPLE")) format = "COMPLEMENT_MULTIPLE";
-    else format = "ELECTION";
-
-    const stem = String(
-      raw.stem || raw.question || raw.enonce || raw.title || `Question d'évaluation sur ${lesson.cleanTitle}`
-    ).trim();
-
-    // Normalisation des statements
-    let statements: string[] | undefined = undefined;
-    if (Array.isArray(raw.statements) && raw.statements.length > 0) {
-      statements = raw.statements.map((s: any) => (typeof s === "string" ? s : s?.text || String(s)).trim());
-    } else if (Array.isArray(raw.assertions) && raw.assertions.length > 0) {
-      statements = raw.assertions.map((s: any) => (typeof s === "string" ? s : s?.text || String(s)).trim());
-    }
-
-    // Normalisation des options
-    let options: EBOption[] = [];
-
-    if (Array.isArray(raw.options) && raw.options.length >= 2) {
-      options = raw.options.slice(0, 5).map((o: any, oIdx: number) => {
-        const letter = String(o.letter || letters[oIdx] || "A").toUpperCase();
-        const text = String(o.text || o.label || o).trim();
-        return { letter, text };
-      });
-    } else if (raw.options && typeof raw.options === "object" && !Array.isArray(raw.options)) {
-      options = Object.entries(raw.options)
-        .slice(0, 5)
-        .map(([k, v], oIdx) => ({
-          letter: letters[oIdx] || k.toUpperCase(),
-          text: String(typeof v === "string" ? v : (v as any)?.text || v).trim(),
-        }));
-    } else if (format === "GROUPAGE" && statements && statements.length >= 3) {
-      // Reconstitution automatique des 5 options canoniques de groupage de Faculté
-      options = [
-        { letter: "A", text: "1 + 2 + 3" },
-        { letter: "B", text: "1 + 3" },
-        { letter: "C", text: "2 + 4" },
-        { letter: "D", text: "4 seulement" },
-        { letter: "E", text: "1 + 2 + 3 + 4" },
-      ];
-    } else if (format === "JUMELAGE") {
-      options = [
-        { letter: "A", text: "Les deux propositions sont vraies et ont une relation de cause à effet" },
-        { letter: "B", text: "Les deux propositions sont vraies mais sans relation de cause à effet" },
-        { letter: "C", text: "La première proposition est vraie, mais la seconde est fausse" },
-        { letter: "D", text: "La première proposition est fausse, mais la seconde est vraie" },
-        { letter: "E", text: "Les deux propositions sont fausses" },
-      ];
-    } else if (statements && statements.length >= 4) {
-      // Si l'IA a mis les propositions dans statements (ex: Censure)
-      options = statements.slice(0, 5).map((s, sIdx) => ({
-        letter: letters[sIdx] || "A",
-        text: s,
-      }));
-      statements = undefined;
-    }
-
-    // Compléter à 5 options si nécessaire
-    while (options.length < 5) {
-      const missingIdx = options.length;
-      options.push({
-        letter: letters[missingIdx] || "E",
-        text:
-          missingIdx === 4 && format === "CENSURE"
-            ? "Toutes les propositions susmentionnées sont conformes au cours."
-            : `Donnée diagnostique complémentaire issue du chapitre « ${lesson.cleanTitle} ».`,
-      });
-    }
-
-    // Normalisation de la réponse correcte
-    let correct: string[] = ["A"];
-    if (Array.isArray(raw.correct)) {
-      correct = raw.correct
-        .map((c: any) => {
-          const s = String(c).trim().toUpperCase();
-          if (s === "1") return "A";
-          if (s === "2") return "B";
-          if (s === "3") return "C";
-          if (s === "4") return "D";
-          if (s === "5") return "E";
-          return s;
-        })
-        .filter((l: string) => letters.includes(l));
-      if (correct.length === 0) correct = ["A"];
-    } else if (typeof raw.correct === "string") {
-      const s = raw.correct.trim().toUpperCase();
-      if (letters.includes(s)) correct = [s];
-      else if (s === "1") correct = ["A"];
-      else if (s === "2") correct = ["B"];
-      else if (s === "3") correct = ["C"];
-      else if (s === "4") correct = ["D"];
-      else if (s === "5") correct = ["E"];
-    }
-
-    const explanation = String(
-      raw.explanation ||
-        raw.justification ||
-        raw.rationale ||
-        `Référence au cours « ${lesson.cleanTitle} »`
-    ).trim();
-
-    result.push({
-      id: raw.id || `item_${idx + 1}`,
-      number: idx + 1,
-      format,
-      lead: raw.lead,
-      stem,
-      statements,
-      options,
-      correct,
-      explanation,
-      lessonId: lesson.id,
-    });
-  }
-
-  return result;
 }
 
 export async function generateExamBlanc(params: {
@@ -1092,11 +969,12 @@ export async function generateExamBlanc(params: {
 
   const systemPrompt = fillSystemPrompt(ueName, subjectName, analysis.quota);
   const activeFormats =
-    analysis.style.preferredFormats.filter((f) => f !== "QNS").length > 0
-      ? analysis.style.preferredFormats.filter((f) => f !== "QNS")
-      : (["ELECTION", "GROUPAGE", "CENSURE", "JUMELAGE"] as EBFormat[]);
+    analysis.style.preferredFormats.length > 0
+      ? analysis.style.preferredFormats
+      : (["ELECTION", "GROUPAGE", "CENSURE"] as EBFormat[]);
 
   let globalQuestionNumber = 1;
+  const itemsPerLesson = Math.max(4, Math.round((analysis.maxQcm || 20) / Math.max(1, selected.length)));
 
   for (let i = 0; i < selected.length; i++) {
     if (isCancelled?.()) break;
@@ -1104,145 +982,96 @@ export async function generateExamBlanc(params: {
 
     onProgress?.({
       phase: "redaction",
-      message: `Rédaction des QCM & Cas Cliniques : « ${lesson.cleanTitle} » (${i + 1}/${selected.length})…`,
+      message: `Rédaction calibrée UCAD : « ${lesson.cleanTitle} » (${i + 1}/${selected.length})…`,
       current: i,
       total: selected.length,
     });
 
-    const isClinicalCase = analysis.style.usesClinicalCases || i % 2 === 0 || selected.length <= 3;
+    const formatsForBlock: EBFormat[] = Array.from({ length: itemsPerLesson }, (_, k) => {
+      return activeFormats[(i + k) % activeFormats.length] || "ELECTION";
+    });
+
     const spec: BlueprintSpec = {
       id: `block_${i + 1}`,
-      kind: isClinicalCase ? "CAS_CLINIQUE" : "STANDALONE",
+      kind: analysis.style.usesClinicalCases || i < 3 ? "CAS_CLINIQUE" : "STANDALONE",
       lessonIds: [lesson.id],
-      formats: [
-        activeFormats[i % activeFormats.length],
-        activeFormats[(i + 1) % activeFormats.length],
-        activeFormats[(i + 2) % activeFormats.length],
-        activeFormats[(i + 3) % activeFormats.length],
-      ],
+      formats: formatsForBlock,
     };
 
-    let aiSuccess = false;
-
-    // Tentative de génération via l'IA universitaire DawJang
     try {
-      const activeFmts = spec.formats;
-      const userPrompt = `Tu es membre du Jury d'Évaluation de la Faculté de Médecine (UCAD).
-Rédige un bloc d'évaluation médicale de type ${isClinicalCase ? "CAS CLINIQUE PROGRESSIF" : "QUESTIONS INDÉPENDANTES"} sur la leçon : « ${lesson.cleanTitle} ».
+      const { data, error } = await supabase.functions.invoke("generate-quiz", {
+        body: {
+          action: "generate_examen_blanc_block",
+          systemPrompt,
+          ueName,
+          subjectName,
+          sessionSeed,
+          lessonTitle: lesson.cleanTitle,
+          lessonContent: lesson.content,
+          blueprintSpec: spec,
+        },
+      });
 
-${
-  isClinicalCase
-    ? `STRUCTURE DU CAS CLINIQUE OBLIGATOIRE :
-1. "header" : "Cas clinique — ${lesson.cleanTitle}"
-2. "vignette" : Observation clinique narrative complète et réaliste (15 à 20 lignes) comprenant :
-   - Patient (âge, sexe, profession, antécédents médicaux).
-   - Signes fonctionnels et motif de consultation précis.
-   - Données d'examen physique complet chiffré (constantes, examen cutanéomuqueux, palpation hépato-splénique, aires ganglionnaires).
-   - Bilan paraclinique initial détaillé et chiffré (NFS complète avec VGM, TCMH, plaquettes, réticulocytes, bilan d'hémolyse ou frottis).
-3. "items" : Exactement ${activeFmts.length} questions médicales progressives de QCM :
-   ${activeFmts.map((f, idx) => `- Question ${idx + 1} : format "${f}"`).join("\n   ")}`
-    : `STRUCTURE DU BLOC DE QUESTIONS :
-1. "header" : "Questions d'évaluation — ${lesson.cleanTitle}"
-2. "items" : Exactement ${activeFmts.length} questions indépendantes de QCM :
-   ${activeFmts.map((f, idx) => `- Question ${idx + 1} : format "${f}"`).join("\n   ")}`
-}
-
-RÈGLES STRICTES DE FORMAT :
-- "ELECTION" : 5 propositions (A à E) dans "options", UNE SEULE est exacte.
-- "CENSURE" : L'énoncé se termine par « SAUF UNE » ou « Indiquez l'affirmation inexacte », 5 propositions (A à E) dans "options" dont 4 exactes et 1 fausse ("correct" = lettre de la fausse).
-- "GROUPAGE" : 4 assertions médicales numérotées 1, 2, 3, 4 dans "statements", puis les 5 options canoniques : A = 1+2+3, B = 1+3, C = 2+4, D = 4 seul, E = 1+2+3+4.
-- "JUMELAGE" : 2 assertions dans "statements" reliées par PARCE QUE, et les 5 options canoniques (A, B, C, D, E).
-- "COMPLEMENT_MULTIPLE" : 5 propositions (A à E) dans "options".
-- AUCUNE QUESTION OUVERTE / AUCUN QROC / AUCUN QNS.
-
-EXTRAIT DU COURS (Source de vérité) :
-${lesson.content.slice(0, 30000)}
-
-Réponds EXCLUSIVEMENT avec ce JSON valide :
-{
-  "kind": "${spec.kind}",
-  "header": "${isClinicalCase ? "Cas clinique" : "Questions"} — ${lesson.cleanTitle}",
-  ${isClinicalCase ? `"vignette": "Observation clinique détaillée du patient...",` : ""}
-  "items": [
-    {
-      "format": "${activeFmts[0]}",
-      "stem": "Énoncé précis de la question...",
-      "statements": ${activeFmts[0] === "GROUPAGE" ? `["Assertion 1", "Assertion 2", "Assertion 3", "Assertion 4"]` : activeFmts[0] === "JUMELAGE" ? `["Proposition 1", "Proposition 2"]` : `null`},
-      "options": [
-        {"letter": "A", "text": "Proposition A"},
-        {"letter": "B", "text": "Proposition B"},
-        {"letter": "C", "text": "Proposition C"},
-        {"letter": "D", "text": "Proposition D"},
-        {"letter": "E", "text": "Proposition E"}
-      ],
-      "correct": ["A"],
-      "explanation": "Justification clinique..."
-    }
-  ]
-}`;
-
-      const rawAiResponse = await callDawiaEngineRaw("dawia2", systemPrompt, userPrompt, 0.25);
-      if (rawAiResponse) {
-        const parsed = repairAndParseQuizJson(rawAiResponse);
-        const rawItems = Array.isArray(parsed?.items)
-          ? parsed.items
-          : Array.isArray(parsed?.questions)
-          ? parsed.questions
-          : Array.isArray(parsed)
-          ? parsed
-          : null;
-
-        if (rawItems && rawItems.length > 0) {
-          const normalized = normalizeRawItems(rawItems, lesson);
-          if (normalized.length > 0) {
-            const formattedItems: EBItem[] = normalized.map((it) => ({
-              ...it,
-              id: `eb_${sessionSeed}_${i + 1}_${globalQuestionNumber}`,
-              number: globalQuestionNumber++,
-            }));
-
-            let vignette = isClinicalCase
-              ? parsed?.vignette ||
-                parsed?.observation ||
-                parsed?.clinicalCase ||
-                parsed?.cas_clinique?.vignette ||
-                parsed?.cas_clinique?.observation
-              : undefined;
-
-            if (isClinicalCase && (!vignette || vignette.length < 40)) {
-              vignette = `Patient âgé de 56 ans reçu en consultation pour un bilan clinique et paraclinique approfondi en rapport avec « ${lesson.cleanTitle} ». L'interrogatoire, l'examen physique complet et les explorations biologiques initiales révèlent les manifestations pathognomoniques détaillées dans votre cours.`;
-            }
-
-            blocks.push({
-              id: `block_${sessionSeed}_${i + 1}`,
-              kind: spec.kind,
-              header: parsed?.header || (isClinicalCase ? `Cas clinique — ${lesson.cleanTitle}` : `Questions — ${lesson.cleanTitle}`),
-              vignette,
-              lessonIds: [lesson.id],
-              items: formattedItems,
+      if (!error && data?.block && Array.isArray(data.block.items) && data.block.items.length > 0) {
+        const numberedItems: EBItem[] = data.block.items.map((it: any) => {
+          let opts: EBOption[] = [];
+          if (Array.isArray(it.options) && it.options.length > 0) {
+            opts = it.options.map((o: any, idx: number) => {
+              if (typeof o === "string") {
+                const letterMatch = o.match(/^([A-E])[.)]\s*(.*)$/i);
+                return {
+                  letter: letterMatch ? letterMatch[1].toUpperCase() : (["A","B","C","D","E"][idx] || "A"),
+                  text: letterMatch ? letterMatch[2].trim() : o.trim()
+                };
+              }
+              return {
+                letter: String(o.letter || ["A","B","C","D","E"][idx] || "A").toUpperCase(),
+                text: String(o.text || o.label || "").trim()
+              };
             });
-            aiSuccess = true;
           }
-        }
+          return {
+            id: `eb_${sessionSeed}_${i + 1}_${globalQuestionNumber}`,
+            number: globalQuestionNumber++,
+            format: (it.format || "ELECTION") as EBFormat,
+            stem: String(it.stem || it.question || `Question sur ${lesson.cleanTitle}`).trim(),
+            lead: it.lead,
+            statements: Array.isArray(it.statements) ? it.statements : undefined,
+            options: opts.length >= 2 ? opts : [
+              { letter: "A", text: "Proposition A" },
+              { letter: "B", text: "Proposition B" },
+              { letter: "C", text: "Proposition C" },
+              { letter: "D", text: "Proposition D" },
+              { letter: "E", text: "Proposition E" }
+            ],
+            correct: Array.isArray(it.correct) && it.correct.length > 0 ? it.correct.map((c: any) => String(c).toUpperCase()) : ["A"],
+            explanation: it.explanation || `Référence au cours « ${lesson.cleanTitle} ».`,
+            lessonId: lesson.id,
+          };
+        });
+        blocks.push({
+          ...data.block,
+          id: `block_${sessionSeed}_${i + 1}`,
+          lessonIds: [lesson.id],
+          items: numberedItems,
+        });
+        continue;
       }
-    } catch (err) {
-      console.warn(`[generateExamBlanc] Appel IA pour ${lesson.cleanTitle} non abouti, bascule autonome :`, err);
+    } catch {
+      // bascule sur la synthèse autonome du cours
     }
 
-    // Filet de sécurité médical autonome si l'IA distante est inaccessible
-    if (!aiSuccess) {
-      const fallback = createSyntheticFallbackBlock(
-        spec,
-        [lesson],
-        `block_${sessionSeed}_${i + 1}`,
-        analysis.style
-      );
-      fallback.items = fallback.items.map((it) => ({
-        ...it,
-        number: globalQuestionNumber++,
-      }));
-      blocks.push(fallback);
-    }
+    const fallback = createSyntheticFallbackBlock(
+      spec,
+      [lesson],
+      `block_${sessionSeed}_${i + 1}`,
+      analysis.style
+    );
+    fallback.items = fallback.items.map((it) => ({
+      ...it,
+      number: globalQuestionNumber++,
+    }));
+    blocks.push(fallback);
   }
 
   return { blocks, warnings };
