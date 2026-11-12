@@ -1,7 +1,7 @@
 // src/lib/examenBlancEngine.ts
 // ============================================================================
-// MOTEUR DOCIMOLOGIQUE UNIVERSEL — Passe Unique Linéaire, Isolation d'EC/Matière,
-// Attribution Sémantique Profonde des Leçons & Génération Calibrée UCAD
+// MOTEUR DOCIMOLOGIQUE UNIVERSEL — Auto-Hydratation des Cours, Analyse Profonde
+// Épreuve par Épreuve & QCM par QCM, Probabilités & Génération Calibrée UCAD
 // ============================================================================
 import { supabase } from "@/integrations/supabase/client";
 
@@ -177,12 +177,13 @@ const STOPWORDS_FR = new Set([
   "apres", "avant", "pendant", "depuis", "contre", "selon", "comme", "ainsi", "etre",
   "avoir", "faire", "peut", "sont", "elle", "elles", "nous", "vous", "leur", "leurs",
   "cours", "chapitre", "lecon", "module", "professeur", "docteur", "faculte", "examen",
-  "patient", "patiente", "ans", "consulte", "examen", "clinique", "bilan", "suivantes",
-  "propositions", "laquelle", "lequel", "parmi", "cochez", "reponse", "exacte", "fausse",
+  "patient", "patiente", "ans", "consulte", "clinique", "bilan", "suivantes", "suivant",
+  "propositions", "proposition", "laquelle", "lequel", "parmi", "cochez", "cocher",
+  "reponse", "reponses", "exacte", "fausse", "juste", "incorrecte", "question", "qcm",
 ]);
 
 export const normalizeText = (s: string): string =>
-  s
+  String(s || "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -191,18 +192,19 @@ export const normalizeText = (s: string): string =>
     .trim();
 
 export const sizeLabelOf = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  const b = Number(bytes) || 0;
+  if (b < 1024) return `${b} o`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} Ko`;
+  return `${(b / (1024 * 1024)).toFixed(1)} Mo`;
 };
 
 export const cleanLessonTitle = (rawName: string): string =>
-  rawName
+  String(rawName || "")
     .replace(/\.(pdf|docx?|pptx?|txt|md|rtf|odt|png|jpe?g|webp)$/i, "")
     .replace(/^(cours|lecon|chapitre|item|ue|module)[\s_-]*\d*[\s_:-]*/i, "")
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
-    .trim() || rawName;
+    .trim() || String(rawName || "Cours");
 
 export const formatSessionDate = (iso: string): string => {
   try {
@@ -216,82 +218,234 @@ export const formatSessionDate = (iso: string): string => {
   }
 };
 
-// Synonymes médicaux pour relier les cas cliniques aux intitulés de cours (Hémato, Médecine Interne, etc.)
-const MEDICAL_TOPIC_CLUSTERS: Array<{ terms: string[]; boostTokens: string[] }> = [
+// ----------------------------------------------------------------------------
+// 1. DICTIONNAIRE DOCIMOLOGIQUE MÉDICAL PROFOND (CLUSTERS SÉMANTIQUES)
+//    Permet de relier un cas clinique aux cours même si le nom de la maladie
+//    n'est pas écrit dans l'énoncé (ex: "dacryocytes + splénomégalie" -> Myélofibrose/SMP)
+// ----------------------------------------------------------------------------
+interface MedicalTopicCluster {
+  id: string;
+  diagnosticMarkers: string[];
+  courseKeywords: string[];
+}
+
+const MEDICAL_TOPIC_CLUSTERS: MedicalTopicCluster[] = [
   {
-    terms: ["myelome", "mgus", "plasmocyte", "crab", "bence jones", "durie", "salmon", "immunofixation", "pic monoclonal", "waldenstrom", "gammapathie"],
-    boostTokens: ["myelome", "multiple", "gammapathie", "monoclonale", "dysglobulinemie", "plasmocytaire", "waldenstrom"],
+    id: "myelome_gammapathies",
+    diagnosticMarkers: [
+      "myelome", "mgus", "plasmocyte", "plasmocytose", "crab", "bence jones",
+      "durie", "salmon", "immunofixation", "pic etroit", "pic monoclonal",
+      "composant monoclonal", "biphosphonate", "bisphosphonate", "melphalan",
+      "velcade", "bortezomib", "thalidomide", "autogreffe", "waldenstrom",
+      "beta 2 microglobuline", "hyperprotidemie", "geodes", "imwg",
+    ],
+    courseKeywords: [
+      "myelome", "multiple", "gammapathie", "gammapathies", "monoclonale",
+      "monoclonales", "dysglobulinemie", "plasmocytaire", "waldenstrom", "mgus",
+    ],
   },
   {
-    terms: ["leucemie lymphoide chronique", "llc", "gumprecht", "matutes", "binet", "richter", "hyperlymphocytose"],
-    boostTokens: ["leucemie", "lymphoide", "chronique", "llc", "syndromes", "lymphoproliferatifs"],
+    id: "llc_lymphoproliferatif",
+    diagnosticMarkers: [
+      "leucemie lymphoide chronique", "llc", "gumprecht", "ombres de gumprecht",
+      "matutes", "score de matutes", "binet", "classification de binet",
+      "syndrome de richter", "richter", "hyperlymphocytose", "lymphocytes matures",
+      "syndrome d evans", "immunophenotypage lymphocytaire",
+    ],
+    courseKeywords: [
+      "leucemie", "lymphoide", "chronique", "llc", "lymphoproliferatif",
+      "lymphoproliferatifs", "hyperlymphocytose", "richter", "binet",
+    ],
   },
   {
-    terms: ["lymphome", "hodgkin", "reed sternberg", "ann arbor", "abvd", "r chop", "cd20", "cd30", "ipi", "adenopathie"],
-    boostTokens: ["lymphome", "hodgkin", "non", "hodgkinien", "lnh", "adenopathie", "splenomegalie"],
+    id: "lymphomes_hodgkin_lnh",
+    diagnosticMarkers: [
+      "lymphome", "hodgkin", "non hodgkinien", "reed sternberg", "sternberg",
+      "cellule lacunaire", "ann arbor", "abvd", "r chop", "chop", "rituximab",
+      "cd20", "cd30", "cd15", "score ipi", "index pronostique international",
+      "grandes cellules", "biopsie ganglionnaire", "polyadenopathie",
+    ],
+    courseKeywords: [
+      "lymphome", "lymphomes", "hodgkin", "hodgkinien", "lnh", "adenopathie",
+      "adenopathies", "ganglionnaire", "sternberg", "ann arbor",
+    ],
   },
   {
-    terms: ["polyglobulie", "vaquez", "myelofibrose", "splenomegalie myeloide", "thrombocytemie", "jak2", "bcr abl", "philadelphie", "lmc", "leucemie myeloide chronique", "dacryocytes"],
-    boostTokens: ["myeloproliferatif", "syndromes", "myeloproliferatifs", "polyglobulie", "vaquez", "lmc", "myelofibrose", "chronique"],
+    id: "smp_vaquez_lmc_myelofibrose",
+    diagnosticMarkers: [
+      "polyglobulie", "vaquez", "myelofibrose", "splenomegalie myeloide",
+      "thrombocytemie essentielle", "jak2", "v617f", "bcr abl", "philadelphie",
+      "lmc", "leucemie myeloide chronique", "dacryocytes", "calreticuline",
+      "mpl", "erythrose faciale", "imatinib", "myelemie", "panmyelose",
+    ],
+    courseKeywords: [
+      "myeloproliferatif", "myeloproliferatifs", "smp", "polyglobulie", "vaquez",
+      "lmc", "myelofibrose", "thrombocytemie", "myeloide chronique", "jak2",
+    ],
   },
   {
-    terms: ["leucemie aigue", "lam3", "promyelocytaire", "myeloblastes", "lymphoblastes", "t 15 17", "pml rara", "aracytine", "blastes"],
-    boostTokens: ["leucemie", "aigue", "leucemies", "aigues", "lam", "lal"],
+    id: "leucemies_aigues_lam_lal",
+    diagnosticMarkers: [
+      "leucemie aigue", "promyelocytaire", "lam3", "myeloblastes", "lymphoblastes",
+      "translocation t 15 17", "t 15 17", "pml rara", "aracytine", "corps d auer",
+      "blastose", "blastes", "acutisation", "leucostase",
+    ],
+    courseKeywords: [
+      "leucemie aigue", "leucemies aigues", "lam", "lal", "myeloblastique",
+      "lymphoblastique", "promyelocytaire", "blastes",
+    ],
   },
   {
-    terms: ["drepanocytose", "hbs", "hbf", "syndrome thoracique aigu", "hydroxyuree", "falciformation", "emmel", "crise vaso occlusive", "thalassemie"],
-    boostTokens: ["drepanocytose", "hemoglobinopathie", "hemolyse", "anemie", "hemolytique", "thalassemie"],
+    id: "drepanocytose_thalassemies",
+    diagnosticMarkers: [
+      "drepanocytose", "hbs", "hbf", "hba2", "syndrome thoracique aigu",
+      "hydroxyuree", "falciformation", "test d emmel", "emmel", "crise vaso occlusive",
+      "thalassemie", "electrophorese de l hemoglobine", "hackett", "echange transfusionnel",
+    ],
+    courseKeywords: [
+      "drepanocytose", "drepanocytaires", "hemoglobinopathie", "hemoglobinopathies",
+      "thalassemie", "thalassemies", "hbs", "falciformation", "hemolytique",
+    ],
   },
   {
-    terms: ["spherocytose", "elliptocytose", "g6pd", "corps de heinz", "ektacytometrie", "minkowski", "pyruvate kinase"],
-    boostTokens: ["anemie", "hemolytique", "hemolytiques", "membrane", "enzymopathie", "g6pd", "spherocytose"],
+    id: "anemies_hemolytiques_membrane_enzymes",
+    diagnosticMarkers: [
+      "spherocytose", "microspherocytose", "minkowski chauffard", "elliptocytose",
+      "ektacytometrie", "g6pd", "corps de heinz", "pyruvate kinase",
+      "hemoglobinurie", "haptoglobine effondree", "quinine", "anemie hemolytique",
+      "reticulocytes", "bilirubine non conjuguee", "bilirubine indirecte",
+    ],
+    courseKeywords: [
+      "hemolytique", "hemolytiques", "hemolyse", "spherocytose", "elliptocytose",
+      "g6pd", "enzymopathie", "membrane", "erythrocytaire", "anemie",
+    ],
   },
   {
-    terms: ["biermer", "macrocytaire", "vitamine b12", "cyanocobalamine", "facteur intrinseque", "carence martiale", "ferriprive", "ferritinemie", "plummer vinson"],
-    boostTokens: ["anemie", "carentielle", "macrocytaire", "microcytaire", "biermer", "carence", "martiale", "fer", "hemogramme"],
+    id: "anemies_carentielles_biermer_martiale",
+    diagnosticMarkers: [
+      "biermer", "anemie macrocytaire", "vitamine b12", "cyanocobalamine",
+      "facteur intrinseque", "cellules parietales", "glossite de hunter",
+      "paraparesie", "neuroanemique", "carence martiale", "ferriprive",
+      "plummer vinson", "perleches", "ferritinemie", "microcytaire hypochrome",
+      "myelodysplasique", "acide folique",
+    ],
+    courseKeywords: [
+      "biermer", "macrocytaire", "megaloblastique", "carentielle", "carentielles",
+      "martiale", "ferriprive", "fer", "vitamine b12", "folates", "anemie", "hemogramme",
+    ],
   },
   {
-    terms: ["hemophilie", "willebrand", "hemarthrose", "facteur viii", "civd", "coagulation intravasculaire", "fibrinogene", "d dimeres", "tca", "hemostase"],
-    boostTokens: ["hemostase", "coagulation", "hemophilie", "willebrand", "civd", "saignement", "purpura", "thrombopenie"],
+    id: "hemostase_hemophilie_willebrand_civd",
+    diagnosticMarkers: [
+      "hemophilie", "hemophile", "conductrice", "willebrand", "von willebrand",
+      "hemarthrose", "facteur viii", "fviii", "temps de saignement", "ivy",
+      "civd", "coagulation intravasculaire disseminee", "d dimeres", "fibrinemie",
+      "fibrinogene", "tca allonge", "post partum", "defibrination", "purpura",
+    ],
+    courseKeywords: [
+      "hemostase", "coagulation", "hemophilie", "willebrand", "civd",
+      "hémorragique", "hemorragique", "thrombopenie", "purpura", "plaquettes",
+    ],
   },
   {
-    terms: ["transfusion", "cross matching", "culot globulaire", "cgr", "incompatibilite abo", "trali", "controle ultime", "groupe sanguin", "rhesus"],
-    boostTokens: ["transfusion", "transfusionnelle", "securite", "produits", "sanguins", "immunohematologie"],
+    id: "transfusion_immunohematologie",
+    diagnosticMarkers: [
+      "transfusion", "transfusionnelle", "transfusionnels", "cross matching",
+      "controle ultime", "lit du malade", "culot globulaire", "concentres de globules rouges",
+      "cgr", "plasma frais congele", "concentres plaquettaires", "incompatibilite abo",
+      "trali", "reaction febrile non hemolytique", "allo immunisation anti d", "rhesus",
+    ],
+    courseKeywords: [
+      "transfusion", "transfusionnelle", "securite transfusionnelle", "produits sanguins",
+      "immunohematologie", "groupes sanguins", "abo", "rhesus", "accident transfusionnel",
+    ],
   },
   {
-    terms: ["lupus", "vespertilio", "anti sm", "anti dna", "slicc", "lupus discoide", "hydroxychloroquine"],
-    boostTokens: ["lupus", "erythemateux", "systemique", "connectivite"],
+    id: "lupus_systemique_discoide",
+    diagnosticMarkers: [
+      "lupus systemique", "lupus erythemateux", "lupus aigu", "lupus discoide",
+      "vespertilio", "sillons naso geniens", "anti sm", "anti dna natif",
+      "slicc", "acr 1997", "nephropathie lupique", "glomerulonephrite lupique",
+      "hydroxychloroquine", "pericardite lupique", "libman sacks",
+    ],
+    courseKeywords: ["lupus", "erythemateux", "systemique", "discoide", "les"],
   },
   {
-    terms: ["sapl", "antiphospholipides", "anticardiolipine", "lupus anticoagulant", "beta2gp1", "avortements", "livedo"],
-    boostTokens: ["sapl", "antiphospholipides", "thrombose"],
+    id: "sapl_antiphospholipides",
+    diagnosticMarkers: [
+      "sapl", "antiphospholipides", "anti phospholipides", "anticardiolipine",
+      "anti cardiolipine", "lupus anticoagulant", "anti beta2gp1", "anti b2 gp1",
+      "pertes foetales", "avortements a repetition", "livedo", "vdrl positif",
+      "syndrome catastrophique",
+    ],
+    courseKeywords: ["sapl", "antiphospholipides", "phospholipides", "thrombose"],
   },
   {
-    terms: ["sclerodermie", "raynaud", "crest", "rodnan", "scl70", "centromeres", "erasmus", "sclerodactylie", "calcinose"],
-    boostTokens: ["sclerodermie", "systemique", "raynaud", "acrosyndrome"],
+    id: "sclerodermie_raynaud_crest",
+    diagnosticMarkers: [
+      "sclerodermie", "phenomene de raynaud", "raynaud", "crest", "rodnan",
+      "anti scl70", "scl70", "anti topoisomerase", "anti centromeres",
+      "sclerodactylie", "cicatrices stellaires", "achromie mouchetee",
+      "syndrome d erasmus", "silice", "calcinose", "htap", "fibrose pulmonaire",
+    ],
+    courseKeywords: ["sclerodermie", "raynaud", "crest", "acrosyndrome", "sclerose"],
   },
   {
-    terms: ["dermatomyosite", "gottron", "anti synthetases", "jo1", "pl7", "cpk", "polymyosite", "myopathie"],
-    boostTokens: ["dermatomyosite", "myosite", "myopathies", "inflammatoires"],
+    id: "dermatomyosite_myopathies",
+    diagnosticMarkers: [
+      "dermatomyosite", "papules de gottron", "gottron", "erythro oedeme",
+      "liliace", "anti synthetases", "anti jo1", "jo 1", "anti pl7", "anti pl12",
+      "testing musculaire", "daniels", "cpk", "electromyogramme", "emg", "polymyosite",
+    ],
+    courseKeywords: ["dermatomyosite", "polymyosite", "myosite", "myopathies", "inflammatoires"],
   },
   {
-    terms: ["sarcoidose", "brocq pautrier", "lupus pernio", "lofgren", "heerfordt", "mikulicz", "granulome", "vitropression"],
-    boostTokens: ["sarcoidose", "granulomatose"],
+    id: "sarcoidose",
+    diagnosticMarkers: [
+      "sarcoidose", "sarcoides", "vitropression", "lupoide", "brocq pautrier",
+      "lupus pernio", "scar sarcoidosis", "darier roussy", "heerfordt",
+      "mikulicz", "adenopathies hilaires", "enzyme de conversion", "granulome sans necrose",
+    ],
+    courseKeywords: ["sarcoidose", "granulomatose", "sarcoide", "bbs"],
   },
   {
-    terms: ["behcet", "aphte", "aphtose", "hypopion", "uveite", "pathergique", "colchicine", "pseudo folliculite"],
-    boostTokens: ["behcet", "aphtose", "vascularite"],
+    id: "maladie_de_behcet",
+    diagnosticMarkers: [
+      "behcet", "aphte", "aphtes", "aphtose bipolaire", "ulcerations scrotales",
+      "ulcerations genitales", "uveite", "hypopion", "pseudo folliculite",
+      "test pathergique", "colchicine", "periphlebite",
+    ],
+    courseKeywords: ["behcet", "aphtose", "vascularite", "uveite"],
   },
   {
-    terms: ["polyarthrite rhumatoide", "anti ccp", "methotrexate", "synovite", "squeeze test", "coup de vent cubital", "sjogren", "sharp", "anti ssa", "u1rnp"],
-    boostTokens: ["polyarthrite", "rhumatoide", "sjogren", "sharp", "connectivite"],
+    id: "pr_sjogren_sharp",
+    diagnosticMarkers: [
+      "polyarthrite rhumatoide", "squeeze test", "anti ccp", "facteurs rhumatoides",
+      "methotrexate", "synovites", "coup de vent cubital", "col de cygne",
+      "boutonniere", "nodules rhumatoides", "sjogren", "gougerot", "xerostomie",
+      "secheresse oculaire", "anti ssa", "anti ssb", "syndrome de sharp", "u1rnp",
+    ],
+    courseKeywords: ["polyarthrite", "rhumatoide", "sjogren", "gougerot", "sharp", "connectivite"],
   },
   {
-    terms: ["corticotherapie", "prednisone", "prednisolone", "betamethasone", "bolus", "corticoide"],
-    boostTokens: ["corticotherapie", "corticoides", "anti inflammatoires", "immunosuppresseurs"],
+    id: "corticotherapie_autoimmunite",
+    diagnosticMarkers: [
+      "corticotherapie", "prednisone", "prednisolone", "betamethasone",
+      "methylprednisolone", "triamcinolone", "bolus", "bioequivalence",
+      "axe hypothalamo", "auto immunite", "tolerance immunitaire",
+      "anticorps antinucleaires", "fluorescence", "ifi", "fievre mediterraneenne familiale",
+    ],
+    courseKeywords: [
+      "corticotherapie", "corticoides", "auto immunite", "auto anticorps",
+      "maladies systemiques", "fmf", "generalites",
+    ],
   },
 ];
 
+// ----------------------------------------------------------------------------
+// 2. CONSTRUCTION & AUTO-RÉHYDRATATION INFAILLIBLE DES COURS (EBLesson)
+//    Empêche définitivement "lesson.headings is not iterable" sur le localStorage
+// ----------------------------------------------------------------------------
 export const buildLesson = (
   id: string,
   fileName: string,
@@ -299,23 +453,25 @@ export const buildLesson = (
   byteSize: number,
   subjectInput: string
 ): EBLesson => {
-  const cleanTitle = cleanLessonTitle(fileName);
-  const words = content.split(/\s+/).filter(Boolean);
+  const safeContent = String(content || "");
+  const safeTitle = String(fileName || "Cours");
+  const cleanTitle = cleanLessonTitle(safeTitle);
+  const words = safeContent.split(/\s+/).filter(Boolean);
 
-  const headings = content
+  const headings = safeContent
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(
       (l) =>
         l.length >= 5 &&
-        l.length <= 110 &&
+        l.length <= 120 &&
         (/^([IVX]+|[1-9]\d*)(\.[1-9]\d*)*[\s.)-]+[A-ZÉÈÊÀ]/i.test(l) ||
           (l === l.toUpperCase() && /[A-ZÉÈÊÀ]{4,}/.test(l)))
     )
-    .slice(0, 45);
+    .slice(0, 60);
 
   const freq = new Map<string, number>();
-  const normTokens = normalizeText(`${cleanTitle} ${cleanTitle} ${headings.join(" ")} ${content}`).split(" ");
+  const normTokens = normalizeText(`${cleanTitle} ${cleanTitle} ${headings.join(" ")} ${safeContent}`).split(" ");
   for (const tok of normTokens) {
     if (tok.length < 4 || STOPWORDS_FR.has(tok) || /^\d+$/.test(tok)) continue;
     freq.set(tok, (freq.get(tok) || 0) + 1);
@@ -326,7 +482,7 @@ export const buildLesson = (
 
   const topKeywords = Array.from(freq.entries())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 65)
+    .slice(0, 80)
     .map(([k]) => k);
 
   const keywords = Array.from(new Set([...titleTokens, ...topKeywords]));
@@ -334,30 +490,66 @@ export const buildLesson = (
   const subjTokens = normalizeText(subjectInput)
     .split(" ")
     .filter((t) => t.length >= 4);
-  const normFull = normalizeText(`${cleanTitle} ${content.slice(0, 20000)}`);
+  const normFull = normalizeText(`${cleanTitle} ${safeContent.slice(0, 25000)}`);
   const relevance =
     subjTokens.length === 0
       ? 1
-      : subjTokens.some((st) => normFull.includes(st)) || content.length > 200
+      : subjTokens.some((st) => normFull.includes(st)) || safeContent.length > 150
       ? 1
       : 0;
 
   return {
-    id,
-    title: fileName,
+    id: String(id || `lesson-${Date.now()}`),
+    title: safeTitle,
     cleanTitle,
-    content,
+    content: safeContent,
     wordCount: words.length,
-    sizeLabel: sizeLabelOf(byteSize),
+    sizeLabel: sizeLabelOf(byteSize || safeContent.length),
     keywords,
     headings,
     relevance,
   };
 };
 
+// Réhydrate tout objet EBLesson issu d'un ancien localStorage pour garantir que headings et keywords sont toujours des Array valides
+export function ensureHydratedLesson(rawLesson: Partial<EBLesson>, subjectInput = ""): EBLesson {
+  const hasValidHeadings = Array.isArray(rawLesson.headings) && rawLesson.headings.length > 0;
+  const hasValidKeywords = Array.isArray(rawLesson.keywords) && rawLesson.keywords.length > 0;
+
+  if (hasValidHeadings && hasValidKeywords && rawLesson.cleanTitle && typeof rawLesson.content === "string") {
+    return {
+      id: String(rawLesson.id || `l-${Date.now()}`),
+      title: String(rawLesson.title || rawLesson.cleanTitle || "Cours"),
+      cleanTitle: String(rawLesson.cleanTitle || cleanLessonTitle(rawLesson.title || "Cours")),
+      content: rawLesson.content,
+      wordCount: Number(rawLesson.wordCount) || rawLesson.content.split(/\s+/).filter(Boolean).length,
+      sizeLabel: String(rawLesson.sizeLabel || sizeLabelOf(rawLesson.content.length)),
+      headings: rawLesson.headings,
+      keywords: rawLesson.keywords,
+      relevance: typeof rawLesson.relevance === "number" ? rawLesson.relevance : 1,
+      duplicateOf: rawLesson.duplicateOf,
+    };
+  }
+
+  const rebuilt = buildLesson(
+    String(rawLesson.id || `l-${Date.now()}`),
+    String(rawLesson.title || rawLesson.cleanTitle || "Cours"),
+    String(rawLesson.content || ""),
+     rawLesson.content ? rawLesson.content.length : 1024,
+    subjectInput
+  );
+  return {
+    ...rebuilt,
+    sizeLabel: rawLesson.sizeLabel || rebuilt.sizeLabel,
+    duplicateOf: rawLesson.duplicateOf,
+  };
+}
+
 export const flagDuplicateLessons = (lessons: EBLesson[]): EBLesson[] => {
+  if (!Array.isArray(lessons)) return [];
   const seen = new Map<string, string>();
-  return lessons.map((l) => {
+  return lessons.map((raw) => {
+    const l = ensureHydratedLesson(raw);
     const sig = `${normalizeText(l.cleanTitle)}__${l.wordCount}`;
     const existing = seen.get(sig);
     if (existing && existing !== l.id) {
@@ -368,86 +560,73 @@ export const flagDuplicateLessons = (lessons: EBLesson[]): EBLesson[] => {
   });
 };
 
-export const loadSessions = (): ExamSession[] => {
-  try {
-    const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-};
+// ----------------------------------------------------------------------------
+// 3. INDEX SÉMANTIQUE PROFOND SUR 100 % DU CONTENU DE CHAQUE COURS
+// ----------------------------------------------------------------------------
+interface IndexedLessonProfile {
+  lesson: EBLesson;
+  normTitle: string;
+  titleTokens: string[];
+  normHeadings: string[];
+  normContent: string;
+  keywordSet: Set<string>;
+  clusterScores: Map<string, number>;
+}
 
-export const saveSessions = (sessions: ExamSession[]): void => {
-  try {
-    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
-  } catch {
-    try {
-      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions.slice(0, 15)));
-    } catch {
-      // ignore
-    }
-  }
-};
+function buildIndexedLessonProfiles(lessons: EBLesson[], subjectName: string): IndexedLessonProfile[] {
+  return lessons
+    .map((l) => ensureHydratedLesson(l, subjectName))
+    .filter((l) => !l.duplicateOf)
+    .map((lesson) => {
+      const normTitle = normalizeText(lesson.cleanTitle);
+      const titleTokens = normTitle.split(" ").filter((t) => t.length >= 3 && !STOPWORDS_FR.has(t));
+      const normHeadings = (lesson.headings || []).map((h) => normalizeText(h)).filter((h) => h.length >= 4);
+      const normContent = normalizeText(lesson.content);
+      const keywordSet = new Set<string>(lesson.keywords || []);
 
-export const isItemCorrect = (item: EBItem, chosen: string[]): boolean => {
-  if (!chosen || chosen.length === 0) return false;
-  if (item.format === "QNS") return chosen[0].trim().length > 10;
-  const a = [...chosen].map((x) => x.toUpperCase()).sort().join(",");
-  const b = [...item.correct].map((x) => x.toUpperCase()).sort().join(",");
-  return a === b;
-};
+      const clusterScores = new Map<string, number>();
+      for (const cluster of MEDICAL_TOPIC_CLUSTERS) {
+        let cScore = 0;
+        for (const ck of cluster.courseKeywords) {
+          const nck = normalizeText(ck);
+          if (normTitle.includes(nck)) cScore += 25;
+          if (normHeadings.some((h) => h.includes(nck))) cScore += 10;
+          if (normContent.includes(nck)) cScore += 3;
+        }
+        for (const dm of cluster.diagnosticMarkers) {
+          const ndm = normalizeText(dm);
+          if (normTitle.includes(ndm)) cScore += 20;
+          else if (normContent.includes(ndm)) cScore += 2;
+        }
+        if (cScore > 0) clusterScores.set(cluster.id, cScore);
+      }
 
-export const computeScore = (blocks: EBBlock[], answers: Record<string, string[]>) => {
-  const allItems = blocks.flatMap((b) => b.items);
-  let found = 0;
-  let wrong = 0;
-  let answered = 0;
-  for (const it of allItems) {
-    const ch = answers[it.id] || [];
-    if (ch.length > 0 && ch[0] !== "") {
-      answered++;
-      if (isItemCorrect(it, ch)) found++;
-      else wrong++;
-    }
-  }
-  return {
-    found,
-    wrong,
-    total: allItems.length,
-    answered,
-    remaining: Math.max(0, allItems.length - answered),
-  };
-};
-
-export const sessionToPdfQuestions = (session: ExamSession): any[] =>
-  session.blocks.flatMap((block) =>
-    block.items.map((it, idx) => ({
-      id: it.id,
-      number: it.number,
-      type: EB_FORMAT_LABELS[it.format],
-      clinicalCase: idx === 0 && block.kind === "CAS_CLINIQUE" ? block.vignette : undefined,
-      question: [it.lead ? `[${it.lead}]` : "", it.stem, ...(it.statements || []).map((s, i) => `${i + 1}. ${s}`)]
-        .filter(Boolean)
-        .join("\n"),
-      options: it.options.map((o) => `${o.letter}. ${o.text}`),
-      correctAnswers: it.correct,
-      explanation: it.explanation,
-    }))
-  );
+      return {
+        lesson,
+        normTitle,
+        titleTokens,
+        normHeadings,
+        normContent,
+        keywordSet,
+        clusterScores,
+      };
+    });
+}
 
 // ----------------------------------------------------------------------------
-// ISOLATION DE LA MATIÈRE CIBLE (Ex: Hématologie vs Maladies de Système)
+// 4. DÉCOUPAGE CHIRURGICAL DES ÉPREUVES : MATIÈRE -> CAS CLINIQUES -> QCM
 // ----------------------------------------------------------------------------
 export function isolateSubjectSectionFromExamText(rawText: string, subjectName: string): string {
+  const safeRaw = String(rawText || "");
   const normSubj = normalizeText(subjectName);
   const isHematoTarget = /hemato|sang|hemopathie|transfusion|hemostase/.test(normSubj);
   const isSystemicTarget = /system|interne|auto\s*immun|connectivite|lupus|rhumato/.test(normSubj);
 
-  // Si le document comporte des balises explicites de section (EC1 Hémato / EC2 Maladies de Système)
-  if (rawText.includes("=== SECTION EC")) {
-    const sections = rawText.split(/(?==== SECTION EC)/g);
+  // 1. Si l'épreuve possède des balises explicites de section (EC1 Hématologie / EC2 Maladies de Système)
+  if (safeRaw.includes("=== SECTION EC")) {
+    const sections = safeRaw.split(/(?==== SECTION EC)/g);
     const matching = sections.filter((sec) => {
-      const header = normalizeText(sec.slice(0, 220));
+      const header = normalizeText(sec.slice(0, 240));
       if (isHematoTarget) return header.includes("hemato");
       if (isSystemicTarget) return header.includes("system") || header.includes("maladies");
       return true;
@@ -455,12 +634,12 @@ export function isolateSubjectSectionFromExamText(rawText: string, subjectName: 
     return matching.join("\n\n").trim();
   }
 
-  // Sinon, filtrage page par page + déduplication des pages scannées en double
-  const rawPages = rawText.split(/--- PAGE \d+ ---/g).map((p) => p.trim()).filter(Boolean);
+  // 2. Sinon, filtrage page par page + déduplication des pages scannées deux fois
+  const rawPages = safeRaw.split(/--- PAGE \d+ ---/g).map((p) => p.trim()).filter(Boolean);
   const uniquePages: string[] = [];
   const seenPageSigs = new Set<string>();
 
-  for (const page of rawPages.length > 0 ? rawPages : [rawText]) {
+  for (const page of rawPages.length > 0 ? rawPages : [safeRaw]) {
     const sig = normalizeText(page).slice(0, 180);
     if (sig.length > 40 && seenPageSigs.has(sig)) continue;
     if (sig.length > 40) seenPageSigs.add(sig);
@@ -469,11 +648,11 @@ export function isolateSubjectSectionFromExamText(rawText: string, subjectName: 
       const normPage = normalizeText(page);
       const hematoScore =
         (normPage.match(
-          /\b(hemogramme|myelogramme|leucemie|lymphome|myelome|drepanocytose|hemophilie|willebrand|plaquettes|reticulocytes|transfusion|bcr\s*abl|jak2|hackett|binet|salmon)\b/g
+          /\b(hemogramme|myelogramme|medullogramme|leucemie|lymphome|myelome|drepanocytose|hemophilie|willebrand|plaquettes|reticulocytes|transfusion|bcr\s*abl|jak2|hackett|binet|salmon|biermer|g6pd|spherocytose)\b/g
         ) || []).length;
       const systemicScore =
         (normPage.match(
-          /\b(lupus|sclerodermie|sarcoidose|behcet|dermatomyosite|sjogren|sharp|raynaud|polyarthrite|anticorps\s*anti|corticotherapie|aphte|gottron|uveite|antiphospholipides|sapl)\b/g
+          /\b(lupus|sclerodermie|sarcoidose|behcet|dermatomyosite|sjogren|sharp|raynaud|polyarthrite|anticorps\s*anti|corticotherapie|aphte|gottron|uveite|antiphospholipides|sapl|rodnan)\b/g
         ) || []).length;
 
       if (isHematoTarget && systemicScore >= 2 && hematoScore === 0) continue;
@@ -486,36 +665,64 @@ export function isolateSubjectSectionFromExamText(rawText: string, subjectName: 
   return uniquePages.join("\n\n").trim();
 }
 
-interface ParsedQuestionUnit {
+export interface ParsedQuestionUnit {
   number: number;
+  caseIndex: number; // 0 = QCM isolé, 1 = Cas clinique 1, 2 = Cas clinique 2...
+  caseVignette: string;
+  stemOnly: string;
   stemAndCase: string;
   fullRawBlock: string;
   format: EBFormat;
   isCasePart: boolean;
 }
 
-function detectFormatFromQuestionBlock(rawBlock: string): EBFormat {
-  const head = rawBlock.slice(0, 160).toUpperCase();
-  if (head.includes("GROUPAGE")) return "GROUPAGE";
-  if (head.includes("CENSURE")) return "CENSURE";
-  if (head.includes("JUMELAGE")) return "JUMELAGE";
-  if (head.includes("COMPLEMENT_MULTIPLE") || head.includes("COMPLEMENTS MULTIPLES")) return "COMPLEMENT_MULTIPLE";
-  if (head.includes("QNS")) return "QNS";
-  if (head.includes("ELECTION") || head.includes("ÉLECTION")) return "ELECTION";
+function detectQuestionFormat(rawBlock: string, inheritedSectionFormat: EBFormat | null): EBFormat {
+  const head = rawBlock.slice(0, 180).toUpperCase();
+  if (/\bGROUPAGE\b/.test(head)) return "GROUPAGE";
+  if (/\bCENSURE\b/.test(head)) return "CENSURE";
+  if (/\bJUMELAGE\b/.test(head)) return "JUMELAGE";
+  if (/\bCOMPLEMENT_MULTIPLE\b|\bCOMPLEMENTS?\s+MULTIPLES?\b/.test(head)) return "COMPLEMENT_MULTIPLE";
+  if (/\bQNS\b/.test(head)) return "QNS";
+  if (/\bELECTION\b|\bÉLECTION\b/.test(head)) return "ELECTION";
 
   const norm = normalizeText(rawBlock);
   if (/\bparce que\b/.test(norm)) return "JUMELAGE";
   if (/(?:^|\n)\s*[1-5][.)]\s+\S+/.test(rawBlock)) return "GROUPAGE";
-  if (/\b(censure|fausse|inexacte|erronee|sauf|n est pas|ne permet pas|moins probable)\b/.test(norm)) {
+  if (
+    /\b(censure|fausse|inexacte|incorrecte|erronee|sauf|n est pas|ne permet pas|ne fait pas|moins probable)\b/.test(
+      norm
+    )
+  ) {
     return "CENSURE";
   }
-  if (/\b(complement multiple|lesquelles|les propositions exactes|cochez les|deux des|choisir 3)\b/.test(norm)) {
+  if (
+    /\b(complement multiple|lesquelles|les propositions exactes|cochez les|cocher la ou les|deux des|deux parmi|choisir 3|citer les 2)\b/.test(
+      norm
+    )
+  ) {
     return "COMPLEMENT_MULTIPLE";
   }
+
+  if (inheritedSectionFormat) return inheritedSectionFormat;
   return "ELECTION";
 }
 
-function parseExamQuestions(rawText: string, subjectName = ""): { questions: ParsedQuestionUnit[]; caseCount: number } {
+function detectSectionFormatBanner(textBetweenQuestions: string): EBFormat | null {
+  const norm = normalizeText(textBetweenQuestions);
+  if (/\bgroupage\b|\ba\s*1\s*2\s*3\b|\breponses\s*groupees\b/.test(norm)) return "GROUPAGE";
+  if (/\bcensure\b|\bchoisir la proposition incorrecte\b/.test(norm)) return "CENSURE";
+  if (/\bjumelage\b|\bvrai\s*vrai avec relation\b/.test(norm)) return "JUMELAGE";
+  if (/\bcomplements multiples\b|\bchoisir la les propositions correctes\b/.test(norm)) {
+    return "COMPLEMENT_MULTIPLE";
+  }
+  if (/\bcochez la reponse juste\b|\belection\b/.test(norm)) return "ELECTION";
+  return null;
+}
+
+export function parseExamQuestionsDetailed(
+  rawText: string,
+  subjectName = ""
+): { questions: ParsedQuestionUnit[]; caseCount: number } {
   const sectionText = isolateSubjectSectionFromExamText(rawText, subjectName);
   if (!sectionText || sectionText.length < 30) {
     return { questions: [], caseCount: 0 };
@@ -523,128 +730,225 @@ function parseExamQuestions(rawText: string, subjectName = ""): { questions: Par
 
   const cleaned = sectionText
     .replace(/\[CORRECTION_MANUSCRITE_DETECTEE:[^\]]*\]/gi, "")
+    .replace(/\[NOTE_DE_COURS_AJOUTEE_IGNOREE\][\s\S]*?(\n\n|$)/gi, "\n")
     .replace(/--- PAGE \d+ ---/g, "\n");
 
-  const caseMatches = cleaned.match(/(?:cas\s+clinique|dossier\s+clinique)\s*\d*/gi);
-  const caseCount = caseMatches ? caseMatches.length : 0;
-
   const regex = /(?:^|\n)\s*(?:QCM\s*(\d{1,3})|Q(?:uestion)?\s*(\d{1,3})|(\d{1,3})\s*[.)-])\s+/gim;
-  const indices: Array<{ index: number; num: number }> = [];
+  const matches: Array<{ index: number; num: number }> = [];
   let m: RegExpExecArray | null;
+
   while ((m = regex.exec(cleaned)) !== null) {
     const num = parseInt(m[1] || m[2] || m[3], 10);
+    // Vérifie qu'il s'agit bien d'un début de QCM et non d'une proposition numérotée 1. 2. 3. 4. 5. d'un Groupage
+    const lineSnippet = cleaned.slice(m.index, m.index + 90).trim();
+    const isExplicitQcm = /^QCM|^Question/i.test(lineSnippet);
+    if (!isExplicitQcm && num >= 1 && num <= 5 && matches.length > 0) {
+      const prevNum = matches[matches.length - 1].num;
+      // Si la question précédente était QCM 6 et qu'on voit "1. Un hématome", c'est un item de groupage, pas QCM 1 !
+      if (prevNum > num && !(prevNum >= 19 && num === 1)) {
+        continue;
+      }
+    }
     if (num >= 1 && num <= 100) {
-      indices.push({ index: m.index, num });
+      matches.push({ index: m.index, num });
     }
   }
 
   const questions: ParsedQuestionUnit[] = [];
+  let activeCaseIndex = 0;
   let activeCaseVignette = "";
+  let inheritedSectionFormat: EBFormat | null = null;
+  const distinctCases = new Set<number>();
 
-  for (let i = 0; i < indices.length; i++) {
-    const start = indices[i].index;
-    const end = i + 1 < indices.length ? indices[i + 1].index : cleaned.length;
-    const preText = i === 0 ? cleaned.slice(0, start) : cleaned.slice(indices[i - 1].index, start);
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].index;
+    const end = i + 1 < matches.length ? matches[i + 1].index : cleaned.length;
+    const interText = i === 0 ? cleaned.slice(0, start) : cleaned.slice(matches[i - 1].index, start);
 
-    const caseIdx = preText.search(/cas\s+clinique\s*\d*/i);
-    if (caseIdx !== -1) {
-      activeCaseVignette = preText.slice(caseIdx).trim();
+    // Mise à jour de la bannière de format de section éventuelle (Groupage, Censure, Jumelage...)
+    const bannerFmt = detectSectionFormatBanner(interText);
+    if (bannerFmt) inheritedSectionFormat = bannerFmt;
+
+    // Détection d'un nouveau Cas Clinique avant la question
+    const caseMatch = interText.match(/(?:cas\s+clinique|ca\s+clinique|dossier\s+clinique)\s*(\d*)/i);
+    if (caseMatch && i === 0) {
+      const caseStart = interText.search(/(?:cas\s+clinique|ca\s+clinique|dossier\s+clinique)/i);
+      activeCaseIndex++;
+      distinctCases.add(activeCaseIndex);
+      activeCaseVignette = interText.slice(caseStart).trim();
     }
 
-    const block = cleaned.slice(start, end).trim();
-    const nextCaseInBlock = block.search(/\n\s*cas\s+clinique\s*\d*/i);
-    const cleanQuestionBlock = nextCaseInBlock !== -1 ? block.slice(0, nextCaseInBlock).trim() : block;
+    const rawBlock = cleaned.slice(start, end).trim();
 
-    const firstOptionIdx = cleanQuestionBlock.search(/(?:^|\n)\s*(?:[A-E][.)-]|\([1-5]\))\s+/m);
-    const stemOnly = firstOptionIdx > 12 ? cleanQuestionBlock.slice(0, firstOptionIdx).trim() : cleanQuestionBlock;
+    // Vérifie si un nouveau Cas Clinique ou une nouvelle section de QCM isolés démarre à la fin de ce bloc
+    const nextCasePos = rawBlock.search(
+      /\n\s*(?:cas\s+clinique|ca\s+clinique|dossier\s+clinique|questions?\s+a\s+reponses?\s+groupees|questions?\s+a\s+choix\s+multiples)/i
+    );
+    const currentQuestionBlock = nextCasePos !== -1 ? rawBlock.slice(0, nextCasePos).trim() : rawBlock;
+    const trailingContext = nextCasePos !== -1 ? rawBlock.slice(nextCasePos).trim() : "";
+
+    // Séparation stricte de l'énoncé (stem) et des propositions (A-E / 1-5)
+    const firstOptPos = currentQuestionBlock.search(/(?:^|\n)\s*(?:[A-Ea-e][.)-]|\(?[1-5][.)])\s+/m);
+    const stemOnly =
+      firstOptPos > 10 ? currentQuestionBlock.slice(0, firstOptPos).trim() : currentQuestionBlock;
+
+    const format = detectQuestionFormat(currentQuestionBlock, inheritedSectionFormat);
 
     questions.push({
-      number: indices[i].num,
-      stemAndCase: `${activeCaseVignette}\n${stemOnly}`.trim(),
-      fullRawBlock: cleanQuestionBlock,
-      format: detectFormatFromQuestionBlock(cleanQuestionBlock),
-      isCasePart: activeCaseVignette.length > 0,
+      number: matches[i].num,
+      caseIndex: activeCaseIndex,
+      caseVignette: activeCaseVignette,
+      stemOnly,
+      stemAndCase: activeCaseVignette ? `${activeCaseVignette}\n${stemOnly}` : stemOnly,
+      fullRawBlock: currentQuestionBlock,
+      format,
+      isCasePart: activeCaseIndex > 0,
     });
 
-    if (nextCaseInBlock !== -1) {
-      activeCaseVignette = block.slice(nextCaseInBlock).trim();
+    // Préparation du contexte pour la question suivante (i + 1)
+    if (trailingContext) {
+      const trailingBanner = detectSectionFormatBanner(trailingContext);
+      if (trailingBanner) inheritedSectionFormat = trailingBanner;
+
+      if (/questions?\s+a\s+reponses?\s+groupees|questions?\s+a\s+choix\s+multiples/i.test(trailingContext)) {
+        // Fin des cas cliniques -> passage aux QCM indépendants
+        activeCaseIndex = 0;
+        activeCaseVignette = "";
+      } else if (/(?:cas\s+clinique|ca\s+clinique|dossier\s+clinique)/i.test(trailingContext)) {
+        activeCaseIndex++;
+        distinctCases.add(activeCaseIndex);
+        activeCaseVignette = trailingContext;
+      }
     }
   }
 
-  return { questions, caseCount: Math.max(caseCount, activeCaseVignette ? 1 : 0) };
+  // Enrichissement mutuel des QCM appartenant au même Cas Clinique :
+  // Si le QCM 1 d'un cas clinique nomme la pathologie dans sa question diagnostique et que le QCM 3 demande "Quel examen confirme ce diagnostic ?",
+  // on consolide le contexte du Cas Clinique pour que QCM 3 hérite du sujet médical du Cas Clinique.
+  const caseCombinedContext = new Map<number, string>();
+  for (const q of questions) {
+    if (q.caseIndex > 0) {
+      const prev = caseCombinedContext.get(q.caseIndex) || q.caseVignette;
+      // On ajoute l'énoncé de toutes les questions du même cas clinique
+      caseCombinedContext.set(q.caseIndex, `${prev}\n${q.stemOnly}`);
+    }
+  }
+
+  for (const q of questions) {
+    if (q.caseIndex > 0 && caseCombinedContext.has(q.caseIndex)) {
+      // Si la question courante introduit une complication transfusionnelle spécifique au sein d'un cas clinique (ex: cross-matching, incompatibilité ABO),
+      // on met l'accent sur l'énoncé spécifique de cette question ; sinon on utilise le dossier complet du cas clinique.
+      const normStemOnly = normalizeText(q.stemOnly);
+      const isSpecificSwitch =
+        /\b(cross matching|controle ultime|lit du malade|transfusion a debute|poche de sang|culot globulaire ab)\b/.test(
+          normStemOnly
+        );
+      q.stemAndCase = isSpecificSwitch
+        ? `${q.stemOnly}\n${q.caseVignette}`
+        : `${q.stemOnly}\n${caseCombinedContext.get(q.caseIndex)}`;
+    }
+  }
+
+  return { questions, caseCount: distinctCases.size };
 }
 
-// Attribution sémantique haute précision entre un énoncé de QCM/Cas clinique et les cours de l'étudiant
-function matchQuestionStemToLesson(
-  stemAndCase: string,
-  lessons: EBLesson[]
+// ----------------------------------------------------------------------------
+// 5. ATTRIBUTION SÉMANTIQUE QCM PAR QCM AUX LEÇONS DE L'UTILISATEUR
+// ----------------------------------------------------------------------------
+function matchQuestionUnitToLesson(
+  q: ParsedQuestionUnit,
+  profiles: IndexedLessonProfile[]
 ): { lessonId: string | null; weak: boolean } {
-  const normStem = normalizeText(stemAndCase);
-  if (!normStem || lessons.length === 0) return { lessonId: null, weak: false };
+  if (profiles.length === 0) return { lessonId: null, weak: false };
 
-  // Identification des clusters médicaux présents dans l'énoncé
-  const activeBoostTokens = new Set<string>();
+  const normPrimary = normalizeText(q.stemAndCase);
+  const normStemOnly = normalizeText(q.stemOnly);
+  const normFull = normalizeText(q.fullRawBlock);
+
+  // Détection des clusters médicaux activés par l'énoncé / cas clinique
+  const activatedClusters = new Map<string, number>();
   for (const cluster of MEDICAL_TOPIC_CLUSTERS) {
-    if (cluster.terms.some((t) => normStem.includes(normalizeText(t)))) {
-      cluster.boostTokens.forEach((bt) => activeBoostTokens.add(normalizeText(bt)));
+    let hits = 0;
+    for (const marker of cluster.diagnosticMarkers) {
+      const nm = normalizeText(marker);
+      if (normStemOnly.includes(nm)) hits += 4;
+      else if (normPrimary.includes(nm)) hits += 2.5;
+      else if (
+        // Si l'énoncé demande "Quel est le diagnostic ?" ou "Quelle est la maladie ?", on inspecte aussi les marqueurs
+        /\b(diagnostic|maladie|affection|pathologie|etiologie|anomalie)\b/.test(normStemOnly) &&
+        normFull.includes(nm)
+      ) {
+        hits += 1;
+      }
+    }
+    if (hits > 0) {
+      activatedClusters.set(cluster.id, hits);
     }
   }
 
   let bestId: string | null = null;
   let bestScore = 0;
 
-  for (const lesson of lessons) {
-    if (lesson.duplicateOf) continue;
+  for (const prof of profiles) {
     let score = 0;
-    const normTitle = normalizeText(lesson.cleanTitle);
-    const titleTokens = normTitle.split(" ").filter((t) => t.length >= 3 && !STOPWORDS_FR.has(t));
 
-    // 1. Correspondance directe ou par cluster médical sur le titre de la leçon
-    for (const tt of titleTokens) {
-      if (normStem.includes(tt)) score += 7;
-      if (activeBoostTokens.has(tt)) score += 9;
-    }
-
-    // 2. Correspondance sur les sous-titres internes du cours
-    for (const h of lesson.headings) {
-      const nh = normalizeText(h);
-      if (nh.length >= 6 && normStem.includes(nh)) score += 8;
-      for (const bt of activeBoostTokens) {
-        if (nh.includes(bt)) score += 4;
+    // 1. Score par cluster médical (relie les signes cliniques/biologiques de l'énoncé au cours correspondant)
+    for (const [clusterId, clusterHits] of activatedClusters.entries()) {
+      const lessonClusterStrength = prof.clusterScores.get(clusterId) || 0;
+      if (lessonClusterStrength > 0) {
+        score += clusterHits * Math.min(12, lessonClusterStrength * 0.5);
       }
     }
 
-    // 3. Correspondance sur l'empreinte de mots-clés du cours
-    for (const kw of lesson.keywords.slice(0, 45)) {
-      if (normStem.includes(kw)) score += 1.5;
-      if (activeBoostTokens.has(kw)) score += 2.5;
+    // 2. Correspondance directe des mots du titre de la leçon dans l'énoncé (stem + cas clinique)
+    for (const tt of prof.titleTokens) {
+      if (normStemOnly.includes(tt)) score += 14;
+      else if (normPrimary.includes(tt)) score += 9;
+    }
+
+    // 3. Correspondance avec les sous-titres internes du cours
+    for (const h of prof.normHeadings) {
+      if (h.length >= 6 && normPrimary.includes(h)) score += 10;
+    }
+
+    // 4. Correspondance avec le vocabulaire spécifique du contenu intégral du cours
+    const stemTokens = normPrimary.split(" ").filter((t) => t.length >= 5 && !STOPWORDS_FR.has(t));
+    const uniqueStemTokens = Array.from(new Set(stemTokens));
+    for (const st of uniqueStemTokens) {
+      if (prof.keywordSet.has(st)) score += 2.5;
+      else if (prof.normContent.includes(st)) score += 0.8;
     }
 
     if (score > bestScore) {
       bestScore = score;
-      bestId = lesson.id;
+      bestId = prof.lesson.id;
     }
   }
 
-  if (!bestId || bestScore < 2.5) {
-    return { lessonId: lessons[0]?.id || null, weak: true };
+  if (!bestId || bestScore < 2) {
+    return { lessonId: profiles[0]?.lesson.id || null, weak: true };
   }
-  return { lessonId: bestId, weak: bestScore < 6 };
+  return { lessonId: bestId, weak: bestScore < 8 };
 }
 
+// ----------------------------------------------------------------------------
+// 6. SYNTHÈSE DOCIMOLOGIQUE & ANALYSE PROFONDE (runDeepAnalysis)
+// ----------------------------------------------------------------------------
 export function computeCorpusAnalysis(
   subjectName: string,
-  lessons: EBLesson[],
+  rawLessons: EBLesson[],
   annales: EBAnnale[]
 ): CorpusAnalysis {
-  const usableLessons = lessons.filter((l) => !l.duplicateOf);
+  const hydratedLessons = flagDuplicateLessons(rawLessons);
+  const profiles = buildIndexedLessonProfiles(hydratedLessons, subjectName);
+  const usableLessons = profiles.map((p) => p.lesson);
+
   const warnings: string[] = [];
   const formatDistribution: Partial<Record<EBFormat, number>> = {};
   const exams: ExamAnalysisItem[] = [];
-  const seenExamFingerprints = new Map<string, string>();
 
   for (const annale of annales) {
-    const { questions, caseCount } = parseExamQuestions(annale.rawText, subjectName);
+    const { questions, caseCount } = parseExamQuestionsDetailed(annale.rawText, subjectName);
 
     if (questions.length === 0) {
       exams.push({
@@ -659,28 +963,9 @@ export function computeCorpusAnalysis(
         audited: true,
       });
       warnings.push(
-        `« ${annale.title} » ne contient aucune question de « ${subjectName} » (épreuve d'une autre matière de l'UE ignorée dans le calcul).`
+        `« ${annale.title} » ne contient aucune question de « ${subjectName} » (épreuve d'une autre matière de l'UE non comptabilisée).`
       );
       continue;
-    }
-
-    // Détection automatique des doublons inter-fichiers (ex: Exam 2019 Hémato corrigé vs Exam 2019 Hémato & MS)
-    const examFingerprint = normalizeText(
-      questions
-        .slice(0, 4)
-        .map((q) => q.stemAndCase.slice(0, 80))
-        .join(" ")
-    ).slice(0, 160);
-
-    if (examFingerprint.length > 40 && seenExamFingerprints.has(examFingerprint)) {
-      const firstTitle = seenExamFingerprints.get(examFingerprint);
-      warnings.push(
-        `Doublon fusionné : la partie ${subjectName} de « ${annale.title} » est identique à « ${firstTitle} » (comptée une seule fois).`
-      );
-      continue;
-    }
-    if (examFingerprint.length > 40) {
-      seenExamFingerprints.set(examFingerprint, annale.title);
     }
 
     const formatCounts: Partial<Record<EBFormat, number>> = {};
@@ -691,7 +976,7 @@ export function computeCorpusAnalysis(
       formatCounts[q.format] = (formatCounts[q.format] || 0) + 1;
       formatDistribution[q.format] = (formatDistribution[q.format] || 0) + 1;
 
-      const { lessonId, weak } = matchQuestionStemToLesson(q.stemAndCase, usableLessons);
+      const { lessonId, weak } = matchQuestionUnitToLesson(q, profiles);
       if (lessonId) {
         const prev = lessonQcmCounts[lessonId] || { blocks: 0, qcm: 0, weak: true };
         const isNewBlock = lessonId !== lastLessonId;
@@ -825,7 +1110,7 @@ export function computeCorpusAnalysis(
   };
 }
 
-// Analyse en 1 seule passe linéaire (examen 1 -> examen N, sans jamais revenir en arrière)
+// Analyse profonde séquentielle : Indexation des 16 cours -> Lecture Épreuve par Épreuve -> Inspection QCM par QCM
 export async function runDeepAnalysis(params: {
   subjectName: string;
   lessons: EBLesson[];
@@ -836,32 +1121,299 @@ export async function runDeepAnalysis(params: {
 }): Promise<CorpusAnalysis> {
   const { subjectName, lessons, annales, onProgress, isCancelled } = params;
 
+  // Étape A : Réhydratation et indexation sémantique à 100 % de tous les cours
+  const hydratedLessons = flagDuplicateLessons(lessons);
+  const profiles = buildIndexedLessonProfiles(hydratedLessons, subjectName);
+  const usableLessons = profiles.map((p) => p.lesson);
+
+  onProgress?.({
+    phase: "lecture",
+    message: `Indexation sémantique de ${usableLessons.length} cours de « ${subjectName} »…`,
+    current: 0,
+    total: Math.max(1, annales.length),
+  });
+  await new Promise((r) => setTimeout(r, 180));
+
+  const warnings: string[] = [];
+  const formatDistribution: Partial<Record<EBFormat, number>> = {};
+  const exams: ExamAnalysisItem[] = [];
+
+  // Étape B : Inspection approfondie Épreuve par Épreuve, Cas Clinique par Cas Clinique, QCM par QCM
   for (let i = 0; i < annales.length; i++) {
     if (isCancelled?.()) break;
+    const annale = annales[i];
+
     onProgress?.({
       phase: "audit",
-      message: `Analyse docimologique (${i + 1}/${annales.length}) : ${annales[i].title}…`,
+      message: `Épreuve ${i + 1}/${annales.length} — Isolation de la matière « ${subjectName} » dans « ${annale.title} »…`,
       current: i,
-      total: Math.max(1, annales.length),
+      total: annales.length,
     });
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 120));
+
+    const { questions, caseCount } = parseExamQuestionsDetailed(annale.rawText, subjectName);
+
+    if (questions.length === 0) {
+      exams.push({
+        examId: annale.id,
+        title: annale.title,
+        year: annale.year,
+        questionCount: 0,
+        caseCount: 0,
+        formatCounts: {},
+        lessonsUsed: [],
+        lessonQcmCounts: {},
+        audited: true,
+      });
+      warnings.push(
+        `« ${annale.title} » ne contient aucune question relevant de « ${subjectName} » (épreuve d'une autre matière ignorée).`
+      );
+      continue;
+    }
+
+    const formatCounts: Partial<Record<EBFormat, number>> = {};
+    const lessonQcmCounts: Record<string, { blocks: number; qcm: number; weak?: boolean }> = {};
+    let lastLessonId: string | null = null;
+
+    // Inspection QCM par QCM à l'intérieur de l'épreuve
+    for (let qIdx = 0; qIdx < questions.length; qIdx++) {
+      if (isCancelled?.()) break;
+      const q = questions[qIdx];
+
+      formatCounts[q.format] = (formatCounts[q.format] || 0) + 1;
+      formatDistribution[q.format] = (formatDistribution[q.format] || 0) + 1;
+
+      const { lessonId, weak } = matchQuestionUnitToLesson(q, profiles);
+      let matchedTitle = "Cours associé";
+
+      if (lessonId) {
+        const foundLesson = usableLessons.find((l) => l.id === lessonId);
+        if (foundLesson) matchedTitle = foundLesson.cleanTitle;
+
+        const prev = lessonQcmCounts[lessonId] || { blocks: 0, qcm: 0, weak: true };
+        const isNewBlock = lessonId !== lastLessonId;
+        lessonQcmCounts[lessonId] = {
+          blocks: prev.blocks + (isNewBlock ? 1 : 0),
+          qcm: prev.qcm + 1,
+          weak: prev.weak && weak,
+        };
+        lastLessonId = lessonId;
+      }
+
+      // Mise à jour visuelle toutes les 4 questions pour afficher la progression granulaire QCM par QCM
+      if (qIdx % 4 === 0 || qIdx === questions.length - 1) {
+        onProgress?.({
+          phase: "audit",
+          message: `Épreuve ${i + 1}/${annales.length} (${annale.title}) · QCM ${qIdx + 1}/${questions.length} [${EB_FORMAT_LABELS[q.format]}] → ${matchedTitle}`,
+          current: i,
+          total: annales.length,
+        });
+        await new Promise((r) => setTimeout(r, 65));
+      }
+    }
+
+    exams.push({
+      examId: annale.id,
+      title: annale.title,
+      year: annale.year,
+      questionCount: questions.length,
+      caseCount,
+      formatCounts,
+      lessonsUsed: Object.keys(lessonQcmCounts),
+      lessonQcmCounts,
+      audited: true,
+    });
   }
 
-  return computeCorpusAnalysis(subjectName, lessons, annales);
+  // Étape C : Calcul des probabilités de sortie et du quota moyen de leçons par examen
+  const validExams = exams.filter((e) => e.questionCount > 0);
+  const totalExamsCount = Math.max(1, validExams.length);
+
+  const maxQcm =
+    validExams.length > 0
+      ? Math.max(...validExams.map((e) => e.questionCount))
+      : Math.min(20, Math.max(10, usableLessons.length * 4));
+
+  const rawAvgLessons =
+    validExams.length > 0
+      ? validExams.reduce((sum, e) => sum + Math.max(1, e.lessonsUsed.length), 0) / validExams.length
+      : Math.min(4, usableLessons.length);
+
+  const avgLessonsPerExam = Number(rawAvgLessons.toFixed(1));
+  const quota = Math.max(
+    1,
+    Math.min(usableLessons.length, Math.round(rawAvgLessons) || Math.min(4, usableLessons.length))
+  );
+
+  const totalMappedQcmAllLessons = Math.max(
+    1,
+    usableLessons.reduce(
+      (acc, l) => acc + validExams.reduce((s, e) => s + (e.lessonQcmCounts[l.id]?.qcm || 0), 0),
+      0
+    )
+  );
+
+  const lessonStats: LessonStat[] = usableLessons.map((lesson) => {
+    const perExam: LessonStat["perExam"] = [];
+    let totalQcm = 0;
+    let timesOut = 0;
+
+    for (const e of validExams) {
+      const hit = e.lessonQcmCounts[lesson.id];
+      if (hit && hit.qcm > 0) {
+        perExam.push({
+          examId: e.examId,
+          examTitle: e.title,
+          blocks: hit.blocks,
+          qcm: hit.qcm,
+          weak: hit.weak,
+        });
+        totalQcm += hit.qcm;
+        timesOut += hit.blocks;
+      }
+    }
+
+    const examsAppeared = perExam.length;
+    const examFreqPct = validExams.length > 0 ? (examsAppeared / totalExamsCount) * 100 : 50;
+    const qcmSharePct = validExams.length > 0 ? (totalQcm / totalMappedQcmAllLessons) * 100 : 50;
+    const percent =
+      validExams.length > 0
+        ? Math.min(100, Math.round(examFreqPct * 0.65 + qcmSharePct * 0.35))
+        : Math.round(100 / Math.max(1, usableLessons.length));
+
+    return {
+      lessonId: lesson.id,
+      title: lesson.cleanTitle,
+      timesOut,
+      examsAppeared,
+      totalExams: validExams.length,
+      totalQcm,
+      percent,
+      perExam,
+    };
+  });
+
+  lessonStats.sort((a, b) => b.percent - a.percent || b.totalQcm - a.totalQcm);
+
+  const preferredFormats = Object.entries(formatDistribution)
+    .sort((a, b) => (b[1] || 0) - (a[1] || 0))
+    .map(([f]) => f as EBFormat);
+
+  const activeFormats: EBFormat[] =
+    preferredFormats.length > 0 ? preferredFormats : ["ELECTION", "GROUPAGE", "CENSURE"];
+
+  const blueprint: BlueprintSpec[] = lessonStats.slice(0, quota).map((st, idx) => ({
+    id: `bp_${idx + 1}`,
+    kind: validExams.some((e) => e.caseCount > 0) || idx === 0 ? "CAS_CLINIQUE" : "STANDALONE",
+    lessonIds: [st.lessonId],
+    formats: [
+      activeFormats[0] || "ELECTION",
+      activeFormats[1 % activeFormats.length] || "GROUPAGE",
+      activeFormats[2 % activeFormats.length] || "CENSURE",
+      activeFormats[3 % activeFormats.length] || "ELECTION",
+    ],
+  }));
+
+  return {
+    subjectName,
+    exams,
+    maxQcm,
+    avgLessonsPerExam,
+    quota,
+    durationMin: maxQcm > 25 ? 90 : 60,
+    formatDistribution,
+    lessonStats,
+    blueprint,
+    style: {
+      usesClinicalCases: validExams.some((e) => e.caseCount > 0),
+      avgItemsPerCase: 5,
+      preferredFormats: activeFormats,
+      typicalStemPatterns: [],
+    },
+    warnings,
+  };
 }
 
 // ----------------------------------------------------------------------------
-// GÉNÉRATION DE L'EXAMEN BLANC (FIDÈLE AUX FORMATS & CAS CLINIQUES UCAD)
+// 7. PERSISTANCE, SCORING & GÉNÉRATION D'EXAMEN BLANC
 // ----------------------------------------------------------------------------
+export const loadSessions = (): ExamSession[] => {
+  try {
+    const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveSessions = (sessions: ExamSession[]): void => {
+  try {
+    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+  } catch {
+    try {
+      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions.slice(0, 15)));
+    } catch {
+      // ignore
+    }
+  }
+};
+
+export const isItemCorrect = (item: EBItem, chosen: string[]): boolean => {
+  if (!chosen || chosen.length === 0) return false;
+  if (item.format === "QNS") return chosen[0].trim().length > 10;
+  const a = [...chosen].map((x) => x.toUpperCase()).sort().join(",");
+  const b = [...item.correct].map((x) => x.toUpperCase()).sort().join(",");
+  return a === b;
+};
+
+export const computeScore = (blocks: EBBlock[], answers: Record<string, string[]>) => {
+  const allItems = blocks.flatMap((b) => b.items);
+  let found = 0;
+  let wrong = 0;
+  let answered = 0;
+  for (const it of allItems) {
+    const ch = answers[it.id] || [];
+    if (ch.length > 0 && ch[0] !== "") {
+      answered++;
+      if (isItemCorrect(it, ch)) found++;
+      else wrong++;
+    }
+  }
+  return {
+    found,
+    wrong,
+    total: allItems.length,
+    answered,
+    remaining: Math.max(0, allItems.length - answered),
+  };
+};
+
+export const sessionToPdfQuestions = (session: ExamSession): any[] =>
+  session.blocks.flatMap((block) =>
+    block.items.map((it, idx) => ({
+      id: it.id,
+      number: it.number,
+      type: EB_FORMAT_LABELS[it.format],
+      clinicalCase: idx === 0 && block.kind === "CAS_CLINIQUE" ? block.vignette : undefined,
+      question: [it.lead ? `[${it.lead}]` : "", it.stem, ...(it.statements || []).map((s, i) => `${i + 1}. ${s}`)]
+        .filter(Boolean)
+        .join("\n"),
+      options: it.options.map((o) => `${o.letter}. ${o.text}`),
+      correctAnswers: it.correct,
+      explanation: it.explanation,
+    }))
+  );
+
 export function createSyntheticFallbackBlock(
   spec: BlueprintSpec,
   selectedLessons: EBLesson[],
   blockId: string,
   _style: ProfessorStyleProfile
 ): EBBlock {
-  const lesson =
+  const rawLesson =
     selectedLessons.find((l) => spec.lessonIds.includes(l.id)) ||
     selectedLessons[0];
+  const lesson = rawLesson ? ensureHydratedLesson(rawLesson) : null;
 
   const sentences = (lesson?.content || "")
     .split(/(?<=[.!?])\s+|\r?\n/)
@@ -967,6 +1519,7 @@ export async function generateExamBlanc(params: {
     return { blocks: [], warnings: ["Aucune leçon sélectionnée."] };
   }
 
+  const hydratedSelected = selected.map((l) => ensureHydratedLesson(l, subjectName));
   const systemPrompt = fillSystemPrompt(ueName, subjectName, analysis.quota);
   const activeFormats =
     analysis.style.preferredFormats.length > 0
@@ -974,17 +1527,20 @@ export async function generateExamBlanc(params: {
       : (["ELECTION", "GROUPAGE", "CENSURE"] as EBFormat[]);
 
   let globalQuestionNumber = 1;
-  const itemsPerLesson = Math.max(4, Math.round((analysis.maxQcm || 20) / Math.max(1, selected.length)));
+  const itemsPerLesson = Math.max(
+    4,
+    Math.round((analysis.maxQcm || 20) / Math.max(1, hydratedSelected.length))
+  );
 
-  for (let i = 0; i < selected.length; i++) {
+  for (let i = 0; i < hydratedSelected.length; i++) {
     if (isCancelled?.()) break;
-    const lesson = selected[i];
+    const lesson = hydratedSelected[i];
 
     onProgress?.({
       phase: "redaction",
-      message: `Rédaction calibrée UCAD : « ${lesson.cleanTitle} » (${i + 1}/${selected.length})…`,
+      message: `Rédaction calibrée UCAD : « ${lesson.cleanTitle} » (${i + 1}/${hydratedSelected.length})…`,
       current: i,
-      total: selected.length,
+      total: hydratedSelected.length,
     });
 
     const formatsForBlock: EBFormat[] = Array.from({ length: itemsPerLesson }, (_, k) => {
@@ -1076,3 +1632,4 @@ export async function generateExamBlanc(params: {
 
   return { blocks, warnings };
 }
+
