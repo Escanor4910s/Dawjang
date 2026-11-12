@@ -406,10 +406,50 @@ function detectFormatFromQuestionBlock(rawBlock: string): EBFormat {
   return "ELECTION";
 }
 
+// Isole automatiquement la section correspondant à la matière évaluée (ex: Hématologie vs Maladies de Système)
+// et élimine les pages scannées en double (ex: Exam 2020 p.2-3, Exam 2021 p.13-14)
+export function isolateSubjectSectionFromExamText(rawText: string, subjectName: string): string {
+  if (!rawText) return "";
+  const normSubj = normalizeText(subjectName);
+  const isHematoTarget = /hemato|sang|hemopathie|transfusion|hemostase/.test(normSubj);
+  const isSystemicTarget = /system|interne|auto\s*immun|connectivite|lupus|rhumato/.test(normSubj);
+
+  // 1. Déduplication des pages scannées deux fois par erreur dans le même PDF
+  const rawPages = rawText.split(/--- PAGE \d+ ---/g).map((p) => p.trim()).filter(Boolean);
+  const uniquePages: string[] = [];
+  const seenPageSigs = new Set<string>();
+
+  for (const page of rawPages.length > 0 ? rawPages : [rawText]) {
+    const sig = normalizeText(page).slice(0, 180);
+    if (sig.length > 40 && seenPageSigs.has(sig)) continue;
+    if (sig.length > 40) seenPageSigs.add(sig);
+
+    // 2. Filtrage page par page si l'utilisateur cible Hématologie ou Maladies de Système
+    if (isHematoTarget || isSystemicTarget) {
+      const normPage = normalizeText(page);
+      const hematoScore =
+        (normPage.match(
+          /\b(hemogramme|myelogramme|leucemie|lymphome|myelome|drepanocytose|hemophilie|willebrand|plaquettes|reticulocytes|transfusion|bcr\s*abl|jak2|hackett|binet|salmon)\b/g
+        ) || []).length;
+      const systemicScore =
+        (normPage.match(
+          /\b(lupus|sclerodermie|sarcoidose|behcet|dermatomyosite|sjogren|sharp|raynaud|polyarthrite|anticorps\s*anti|corticotherapie|aphte|gottron|uveite|antiphospholipides|sapl)\b/g
+        ) || []).length;
+
+      if (isHematoTarget && systemicScore >= 3 && hematoScore === 0) continue;
+      if (isSystemicTarget && hematoScore >= 3 && systemicScore === 0) continue;
+    }
+
+    uniquePages.push(page);
+  }
+
+  return uniquePages.join("\n\n");
+}
+
 // Découpe une annale en questions et isole l'énoncé (stem) des propositions
-function parseExamQuestions(rawText: string): { questions: ParsedQuestionUnit[]; caseCount: number } {
-  // Nettoyage des marqueurs de pagination et d'annotations manuscrites pour ne pas fausser l'analyse
-  const cleaned = rawText
+function parseExamQuestions(rawText: string, subjectName = ""): { questions: ParsedQuestionUnit[]; caseCount: number } {
+  // Découpage par matière ciblée et déduplication des pages scannées en double
+  const cleaned = isolateSubjectSectionFromExamText(rawText, subjectName)
     .replace(/\[CORRECTION_MANUSCRITE_DETECTEE:[^\]]*\]/gi, "")
     .replace(/\[ANNOTATION_DETECTEE:[^\]]*\]/gi, "")
     .replace(/--- PAGE \d+ ---/g, "\n")
@@ -536,7 +576,7 @@ export function computeCorpusAnalysis(
   const exams: ExamAnalysisItem[] = [];
 
   for (const annale of annales) {
-    const { questions, caseCount } = parseExamQuestions(annale.rawText);
+    const { questions, caseCount } = parseExamQuestions(annale.rawText, subjectName);
     const formatCounts: Partial<Record<EBFormat, number>> = {};
     const lessonQcmCounts: Record<string, { blocks: number; qcm: number; weak?: boolean }> = {};
 

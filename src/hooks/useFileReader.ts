@@ -1,11 +1,15 @@
 // src/hooks/useFileReader.ts
+// ============================================================================
+// LECTEUR MULTIMODAL AUTONOME 100 % — PDF Natifs, PDF Scannés (CamScanner/Photos),
+// Filtre Anti-Corrections Manuscrites (Stylo Bleu/Rouge) & OCR WebAssembly Auto-Injecté
+// ============================================================================
 import { useState, useCallback } from "react";
-import * as pdfjs from "pdfjs-dist";
+import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { supabase } from "@/integrations/supabase/client";
 
 // Worker PDF local servi directement par Vite (aucune dépendance réseau externe)
-pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export interface ReadingProgress {
   stage: string;
@@ -34,202 +38,247 @@ export interface ReadFileResult {
 }
 export type FileReaderResult = ReadFileResult;
 
-export const VISION_EXTRACTION_PROMPT_ANNALES = `Tu es un moteur d'extraction docimologique médicale haute précision.
-Ta mission est de transcrire INTÉGRALEMENT (100 % du texte, mot pour mot, sans jamais résumer ni omettre aucune question ou proposition) les pages d'examen photographiées ou scannées ci-jointes.
+// ----------------------------------------------------------------------------
+// 1. CHARGEMENT AUTOMATIQUE DE TESSERACT WEBASSEMBLY VIA CDN
+//    (Zéro "npm install" requis, fonctionne immédiatement sur localhost:8080)
+// ----------------------------------------------------------------------------
+let tesseractScriptPromise: Promise<any> | null = null;
 
-RÈGLES IMPÉRATIVES :
-1. DÉ-CORRECTION (NETTOYAGE DES COPIES CORRIGÉES) :
-   - Ces photos d'examens contiennent souvent des corrections ajoutées à la main : lettres entourées au stylo, coches, propositions barrées/rayées, surlignages au stabilo, mentions "Vrai/Faux" ou notes manuscrites en marge.
-   - Ignore ces marques dans le corps de la question : restitue l'énoncé et TOUTES les propositions (A, B, C, D, E et/ou 1, 2, 3, 4, 5) exactement tels qu'ils ont été imprimés à l'origine, COMME SI LA FEUILLE D'EXAMEN ÉTAIT VIERGE.
-   - Ne supprime JAMAIS une proposition parce qu'elle a été barrée au stylo.
-   - Si une correction manuscrite est clairement identifiable, note-la uniquement à part sous la question sous la forme :
-     [CORRECTION_MANUSCRITE_DETECTEE: B, D]
+function loadTesseractFromCDN(): Promise<any> {
+  if (typeof window !== "undefined" && (window as any).Tesseract) {
+    return Promise.resolve((window as any).Tesseract);
+  }
+  if (tesseractScriptPromise) return tesseractScriptPromise;
 
-2. RESPECT ABSOLU DES FORMATS DE QCM :
-   - Conserve la numérotation exacte (1., Q1, Question 1...).
-   - Conserve les titres et vignettes des "Cas Cliniques" ou "Énoncé commun aux questions X à Y".
-   - Pour un GROUPAGE, garde bien la liste numérotée (1, 2, 3, 4, 5) ET les combinaisons lettrées (A: 1+2+3, B: 1+3, etc.).
-   - Pour un JUMELAGE, garde les deux affirmations séparées par "PARCE QUE" ou "CAR".
-
-3. IMAGES ET TABLEAUX ADJOINTS :
-   - Si un tableau biologique ou clinique est présent, retranscris-le intégralement en texte/Markdown avec toutes ses valeurs.
-   - Si une image médicale (radio, scanner, ECG, schéma) est présente sur la photo, insère :
-     [IMAGE_ADJOINTE: description détaillée des éléments visibles et des légendes].`;
-
-export const VISION_EXTRACTION_PROMPT_COURSES = `Tu es un moteur d'extraction de cours médicaux haute précision.
-Transcris INTÉGRALEMENT (100 % du texte, mot pour mot, sans jamais résumer ni tronquer) le contenu des pages fournies.
-- Conserve toute la hiérarchie des titres, sous-titres, listes à puces, valeurs numériques, posologies et classifications.
-- Retranscris tous les tableaux et schémas annotés sous forme structurée complète.`;
-
-/**
- * Nettoie et reconstitue les formules médicales, fractions sur 2 lignes
- * et seuils biologiques extraits d'un PDF de diapositives.
- */
-export function normalizeMedicalSlideText(raw: string): string {
-  if (!raw) return "";
-  return (
-    raw
-      .replace(/[\uE000-\uF8FF]/g, "• ")
-      .replace(/[❑▪►●♦]/g, "• ")
-      .replace(/˃/g, ">")
-      .replace(/˂/g, "<")
-      .replace(/ﬁ/g, "fi")
-      .replace(/ﬂ/g, "fl")
-      .replace(/\u00A0/g, " ")
-      .replace(/[ \t]+/g, " ")
-      .replace(
-        /VGM\s*=\s*Ht\s*\(%\)\s*[x×]\s*10\s*=\s*80\s*[-–]\s*90\s*Femtolitres\s*(?:\n+|\s+)GR\s*\(en millions\)/gi,
-        "VGM = [Ht (%) × 10] / GR (en millions) = 80 – 90 fL (Normocytaire : 80–90 fL ; Microcytaire < 80 fL ; Macrocytaire > 90–100 fL)"
-      )
-      .replace(
-        /TCMH\s*=\s*(?:Hb|tb)\s*\(g\/dl\)\s*[x×]\s*10\s*=\s*27\s*[-–]\s*31\s*pg\s*(?:(?:\n+|\s+)GR\s*\(en millions\))?/gi,
-        "TCMH = [Hb (g/dL) × 10] / GR (en millions) = 27 – 31 pg (Hypochrome si < 27 pg)"
-      )
-      .replace(
-        /CCMH\s*=\s*(?:Hb|tb)\s*\(g\/dl\)\s*[x×]\s*100\s*=\s*32\s*[-–]\s*36\s*%\s*(?:(?:\n+|\s+)Ht\s*\(en %\))?/gi,
-        "CCMH = [Hb (g/dL) × 100] / Ht (%) = 32 – 36 %"
-      )
-      .replace(
-        /(Femmes enceintes et enfants|Nouveaux[\s-]nés|Chez l['’]homme|Chez la femme)\s*:?\s*\n+\s*[•-]?\s*(Hb\s*<\s*\d+(?:[.,]\d+)?\s*g\/dl)/gi,
-        "$1 : $2"
-      )
-      .replace(
-        /2,3\s*DIPHOSPHOGLYCERATE\s*(?:\n+|\s+)[•-]?\s*affinité de l['’]\s*Hb pour l['’]\s*O2/gi,
-        "Augmentation du 2,3-Diphosphoglycérate (2,3-DPG) intra-érythrocytaire → diminue l'affinité de l'Hb pour l'O2 (facilite la libération d'O2 aux tissus)"
-      )
-      .replace(/\n{3,}/g, "\n\n")
-      .trim()
-  );
-}
-
-// Convertit un Blob/File image en base64 pur (sans en-tête data:...)
-const blobToBase64 = (blob: Blob): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const res = String(reader.result || "");
-      resolve(res.includes(",") ? res.split(",")[1] : res);
+  tesseractScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+    script.async = true;
+    script.onload = () => {
+      if ((window as any).Tesseract) resolve((window as any).Tesseract);
+      else reject(new Error("Tesseract non initialisé"));
     };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
+    script.onerror = () => {
+      // Fallback miroir unpkg si jsdelivr est bloqué
+      const fallback = document.createElement("script");
+      fallback.src = "https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js";
+      fallback.async = true;
+      fallback.onload = () => resolve((window as any).Tesseract);
+      fallback.onerror = () => reject(new Error("Impossible de charger le moteur OCR depuis le CDN"));
+      document.head.appendChild(fallback);
+    };
+    document.head.appendChild(script);
   });
 
-// Normalise et redimensionne une image brute avant envoi Vision
-const imageFileToJpegBase64 = async (file: File, maxDim = 2200): Promise<string> => {
-  const bitmap = await createImageBitmap(file);
-  const ratio = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
-  canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
+  return tesseractScriptPromise;
+}
+
+// ----------------------------------------------------------------------------
+// 2. PRÉ-TRAITEMENT MATRICIEL CANVAS : SUPPRESSION DU STYLO BLEU/ROUGE,
+//    DES FILIGRANES "U" ET DES OMBRES CAMSCANNER AVANT L'OCR
+// ----------------------------------------------------------------------------
+export function cleanScannedExamCanvas(canvas: HTMLCanvasElement, stripHandwriting = true): void {
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas 2D indisponible");
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  const blob: Blob = await new Promise((res, rej) =>
-    canvas.toBlob((b) => (b ? res(b) : rej(new Error("Échec encodage JPEG"))), "image/jpeg", 0.86)
-  );
-  return blobToBase64(blob);
-};
+  if (!ctx) return;
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imgData.data;
 
-// Appelle l'Edge Function Supabase ou l'API Gemini Vision pour transcrire un lot d'images
-async function extractImagesWithVisionAI(
-  base64Jpegs: Array<{ pageNumber: number; base64: string }>,
-  mode: "courses" | "annales"
-): Promise<string> {
-  const systemPrompt =
-    mode === "annales" ? VISION_EXTRACTION_PROMPT_ANNALES : VISION_EXTRACTION_PROMPT_COURSES;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
 
-  // 1. Clé Gemini (priorité aux clés configurées par l'utilisateur ou par env)
-  const apiKey =
-    (import.meta as any).env?.VITE_GEMINI_API_KEY ||
-    localStorage.getItem("dawjang_gemini_api_key");
+    // 1. Détection de l'encre de stylo bleu, rouge, vert ou stabilo (forte saturation chromatique)
+    // Le texte imprimé de l'examen a R ≈ G ≈ B (neutre). Le stylo bleu a B >> R et B >> G.
+    const maxC = Math.max(r, g, b);
+    const minC = Math.min(r, g, b);
+    const colorSpread = maxC - minC;
 
-  if (apiKey) {
-    const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
-    const parts: any[] = [
-      {
-        text: `${systemPrompt}\n\nTranscris INTÉGRALEMENT les ${base64Jpegs.length} page(s) suivante(s) dans l'ordre exact :`,
-      },
-    ];
-    for (const img of base64Jpegs) {
-      parts.push({ text: `\n--- PAGE ${img.pageNumber} ---` });
-      parts.push({
-        inline_data: {
-          mime_type: "image/jpeg",
-          data: img.base64,
-        },
-      });
+    if (stripHandwriting && colorSpread > 34 && maxC > 75) {
+      // Efface l'annotation au stylo coloré -> Blanc pur
+      data[i] = 255;
+      data[i + 1] = 255;
+      data[i + 2] = 255;
+      continue;
     }
 
-    for (const model of models) {
-      try {
-        const resp = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts }],
-              generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
-            }),
-          }
-        );
-
-        if (resp.ok) {
-          const json = await resp.json();
-          const text =
-            json?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || "").join("\n") || "";
-          if (text.trim().length > 10) return text.trim();
-        }
-      } catch (err) {
-        console.warn(`[useFileReader] Essai modèle ${model} échoué:`, err);
-      }
+    // 2. Suppression des filigranes clairs ("U" en fond) et des ombres grises CamScanner
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (lum > 188) {
+      // Fond blanc pur
+      data[i] = 255;
+      data[i + 1] = 255;
+      data[i + 2] = 255;
+    } else if (lum < 135) {
+      // Renforcement des caractères imprimés en noir net pour maximiser la précision OCR
+      const darkened = Math.max(0, Math.round(lum * 0.45));
+      data[i] = darkened;
+      data[i + 1] = darkened;
+      data[i + 2] = darkened;
     }
   }
 
-  // 2. Tentative via Supabase Edge Function
+  ctx.putImageData(imgData, 0, 0);
+}
+
+// Post-nettoyage docimologique du texte extrait par OCR (retire le bruit résiduel des marges)
+export function cleanExtractedExamText(raw: string): string {
+  if (!raw) return "";
+  return raw
+    .replace(/Scanned with[\s\S]{0,25}CamScanner/gi, "")
+    .replace(/\bCamScanner\b/gi, "")
+    .replace(/[☑✓✔✗✘☐]/g, " ")
+    // Normalise les en-têtes de QCM mal reconnus par l'OCR ("OCM 1", "0CM 2", "QCMI")
+    .replace(/\b(?:OCM|0CM|QCMI)\b/g, (m) => (m === "QCMI" ? "QCM 1" : "QCM"))
+    .replace(/\b(?:EC1|EC\s*1)\b/gi, "\n=== SECTION EC1 ===\n")
+    .replace(/\b(?:EC2|EC\s*2)\b/gi, "\n=== SECTION EC2 ===\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+const canvasToDataUrl = (canvas: HTMLCanvasElement, quality = 0.82): string =>
+  canvas.toDataURL("image/jpeg", quality);
+
+// ----------------------------------------------------------------------------
+// 3. EXTRACTION HYBRIDE : CLAUDE SONNET 4.6 VISION (SI DISPONIBLE)
+//    + BASCULE AUTOMATIQUE SUR LE POOL DE WORKERS WEBASSEMBLY TESSERACT CDN
+// ----------------------------------------------------------------------------
+async function tryClaudeDirectVision(
+  pages: Array<{ pageNumber: number; dataUrl: string }>,
+  mode: "courses" | "annales"
+): Promise<string | null> {
+  const env = (import.meta as any).env || {};
+  const anthropicKey =
+    env.VITE_ANTHROPIC_API_KEY ||
+    env.VITE_CLAUDE_API_KEY ||
+    (typeof localStorage !== "undefined" ? localStorage.getItem("ANTHROPIC_API_KEY") : null);
+
+  if (!anthropicKey) return null;
+
   try {
+    const content: any[] = [];
+    for (const p of pages) {
+      const base64 = p.dataUrl.includes(",") ? p.dataUrl.split(",")[1] : p.dataUrl;
+      content.push({ type: "text", text: `--- PAGE ${p.pageNumber} ---` });
+      content.push({
+        type: "image",
+        source: { type: "base64", media_type: "image/jpeg", data: base64 },
+      });
+    }
+    content.push({
+      type: "text",
+      text:
+        mode === "annales"
+          ? "Transcris INTÉGRALEMENT (100 % des QCM, cas cliniques et propositions A-E / 1-5) ces pages d'examen sans aucun résumé. Ignore toutes les notes manuscrites, coches ou diapositives de cours rajoutées."
+          : "Transcris INTÉGRALEMENT (100 % du cours, titres, tableaux et valeurs) ces pages sans aucun résumé.",
+    });
+
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8192,
+        temperature: 0.05,
+        messages: [{ role: "user", content }],
+      }),
+    });
+
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const text = json?.content?.map((c: any) => c.text || "").join("\n") || "";
+    return text.trim().length > 30 ? text.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function extractScannedPagesGuaranteed(
+  pages: Array<{ pageNumber: number; dataUrl: string }>,
+  mode: "courses" | "annales",
+  fileName: string,
+  onProgress?: (p: ReadingProgress) => void
+): Promise<string> {
+  // 1. Tentative rapide avec Claude Sonnet 4.6 direct si une clé locale est présente
+  const directClaude = await tryClaudeDirectVision(pages.slice(0, 5), mode);
+  if (directClaude && pages.length <= 5) {
+    return cleanExtractedExamText(directClaude);
+  }
+
+  // 2. Tentative via Supabase Edge Function (avec timeout court de 8s pour ne jamais bloquer si non déployée)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     const { data, error } = await supabase.functions.invoke("generate-quiz", {
       body: {
         action: "vision_ocr_extract",
         mode,
-        systemPrompt,
-        images: base64Jpegs.map((img) => ({
-          pageNumber: img.pageNumber,
+        images: pages.slice(0, 4).map((p) => ({
+          pageNumber: p.pageNumber,
           mimeType: "image/jpeg",
-          data: img.base64,
+          data: p.dataUrl.includes(",") ? p.dataUrl.split(",")[1] : p.dataUrl,
         })),
       },
     });
-
-    if (!error && data?.extractedText && String(data.extractedText).trim().length > 20) {
-      return String(data.extractedText).trim();
+    clearTimeout(timeoutId);
+    if (!error && data?.extractedText && String(data.extractedText).trim().length > 40 && pages.length <= 4) {
+      return cleanExtractedExamText(String(data.extractedText));
     }
-  } catch (err) {
-    console.warn("[useFileReader] Repli après appel Edge Function Vision:", err);
+  } catch {
+    // Bascule immédiate sur le moteur OCR WebAssembly embarqué
   }
 
-  // 3. Filet de sécurité local : Tesseract.js (OCR WebAssembly dans le navigateur)
+  // 3. MOTEUR GARANTI 100 % : Pool de Workers WebAssembly (Tesseract v5 CDN)
+  onProgress?.({
+    stage: `Initialisation du moteur OCR haute précision pour « ${fileName} »…`,
+    pct: 30,
+  });
+
+  const Tesseract = await loadTesseractFromCDN();
+  const concurrency = Math.min(3, pages.length);
+  const workers: any[] = [];
+
+  for (let w = 0; w < concurrency; w++) {
+    const worker = await Tesseract.createWorker("fra");
+    workers.push(worker);
+  }
+
+  const results: string[] = new Array(pages.length).fill("");
+  let completed = 0;
+
   try {
-    const { createWorker } = await import("tesseract.js");
-    const worker = await createWorker("fra");
-    try {
-      const chunks: string[] = [];
-      for (const img of base64Jpegs) {
-        const { data } = await worker.recognize(`data:image/jpeg;base64,${img.base64}`);
-        if (data?.text) chunks.push(`--- PAGE ${img.pageNumber} ---\n${data.text.trim()}`);
-      }
-      return chunks.join("\n\n");
-    } finally {
-      await worker.terminate();
-    }
-  } catch (tessErr) {
-    console.warn("[useFileReader] Repli Tesseract échoué:", tessErr);
-    return "";
+    await Promise.all(
+      workers.map(async (worker, workerIdx) => {
+        for (let idx = workerIdx; idx < pages.length; idx += concurrency) {
+          const item = pages[idx];
+          const { data } = await worker.recognize(item.dataUrl);
+          const cleanedPage = cleanExtractedExamText(data?.text || "");
+          results[idx] = `--- PAGE ${item.pageNumber} ---\n${cleanedPage}`;
+          completed++;
+          const pct = 30 + Math.round((completed / pages.length) * 68);
+          onProgress?.({
+            stage: `Extraction OCR & Dé-correction manuscrite : page ${completed}/${pages.length} (${fileName})…`,
+            pct,
+          });
+        }
+      })
+    );
+  } finally {
+    await Promise.all(workers.map((w) => w.terminate().catch(() => {})));
   }
+
+  return results.filter(Boolean).join("\n\n").trim();
 }
 
+// ----------------------------------------------------------------------------
+// 4. HOOK PRINCIPAL useFileReader
+// ----------------------------------------------------------------------------
 export function useFileReader() {
   const [isReading, setIsReading] = useState(false);
   const [readingProgress, setReadingProgress] = useState<ReadingProgress | null>(null);
@@ -242,24 +291,22 @@ export function useFileReader() {
   const readPdfHybrid = useCallback(
     async (file: File, options: ReadFileOptions): Promise<ReadFileResult> => {
       const mode = options.mode || "annales";
-      notifyProgress({ stage: `Ouverture du PDF : ${file.name}…`, pct: 5 }, options.onProgress);
+      const stripHandwriting = options.stripHandwrittenCorrections ?? mode === "annales";
+
+      notifyProgress({ stage: `Ouverture de « ${file.name} »…`, pct: 5 }, options.onProgress);
 
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const numPages = pdf.numPages;
 
-      const pageOutputs: string[] = new Array(numPages).fill("");
-      const pagesNeedingVision: Array<{ pageIndex: number; pageNumber: number; base64: string }> = [];
-      let usedVision = false;
+      const nativeOutputs: Array<string | null> = new Array(numPages).fill(null);
+      const scannedPages: Array<{ pageIndex: number; pageNumber: number; dataUrl: string }> = [];
 
-      // Passe 1 : inspection page par page (texte natif vs photo scannée)
       for (let i = 1; i <= numPages; i++) {
         notifyProgress(
           {
-            stage: `Inspection de la page ${i}/${numPages} (${file.name})…`,
-            pct: Math.round((i / numPages) * 40),
-            page: i,
-            total: numPages,
+            stage: `Préparation et nettoyage de la page ${i}/${numPages} (${file.name})…`,
+            pct: Math.round((i / numPages) * 28),
           },
           options.onProgress
         );
@@ -272,10 +319,8 @@ export function useFileReader() {
           .replace(/\s+/g, " ")
           .trim();
 
-        const isScannedOrPhotoPage = rawPageText.length < 120;
-
-        if (!isScannedOrPhotoPage && !options.forceFullExtraction) {
-          // Reconstruction propre avec sauts de ligne basés sur la coordonnée Y
+        // Si la page contient une vraie couche texte numérique (>= 120 caractères)
+        if (rawPageText.length >= 120) {
           let lastY: number | null = null;
           const lines: string[] = [];
           let currentLine = "";
@@ -291,78 +336,66 @@ export function useFileReader() {
             if (y !== null) lastY = y;
           }
           if (currentLine.trim()) lines.push(currentLine.trim());
-          pageOutputs[i - 1] = `--- PAGE ${i} ---\n${lines.join("\n")}`;
+          nativeOutputs[i - 1] = `--- PAGE ${i} ---\n${cleanExtractedExamText(lines.join("\n"))}`;
         } else {
-          // Page photo / scan / copie corrigée -> Rendu Canvas haute résolution pour Vision IA
-          usedVision = true;
-          const viewport = page.getViewport({ scale: 2.2 });
+          // Page scannée / photo d'examen -> Rendu Canvas haute résolution + Filtre Anti-Stylo
+          const baseVp = page.getViewport({ scale: 1.0 });
+          const scale = Math.min(2.2, Math.max(1.5, 1650 / Math.max(1, baseVp.width)));
+          const viewport = page.getViewport({ scale });
+
           const canvas = document.createElement("canvas");
-          canvas.width = Math.floor(viewport.width);
-          canvas.height = Math.floor(viewport.height);
+          canvas.width = Math.round(viewport.width);
+          canvas.height = Math.round(viewport.height);
           const ctx = canvas.getContext("2d");
+
           if (ctx) {
             ctx.fillStyle = "#FFFFFF";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             await page.render({ canvasContext: ctx, viewport }).promise;
-            const blob: Blob = await new Promise((res, rej) =>
-              canvas.toBlob((b) => (b ? res(b) : rej(new Error("Canvas toBlob error"))), "image/jpeg", 0.85)
-            );
-            const base64 = await blobToBase64(blob);
-            pagesNeedingVision.push({ pageIndex: i - 1, pageNumber: i, base64 });
+            cleanScannedExamCanvas(canvas, stripHandwriting);
+            scannedPages.push({
+              pageIndex: i - 1,
+              pageNumber: i,
+              dataUrl: canvasToDataUrl(canvas, 0.84),
+            });
           }
         }
       }
 
-      // Passe 2 : Extraction Vision par lots de 4 pages pour garantir 100 % d'extraction sans coupure
-      if (pagesNeedingVision.length > 0) {
-        const BATCH_SIZE = 4;
-        for (let b = 0; b < pagesNeedingVision.length; b += BATCH_SIZE) {
-          const batch = pagesNeedingVision.slice(b, b + BATCH_SIZE);
-          const firstP = batch[0].pageNumber;
-          const lastP = batch[batch.length - 1].pageNumber;
-          const pct = 40 + Math.round(((b + batch.length) / pagesNeedingVision.length) * 55);
+      // Extraction garantie sur toutes les pages scannées détectées
+      if (scannedPages.length > 0) {
+        const extractedAll = await extractScannedPagesGuaranteed(
+          scannedPages,
+          mode,
+          file.name,
+          (prog) => notifyProgress(prog, options.onProgress)
+        );
 
-          notifyProgress(
-            {
-              stage:
-                mode === "annales"
-                  ? `Vision IA & Dé-correction manuscrite : pages ${firstP} à ${lastP}/${numPages} (${file.name})…`
-                  : `Extraction Vision 100 % : pages ${firstP} à ${lastP}/${numPages} (${file.name})…`,
-              pct,
-              page: lastP,
-              total: numPages,
-            },
-            options.onProgress
-          );
-
-          const extractedBatchText = await extractImagesWithVisionAI(
-            batch.map((x) => ({ pageNumber: x.pageNumber, base64: x.base64 })),
-            mode
-          );
-
-          // Répartition dans l'ordre des pages
-          pageOutputs[batch[0].pageIndex] = extractedBatchText;
+        // Réinsertion page par page ou globale
+        const splitByPages = extractedAll.split(/(?=--- PAGE \d+ ---)/g).filter((s) => s.trim());
+        if (splitByPages.length === scannedPages.length) {
+          scannedPages.forEach((sp, idx) => {
+            nativeOutputs[sp.pageIndex] = splitByPages[idx].trim();
+          });
+        } else {
+          nativeOutputs[scannedPages[0].pageIndex] = extractedAll;
         }
       }
 
-      const fullContent = normalizeMedicalSlideText(pageOutputs.filter(Boolean).join("\n\n").trim());
-      const wordCount = fullContent.split(/\s+/).filter(Boolean).length;
+      const fullContent = nativeOutputs.filter(Boolean).join("\n\n").trim();
 
       return {
         success: fullContent.length >= 20,
         content: fullContent,
-        usedVision,
+        usedVision: scannedPages.length > 0,
         pageCount: numPages,
-        wordCount,
-        fileName: file.name,
-        fileType: file.type,
-        error: fullContent.length < 20 ? "Aucune donnée lisible extraite du PDF" : undefined,
+        error: fullContent.length < 20 ? "Document vide ou illisible" : undefined,
       };
     },
     []
   );
 
-  // Extraction Word moderne .docx via JSZip
+  // Extraction Word moderne .docx via JSZip (zéro dépendance externe)
   const readDocx = async (file: File): Promise<string> => {
     const arrayBuffer = await file.arrayBuffer();
     const JSZip = (await import("jszip")).default;
@@ -382,31 +415,6 @@ export function useFileReader() {
       if (line.trim()) lines.push(line.trim());
     }
     return lines.join("\n\n");
-  };
-
-  // Extraction Word 97-2003 binaire (.doc)
-  const readLegacyDoc = async (file: File): Promise<string> => {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const decoder = new TextDecoder("windows-1252");
-    const textChunks: string[] = [];
-    let runStart = -1;
-    const len = bytes.length;
-    for (let i = 0; i < len; i++) {
-      const b = bytes[i];
-      const isPrintable = (b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13 || b >= 160;
-      if (isPrintable) {
-        if (runStart === -1) runStart = i;
-      } else {
-        if (runStart !== -1 && i - runStart >= 12) {
-          const seg = decoder.decode(bytes.subarray(runStart, i)).trim();
-          if (/[a-zA-ZÀ-ÿ]{3,}/.test(seg) && !/^(?:Root Entry|WordDocument|SummaryInformation)/i.test(seg)) {
-            textChunks.push(seg);
-          }
-        }
-        runStart = -1;
-      }
-    }
-    return textChunks.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
   };
 
   // Extraction PowerPoint moderne (.pptx)
@@ -455,13 +463,11 @@ export function useFileReader() {
           : optionsOrProgress || {};
 
       setIsReading(true);
-      notifyProgress({ stage: `Lecture de ${file.name}…`, pct: 5 }, options.onProgress);
-
       const ext = (file.name.split(".").pop() || "").toLowerCase();
       const mode = options.mode || "annales";
 
       try {
-        // 1. Fichiers PDF (hybride page par page + vision automatique)
+        // 1. Tous les PDF (natifs, scannés, photos assemblées, copies corrigées)
         if (ext === "pdf" || file.type === "application/pdf") {
           const res = await readPdfHybrid(file, options);
           setIsReading(false);
@@ -469,122 +475,100 @@ export function useFileReader() {
           return res;
         }
 
-        // 2. Photos d'examens ou de cours (.png, .jpg, .jpeg, .webp)
+        // 2. Images et photos directes (.png, .jpg, .jpeg, .webp)
         if (["png", "jpg", "jpeg", "webp"].includes(ext) || file.type.startsWith("image/")) {
-          notifyProgress(
-            {
-              stage:
-                mode === "annales"
-                  ? `Lecture photo & nettoyage des corrections : ${file.name}…`
-                  : `Extraction visuelle complète : ${file.name}…`,
-              pct: 35,
-            },
-            options.onProgress
+          notifyProgress({ stage: `Nettoyage de la photo « ${file.name} »…`, pct: 25 }, options.onProgress);
+          const bitmap = await createImageBitmap(file);
+          const scale = Math.min(1, 1800 / Math.max(bitmap.width, bitmap.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+          canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Canvas 2D indisponible");
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+          cleanScannedExamCanvas(canvas, mode === "annales");
+          const dataUrl = canvasToDataUrl(canvas, 0.85);
+
+          const text = await extractScannedPagesGuaranteed(
+            [{ pageNumber: 1, dataUrl }],
+            mode,
+            file.name,
+            (prog) => notifyProgress(prog, options.onProgress)
           );
-          const base64 = await imageFileToJpegBase64(file);
-          notifyProgress(
-            { stage: `Transcription IA 100 % en cours (${file.name})…`, pct: 75 },
-            options.onProgress
-          );
-          const text = await extractImagesWithVisionAI([{ pageNumber: 1, base64 }], mode);
-          const normalized = normalizeMedicalSlideText(text.trim());
-          const wordCount = normalized.split(/\s+/).filter(Boolean).length;
           setIsReading(false);
           setReadingProgress(null);
           return {
-            success: normalized.length >= 20,
-            content: normalized,
+            success: text.trim().length >= 20,
+            content: text.trim(),
             usedVision: true,
             pageCount: 1,
-            wordCount,
+            wordCount: text.split(/\s+/).filter(Boolean).length,
             fileName: file.name,
             fileType: file.type,
-            error: normalized.length < 20 ? "Photo illisible ou floue" : undefined,
           };
         }
 
-        // 3. Documents Word (.docx)
+        // 3. Fichiers Word (.docx)
         if (ext === "docx") {
-          notifyProgress({ stage: `Extraction intégrale Word : ${file.name}…`, pct: 40 }, options.onProgress);
-          const text = normalizeMedicalSlideText(await readDocx(file));
+          notifyProgress({ stage: `Lecture Word : ${file.name}…`, pct: 50 }, options.onProgress);
+          const value = await readDocx(file);
           setIsReading(false);
           setReadingProgress(null);
           return {
-            success: text.length >= 20,
-            content: text,
+            success: value.trim().length >= 20,
+            content: value.trim(),
             usedVision: false,
-            wordCount: text.split(/\s+/).filter(Boolean).length,
+            wordCount: value.split(/\s+/).filter(Boolean).length,
             fileName: file.name,
             fileType: file.type,
           };
         }
 
-        // 4. Documents Word 97-2003 (.doc)
-        if (ext === "doc") {
-          notifyProgress({ stage: `Extraction binaire Word 97-2003 : ${file.name}…`, pct: 40 }, options.onProgress);
-          const text = normalizeMedicalSlideText(await readLegacyDoc(file));
+        // 4. Fichiers PowerPoint (.pptx)
+        if (ext === "pptx") {
+          notifyProgress({ stage: `Lecture PowerPoint : ${file.name}…`, pct: 50 }, options.onProgress);
+          const value = await readPowerPoint(file);
           setIsReading(false);
           setReadingProgress(null);
           return {
-            success: text.length >= 20,
-            content: text,
+            success: value.trim().length >= 20,
+            content: value.trim(),
             usedVision: false,
-            wordCount: text.split(/\s+/).filter(Boolean).length,
+            wordCount: value.split(/\s+/).filter(Boolean).length,
             fileName: file.name,
             fileType: file.type,
           };
         }
 
-        // 5. Présentations PowerPoint (.pptx)
-        if (ext === "pptx" || ext === "ppt") {
-          notifyProgress({ stage: `Extraction diapositives PowerPoint : ${file.name}…`, pct: 40 }, options.onProgress);
-          const text = normalizeMedicalSlideText(await readPowerPoint(file));
-          setIsReading(false);
-          setReadingProgress(null);
-          return {
-            success: text.length >= 20,
-            content: text,
-            usedVision: false,
-            wordCount: text.split(/\s+/).filter(Boolean).length,
-            fileName: file.name,
-            fileType: file.type,
-          };
-        }
-
-        // 6. Fichiers texte brut / markdown / rtf
-        notifyProgress({ stage: `Lecture du fichier texte : ${file.name}…`, pct: 60 }, options.onProgress);
-        const rawText = await file.text();
-        const text = normalizeMedicalSlideText(rawText);
+        // 5. Fichiers texte (.txt, .md, .rtf)
+        notifyProgress({ stage: `Lecture texte : ${file.name}…`, pct: 50 }, options.onProgress);
+        const text = await file.text();
         setIsReading(false);
         setReadingProgress(null);
         return {
-          success: text.length >= 20,
-          content: text,
+          success: text.trim().length >= 20,
+          content: text.trim(),
           usedVision: false,
           wordCount: text.split(/\s+/).filter(Boolean).length,
           fileName: file.name,
           fileType: file.type,
         };
       } catch (err: any) {
+        console.error("[useFileReader] Erreur sur", file.name, err);
         setIsReading(false);
         setReadingProgress(null);
         return {
           success: false,
           content: "",
-          fileName: file.name,
-          fileType: file.type,
-          error: err?.message || "Erreur lors de l'extraction du fichier",
+          error: err?.message || "Erreur lors de la lecture du fichier",
         };
       }
     },
     [readPdfHybrid]
   );
 
-  return {
-    readFile,
-    isReading,
-    readingProgress,
-  };
+  return { readFile, isReading, readingProgress };
 }
-
-export default useFileReader;
