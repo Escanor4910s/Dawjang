@@ -208,6 +208,10 @@ export const ExamenBlanc: React.FC = () => {
       .slice(0, quota)
       .map((st) => st.lessonId);
     setSelectedLessonIds(topIds);
+    toast({
+      title: `Top ${topIds.length} leçons sélectionnées`,
+      description: "Les leçons ayant la plus forte probabilité de sortie ont été cochées.",
+    });
   };
 
   const rankedLessons = useMemo(() => {
@@ -1126,10 +1130,10 @@ export const ExamenBlanc: React.FC = () => {
                     <button
                       type="button"
                       onClick={selectTopProbableLessons}
-                      className="p-1.5 px-3 rounded-lg border border-black/15 bg-[#FAF8F5] hover:bg-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer text-[#121316]"
+                      className="px-3 py-1.5 rounded-lg bg-[#121316] text-white hover:bg-[#C96442] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
                       title="Sélectionner automatiquement les leçons ayant les plus fortes probabilités d'apparition"
                     >
-                      <Sparkles className="w-3 h-3 text-[#C96442]" /> Top {quota} probable
+                      <Sparkles className="w-3 h-3" /> Auto-sélectionner le Top {quota} probable
                     </button>
                     <button type="button" onClick={() => setProbSortOrder(probSortOrder === "desc" ? "asc" : "desc")} className="p-1.5 rounded-lg border border-black/15 bg-[#FAF8F5] hover:bg-white text-xs font-semibold flex items-center gap-1 cursor-pointer">
                       <ArrowUpDown className="w-3 h-3" /> {probSortOrder === "desc" ? "Plus fréquentes d'abord" : "Moins fréquentes d'abord"}
