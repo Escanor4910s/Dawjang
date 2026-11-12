@@ -410,10 +410,37 @@ export function isolateSubjectSection(text: string, subjectName: string): { text
 // 5. SEGMENTATION DES ÉPREUVES (cas cliniques / QCM isolés)
 // ----------------------------------------------------------------------------
 
-const OPT_RE = /^\s*\(?([A-Ea-e])\s*[-–—.):]\s*(\S.*)$/;
-const Q_RE = /^\s*(?:(?:QCM|Question|Q|N°|No)\s*)?(\d{1,3})\s*[-–—.):]\s*(\S.*)?$/i;
-const STATEMENT_RE = /^\s*\(?([1-6])\s*[-–—.):]\s*(\S.*)$/;
+const SINGLE_OPT_RE = /^\s*(?:\(?([A-Ea-e])\s*[-–—.):/]|\[([A-Ea-e])\]|\b([A-Ea-e])\s*[/])\s*(\S.*)$/;
+const NUM_OPT_RE = /^\s*(?:\(?([1-5])\s*[-–—.):/]|\[([1-5])\])\s*(\S.*)$/;
+const Q_RE = /^\s*(?:(?:QCM|Question|Item|Q|N°|No)\s*)?(\d{1,3})\s*(?:[-–—.):/]|(?=\s+[A-ZÀ-Ý«]))\s*(\S.*)?$/i;
+const STATEMENT_RE = /^\s*\(?([1-6])\s*[-–—.):/]\s*(\S.*)$/;
 
+function extractInlineOptions(line: string): { letter: EBLetter; text: string }[] | null {
+  const markerRe = /(?:^|\s+)(?:\(?([A-Ea-e])\s*[-–—.):/]|\[([A-Ea-e])\])\s*/g;
+  const matches: { letter: EBLetter; index: number; matchLen: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = markerRe.exec(line)) !== null) {
+    const rawL = (m[1] || m[2]).toUpperCase();
+    if (EB_LETTERS.includes(rawL as EBLetter)) {
+      matches.push({ letter: rawL as EBLetter, index: m.index, matchLen: m[0].length });
+    }
+  }
+  if (matches.length >= 2) {
+    const opts: { letter: EBLetter; text: string }[] = [];
+    for (let i = 0; i < matches.length; i++) {
+      const curM = matches[i];
+      const start = curM.index + curM.matchLen;
+      const end = i < matches.length - 1 ? matches[i + 1].index : line.length;
+      const text = line.slice(start, end).trim();
+      opts.push({ letter: curM.letter, text });
+    }
+    return opts;
+  }
+  return null;
+}
+
+const ISOLE_START =
+  /^(?:qcm\s+isol[ée]s?|questions?\s+isol[ée]es?|questions?\s+ind[ée]pendantes?|hors\s+dossier|questions?\s+hors\s+dossier)/i;
 const NEW_CASE_START =
   /^(?:cas clinique|dossier|observation|un patient|une patiente|un enfant|une enfant|une femme|un homme|un nourrisson|un adolescent|une adolescente|une jeune|un jeune|un sujet|mme|mlle|madame|monsieur|m\.|mr|patient(?:e)? de|nouveau cas)/i;
 const CONT_STEM =
@@ -432,7 +459,6 @@ interface RawQuestion {
 function detectFormat(stem: string, statements: string[] | undefined, options: EBOption[]): EBFormat {
   const s = stem.toLowerCase();
   const optTexts = options.map((o) => o.text.toLowerCase());
-  if (options.length < 2) return "QNS";
 
   // GROUPAGE : codes de combinaison (1,2,3 / 1 et 3 / ... / autre combinaison)
   const comboOpts = optTexts.filter((t) => /(?:^|\D)[1-6](?:\s*(?:,|et|-|&)\s*[1-6])*\D*(?:sont|est)?\s*(?:exacte|exactes|vraie|vraies|juste|justes|correcte|correctes)?/.test(t) && /[1-6]/.test(t));
@@ -450,7 +476,7 @@ function detectFormat(stem: string, statements: string[] | undefined, options: E
     return "ASSOCIATION";
 
   const negation =
-    /\b(sauf|inexacte|inexactes|incorrecte|incorrectes|fausse|fausses|faux|ne\s+(?:doit|doivent|peut|peuvent|fait|font|correspond|correspondent|constitue|constituent|figure)\s+pas|n['’]est\s+pas|n['’]est\s+pas|ne\s+(?:fait|font)\s+pas\s+partie|sauf\s+une)\b/.test(
+    /\b(sauf|inexacte|inexactes|incorrecte|incorrectes|fausse|fausses|faux|ne\s+(?:doit|doivent|peut|peuvent|fait|font|correspond|correspondent|constitue|constituent|figure)\s+pas|n['’]est\s+pas|ne\s+(?:fait|font)\s+pas\s+partie|sauf\s+une)\b/.test(
       s
     );
   const plural =
@@ -462,23 +488,21 @@ function detectFormat(stem: string, statements: string[] | undefined, options: E
   if (negation && plural && !single) return "COMPLEMENT_MULTIPLE";
   if (negation) return "CENSURE";
   if (plural && !single) return "COMPLEMENT_MULTIPLE";
+
+  // En docimologie médicale : si l'énoncé contient des assertions numérotées, c'est un groupage
+  if (statements && statements.length >= 3) return "GROUPAGE";
+
+  // Règle d'or : en médecine, une question d'épreuve est par défaut un QCM à choix simple (Élection)
   return "ELECTION";
 }
 
 function parseQuestions(text: string): { questions: RawQuestion[]; preamble: string[] } {
   const lines = text.replace(/\r/g, "").split("\n").map((l) => l.replace(/\s+$/, ""));
-  const optionLineCount = lines.filter((l) => OPT_RE.test(l)).length;
-  const qnsMode = optionLineCount < 3;
 
   const questions: RawQuestion[] = [];
   const preamble: string[] = [];
   let cur: RawQuestion | null = null;
   let prevBlank = false;
-
-  const nextLetter = (c: RawQuestion): EBLetter | null => {
-    const idx = c.options.length;
-    return idx < 5 ? EB_LETTERS[idx] : null;
-  };
 
   for (const line of lines) {
     const isBlank = line.trim() === "";
@@ -487,15 +511,44 @@ function parseQuestions(text: string): { questions: RawQuestion[]; preamble: str
       continue;
     }
 
-    // Option suivante attendue ?
+    // Détection des options pour la question en cours
     if (cur) {
-      const om = OPT_RE.exec(line);
+      // 1. Détection des options inline (A. ... B. ... sur une même ligne)
+      const inlineOpts = extractInlineOptions(line);
+      if (inlineOpts && inlineOpts.length >= 2) {
+        inlineOpts.forEach((io) => {
+          if (!cur!.options.some((o) => o.letter === io.letter)) {
+            cur!.options.push(io);
+          }
+        });
+        prevBlank = false;
+        continue;
+      }
+
+      // 2. Détection d'option par lettre unique (A., A), A-, A:, A/, [A], etc.)
+      const om = SINGLE_OPT_RE.exec(line);
       if (om) {
-        const letter = om[1].toUpperCase() as EBLetter;
-        if (letter === nextLetter(cur)) {
-          cur.options.push({ letter, text: om[2].trim() });
+        const rawL = (om[1] || om[2] || om[3]).toUpperCase() as EBLetter;
+        if (EB_LETTERS.includes(rawL) && !cur.options.some((o) => o.letter === rawL)) {
+          cur.options.push({ letter: rawL, text: (om[4] || "").trim() });
           prevBlank = false;
           continue;
+        }
+      }
+
+      // 3. Détection d'option numérotée 1 à 5 (convertie en A-E si pas de groupage)
+      if (cur.options.length < 5 && cur.stemLines.length > 0) {
+        const nm = NUM_OPT_RE.exec(line);
+        if (nm) {
+          const numIdx = parseInt(nm[1], 10) - 1;
+          if (numIdx >= 0 && numIdx < 5) {
+            const letter = EB_LETTERS[numIdx];
+            if (!cur.options.some((o) => o.letter === letter)) {
+              cur.options.push({ letter, text: (nm[3] || "").trim() });
+              prevBlank = false;
+              continue;
+            }
+          }
         }
       }
     }
@@ -505,7 +558,7 @@ function parseQuestions(text: string): { questions: RawQuestion[]; preamble: str
     if (qm) {
       const num = parseInt(qm[1], 10);
       const okSequence = !cur || num === cur.origNumber + 1 || num === 1;
-      const curDone = !cur || cur.options.length >= 2 || (qnsMode && cur.stemLines.length > 0);
+      const curDone = !cur || cur.options.length >= 2 || cur.stemLines.length > 0;
       if (okSequence && curDone) {
         cur = {
           seq: questions.length + 1,
@@ -607,15 +660,26 @@ export function parseExamBlocks(text: string, examId: string): EBBlock[] {
     let leadText = "";
     let vignetteText = "";
 
-    if (ctx.length >= 120 || /cas clinique/i.test(ctx)) {
-      const looksNew = NEW_CASE_START.test(ctx) || /cas clinique|nouveau cas|dossier/i.test(ctx.slice(0, 80));
-      if (prevInCase && !looksNew) {
-        attach = "continue";
-        leadText = ctx;
-      } else {
-        attach = "new";
-        vignetteText = ctx;
-      }
+    const isExplicitlyIsolated =
+      ISOLE_START.test(item.stem) ||
+      (ctx.length > 0 && ISOLE_START.test(ctx)) ||
+      /^qcm\s*\d+/i.test(q.stemLines[0] || "") ||
+      (/\b(concernant\s+la|concernant\s+le|au\s+cours\s+d[ue]|la\s+définition\s+de)\b/i.test(item.stem) && !CONT_STEM.test(item.stem));
+    const looksNew =
+      NEW_CASE_START.test(ctx) ||
+      /cas clinique|nouveau cas|dossier/i.test(ctx.slice(0, 80)) ||
+      /cas clinique|dossier/i.test(item.stem.slice(0, 50));
+
+    if (looksNew && (ctx.length >= 80 || /cas clinique/i.test(ctx))) {
+      attach = "new";
+      vignetteText = ctx;
+    } else if (prevInCase && !isExplicitlyIsolated && currentCase && currentCase.items.length < 5) {
+      // Dans une épreuve médicale de faculté, les questions successives (Q1, Q2, Q3...) restent rattachées au cas clinique
+      attach = "continue";
+      leadText = ctx;
+    } else if (ctx.length >= 120 || /cas clinique/i.test(ctx)) {
+      attach = "new";
+      vignetteText = ctx;
     } else if (prevInCase && (CONT_STEM.test(item.stem) || (ctx.length > 0 && TRANSITION_START.test(ctx)))) {
       attach = "continue";
       leadText = ctx;
@@ -915,13 +979,34 @@ export function computeCorpusAnalysis(
   )[0];
 
   const blueprint: BlueprintBlock[] = reference
-    ? reference.blocks.map((b) => ({ kind: b.kind, formats: b.items.map((i) => i.format) }))
+    ? reference.blocks.map((b) => {
+        const formats: EBFormat[] = b.items.map((it, idx) => {
+          if (it.format === "QNS") {
+            // Règle d'or docimologique : un cas clinique ou QCM d'examen de médecine n'a jamais de QROC.
+            // On rétablit le format QCM authentique avec 5 propositions A-E.
+            if (b.kind === "CAS_CLINIQUE") {
+              if (idx === 0) return "ELECTION";
+              if (idx === 1) return "COMPLEMENT_MULTIPLE";
+              if (idx === 2) return "CENSURE";
+              return idx % 2 === 0 ? "ELECTION" : "COMPLEMENT_MULTIPLE";
+            }
+            return "ELECTION";
+          }
+          return it.format;
+        });
+        return {
+          kind: b.kind,
+          formats: formats.length > 0 ? formats : (b.kind === "CAS_CLINIQUE" ? ["ELECTION", "COMPLEMENT_MULTIPLE", "CENSURE"] : ["ELECTION"]),
+        };
+      })
     : [];
 
   const dist: Partial<Record<EBFormat | "CAS_CLINIQUE", number>> = {};
   valid.forEach((e) =>
     (Object.keys(e.formatCounts) as (EBFormat | "CAS_CLINIQUE")[]).forEach((k) => {
-      dist[k] = (dist[k] || 0) + (e.formatCounts[k] || 0);
+      if (k !== "QNS") {
+        dist[k] = (dist[k] || 0) + (e.formatCounts[k] || 0);
+      }
     })
   );
 
@@ -977,7 +1062,7 @@ const AUDIT_SYSTEM = `Tu es un docimologue expert de la Faculté de Médecine (U
 Ta mission, rigoureuse et patiente, pour CHAQUE bloc :
 1. Confirmer si le bloc relève de la matière cible (inSubject). Les questions d'une autre matière (autre EC) doivent être exclues.
 2. Confirmer la nature du bloc : "CAS_CLINIQUE" (contexte clinique suivi de questions, même si une question interne ressemble à une élection, une censure, un groupage ou un complément multiple) ou "ISOLE" (QCM autonome).
-3. Corriger le format de chaque question si besoin : ELECTION, CENSURE, GROUPAGE, COMPLEMENT_MULTIPLE, ASSOCIATION, JUMELAGE, QNS.
+3. Corriger le format de chaque question : ELECTION (choix simple), CENSURE (sauf / fausse), GROUPAGE (assertions 1-4), COMPLEMENT_MULTIPLE (plusieurs justes), ASSOCIATION, JUMELAGE (parce que). Chaque question est obligatoirement un format QCM avec options.
 4. Identifier quelles leçons ont réellement servi à CONSTRUIRE le bloc. RÈGLE CAPITALE : une leçon est "sortie" seulement si elle est l'objet du cas clinique ou de l'énoncé de la question. Un terme qui apparaît seulement dans une proposition / un distracteur / un diagnostic différentiel NE compte PAS.
 Réponds UNIQUEMENT par un JSON valide, sans commentaire.`;
 
@@ -1013,7 +1098,7 @@ BLOCS À AUDITER (index global #n) :
 ${compactExamForAudit(slice.map((b, k) => ({ ...b, header: `${b.header || ""}` })) ).replace(/^#(\d+)/gm, (_m, n) => `#${start + parseInt(n, 10)}`)}
 
 Réponds avec ce JSON exact :
-{"blocks":[{"idx":<index global>,"inSubject":true|false,"kind":"CAS_CLINIQUE"|"ISOLE","lessons":["id_leçon", ...],"formats":{"<numéro de question>":"ELECTION|CENSURE|GROUPAGE|COMPLEMENT_MULTIPLE|ASSOCIATION|JUMELAGE|QNS"}}]}`;
+{"blocks":[{"idx":<index global>,"inSubject":true|false,"kind":"CAS_CLINIQUE"|"ISOLE","lessons":["id_leçon", ...],"formats":{"<numéro de question>":"ELECTION|CENSURE|GROUPAGE|COMPLEMENT_MULTIPLE|ASSOCIATION|JUMELAGE"}}]}`;
     try {
       const raw = await callDawiaEngineRaw("dawia2", AUDIT_SYSTEM, prompt, 0.1);
       if (!raw) continue;
@@ -1037,9 +1122,12 @@ Réponds avec ce JSON exact :
           target.items.forEach((it) => {
             const f = r.formats[String(it.number)];
             if (
-              ["ELECTION", "CENSURE", "GROUPAGE", "COMPLEMENT_MULTIPLE", "ASSOCIATION", "JUMELAGE", "QNS"].includes(f)
-            )
+              ["ELECTION", "CENSURE", "GROUPAGE", "COMPLEMENT_MULTIPLE", "ASSOCIATION", "JUMELAGE"].includes(f)
+            ) {
               it.format = f;
+            } else if (f === "QNS") {
+              it.format = "ELECTION";
+            }
           });
         }
       });
@@ -1650,10 +1738,11 @@ function schemaFor(spec: BlueprintBlock): string {
         return `{"format":"GROUPAGE",${isCase && i > 0 ? '"lead":"phrase de transition clinique",' : ""}"stem":"énoncé","statements":["assertion 1","assertion 2","assertion 3","assertion 4"],"truth":[true|false,true|false,true|false,true|false],"explanation":"..."}`;
       case "JUMELAGE":
         return `{"format":"JUMELAGE",${isCase && i > 0 ? '"lead":"...",' : ""}"stem":"énoncé court","statements":["assertion 1","assertion 2"],"truth":[true|false,true|false],"causal":true|false,"explanation":"..."}`;
-      case "QNS":
-        return `{"format":"QNS",${isCase && i > 0 ? '"lead":"...",' : ""}"stem":"question","explanation":"réponse attendue détaillée"}`;
       case "COMPLEMENT_MULTIPLE":
         return `{"format":"COMPLEMENT_MULTIPLE",${isCase && i > 0 ? '"lead":"...",' : ""}"stem":"énoncé","options":["A","B","C","D","E"],"correct":["lettre","lettre"],"explanation":"..."}`;
+      case "QNS":
+        // Dans un examen médical de type QCM / cas clinique, garantir 5 options A-E complètes
+        return `{"format":"ELECTION",${isCase && i > 0 ? '"lead":"...",' : ""}"stem":"énoncé","options":["A","B","C","D","E"],"correct":["lettre"],"explanation":"..."}`;
       default:
         return `{"format":"${f}",${isCase && i > 0 ? '"lead":"...",' : ""}"stem":"énoncé","options":["A","B","C","D","E"],"correct":["lettre"],"explanation":"..."}`;
     }
@@ -1829,8 +1918,17 @@ export async function generateExamBlanc(params: GenerateParams): Promise<{ block
       if (isCancelled()) break;
       onProgress({ phase: "redaction", message: `Bloc ${i + 1}/${total} — rédaction : ${label}${attempt > 1 ? ` (essai ${attempt})` : ""}`, current: i, total });
       const userPrompt = `STRUCTURE DU BLOC À RÉDIGER : ${label}
-Formats imposés, dans l'ordre : ${spec.formats.map((f) => EB_FORMAT_LABELS[f]).join(" → ")}
+Formats imposés, dans l'ordre strict : ${spec.formats.map((f) => EB_FORMAT_LABELS[f]).join(" → ")}
 Leçons sources : ${lessons.map((l) => l.cleanTitle).join(" + ")}
+
+RÈGLE D'OR DE LA FACULTÉ DE MÉDECINE :
+- Chaque question (au sein d'un cas clinique ou en QCM isolé) est un VRAI QCM composé de 5 propositions distinctes (A, B, C, D, E).
+- ÉLECTION : 1 seule proposition exacte (la bonne réponse).
+- COMPLÉMENT MULTIPLE : 2 à 4 propositions exactes (les bonnes réponses à cocher).
+- CENSURE : 1 seule proposition fausse (l'assertion erronée ou le piège "SAUF / inexacte").
+- GROUPAGE : 4 assertions cliniques numérotées 1 à 4, propositions A à E pour les codes de combinaisons.
+- JUMELAGE : deux assertions reliées par PARCE QUE, propositions A à E pour les codes de relation causale.
+- INTERDICTION FORMELLE DE GÉNÉRER DES QUESTIONS OUVERTES OU DES QROC. L'étudiant répond EXCLUSIVEMENT en cochant des options A à E.
 
 COURS (seule source de vérité) :
 ${courseText}
