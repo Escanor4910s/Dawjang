@@ -17,6 +17,36 @@ export interface OcrProgress {
   pct: number;
 }
 
+export interface OcrOptions {
+  systemPrompt?: string;
+  stripHandwrittenCorrections?: boolean;
+  scale?: number;
+}
+
+export const VISION_EXTRACTION_SYSTEM_PROMPT = `
+Tu es un moteur d'extraction documentaire médicale haute précision.
+Ta mission est de transcrire INTÉGRALEMENT (100 % du texte, mot pour mot, sans jamais résumer ni tronquer) les pages fournies.
+
+RÈGLES CRITIQUES POUR LES PHOTOS D'EXAMENS / ANNALES CORRIGÉES :
+1. SÉPARATION IMPRIMÉ vs MANUSCRIT (DÉ-CORRECTION) :
+   - Les photos d'examens contiennent souvent des corrections appliquées après coup : lettres entourées au stylo, coches, propositions barrées, surlignage au stabilo, notes manuscrites en marge ou tampons.
+   - Tu dois extraire l'ESSENCE ORIGINALE de l'épreuve : restitue l'énoncé et toutes les propositions (A, B, C, D, E et/ou 1, 2, 3, 4, 5) exactement tels qu'ils ont été imprimés par le professeur, COMME SI LA COPIE ÉTAIT VIERGE.
+   - Ne supprime jamais une proposition parce qu'elle est barrée au stylo sur la photo.
+   - Si une correction manuscrite ou un corrigé entouré est visible, ne l'intègre PAS dans le texte de la proposition : ajoute-le uniquement sur une ligne séparée sous la question au format :
+     [ANNOTATION_DETECTEE: Proposition(s) marquée(s) sur la copie = B, D (à vérifier avec le cours)]
+
+2. PRÉSERVATION DES STRUCTURES DOCIMOLOGIQUES :
+   - Conserve scrupuleusement la numérotation exacte des questions (Q1, 1., Question 1...).
+   - Conserve les blocs de "Cas Clinique" / "Énoncé commun aux questions X à Y".
+   - Pour les questions de GROUPAGE, sépare clairement les propositions numérotées (1, 2, 3, 4, 5) des combinaisons de réponses lettrées (A: 1+2+3, B: 1+3, C: 2+4, D: 4, E: 1+2+3+4).
+   - Pour les questions de JUMELAGE, conserve les deux affirmations reliées par "PARCE QUE" ou "CAR".
+
+3. IMAGES, SCHÉMAS ET TABLEAUX ADJOINTS :
+   - Si une image médicale (radio, scanner, ECG, coupe histologique, arbre, schéma anatomique) ou un tableau biologique est présent sur la photo :
+   - Transcris toutes les valeurs chiffrées et légendes du tableau en Markdown.
+   - Insère une balise descriptive complète : [IMAGE_MEDICALE_ADJOINTE: description précise de ce que montre l'image et ses légendes] afin que l'analyse thématique identifie la leçon correspondante.
+`;
+
 /**
  * Détermine si le texte extrait d'un PDF est quasi-vide (signe d'un document scanné ou image)
  */
@@ -56,8 +86,9 @@ export function cleanOcrText(raw: string): string {
  */
 export async function ocrImageFile(
   file: File | Blob,
-  onProgress?: (progress: OcrProgress) => void
-): Promise<string> {
+  onProgress?: (progress: OcrProgress) => void,
+  options?: OcrOptions
+): Promise<{ text: string; usedVision: boolean }> {
   onProgress?.({ page: 1, total: 1, stage: "Initialisation du moteur OCR...", pct: 10 });
 
   // 1. Essai prioritaire via Gemini Vision si clé configurée (ultra-rapide)
@@ -65,14 +96,16 @@ export async function ocrImageFile(
     import.meta.env?.VITE_GEMINI_API_KEY ||
     localStorage.getItem("dawjang_gemini_api_key");
 
+  let usedVision = false;
+
   if (geminiKey) {
     try {
       const base64 = await fileToBase64(file);
       const mime = file.type || "image/jpeg";
-      const aiText = await ocrWithGeminiVision(base64, mime, geminiKey);
+      const aiText = await ocrWithGeminiVision(base64, mime, geminiKey, options?.systemPrompt);
       if (aiText && aiText.trim().length >= 20) {
         onProgress?.({ page: 1, total: 1, stage: "Transcription terminée", pct: 100 });
-        return cleanOcrText(aiText);
+        return { text: cleanOcrText(aiText), usedVision: true };
       }
     } catch (e) {
       console.warn("[OCR] Échec Gemini Vision, bascule sur Tesseract local :", e);
@@ -89,7 +122,7 @@ export async function ocrImageFile(
       onProgress?.({ page: 1, total: 1, stage: "Reconnaissance du texte en cours...", pct: 60 });
       const res = await worker.recognize(file as any);
       onProgress?.({ page: 1, total: 1, stage: "Finalisation...", pct: 100 });
-      return cleanOcrText(res.data.text || "");
+      return { text: cleanOcrText(res.data.text || ""), usedVision: false };
     } finally {
       await worker.terminate();
     }
@@ -100,12 +133,47 @@ export async function ocrImageFile(
 }
 
 /**
+ * OCR sur un canvas HTML (page PDF rendue)
+ */
+export async function ocrCanvas(
+  canvas: HTMLCanvasElement,
+  options?: OcrOptions
+): Promise<{ text: string; usedVision: boolean }> {
+  const geminiKey =
+    import.meta.env?.VITE_GEMINI_API_KEY ||
+    localStorage.getItem("dawjang_gemini_api_key");
+
+  if (geminiKey) {
+    try {
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      const base64 = dataUrl.split(",")[1];
+      const aiText = await ocrWithGeminiVision(base64, "image/jpeg", geminiKey, options?.systemPrompt);
+      if (aiText && aiText.trim().length >= 10) {
+        return { text: cleanOcrText(aiText), usedVision: true };
+      }
+    } catch (e) {
+      console.warn("[OCR Canvas] Échec Gemini Vision, bascule Tesseract :", e);
+    }
+  }
+
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker("fra");
+  try {
+    const res = await worker.recognize(canvas);
+    return { text: cleanOcrText(res?.data?.text || ""), usedVision: false };
+  } finally {
+    await worker.terminate();
+  }
+}
+
+/**
  * OCR complet sur un document PDF scanné (page par page via Canvas haute résolution)
  */
 export async function ocrPdfDocument(
   file: File | ArrayBuffer,
-  onProgress?: (progress: OcrProgress) => void
-): Promise<string> {
+  onProgress?: (progress: OcrProgress) => void,
+  options?: OcrOptions
+): Promise<{ text: string; usedVision: boolean }> {
   const data = file instanceof File ? await file.arrayBuffer() : file;
   const typedArray = new Uint8Array(data);
 
@@ -124,6 +192,7 @@ export async function ocrPdfDocument(
     localStorage.getItem("dawjang_gemini_api_key");
 
   let worker: any = null;
+  let hadVisionSuccess = false;
 
   // Si pas de clé Gemini, on pré-charge le worker Tesseract une seule fois pour tout le PDF
   if (!geminiKey) {
@@ -133,6 +202,7 @@ export async function ocrPdfDocument(
   }
 
   const transcribedPages: string[] = [];
+  const scale = options?.scale || 2.2;
 
   try {
     for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
@@ -145,8 +215,8 @@ export async function ocrPdfDocument(
       });
 
       const page = await pdf.getPage(pageNum);
-      // Rendu à échelle 2.0 pour une netteté de caractères optimale pour l'OCR
-      const viewport = page.getViewport({ scale: 2.0 });
+      // Rendu à échelle 2.2 pour une netteté de caractères optimale pour l'OCR
+      const viewport = page.getViewport({ scale });
 
       // Création canvas hors-écran
       const canvas = document.createElement("canvas");
@@ -171,9 +241,10 @@ export async function ocrPdfDocument(
       // Priorité 1 : Gemini Vision si clé présente
       if (geminiKey) {
         try {
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
           const base64 = dataUrl.split(",")[1];
-          pageText = await ocrWithGeminiVision(base64, "image/jpeg", geminiKey);
+          pageText = await ocrWithGeminiVision(base64, "image/jpeg", geminiKey, options?.systemPrompt);
+          if (pageText) hadVisionSuccess = true;
         } catch (e) {
           console.warn(`[OCR] Gemini Vision page ${pageNum} échouée, essai Tesseract :`, e);
         }
@@ -210,7 +281,7 @@ export async function ocrPdfDocument(
   }
 
   onProgress?.({ page: totalPages, total: totalPages, stage: "Reconnaissance OCR terminée avec succès !", pct: 100 });
-  return fullText;
+  return { text: fullText, usedVision: hadVisionSuccess };
 }
 
 /**
@@ -219,9 +290,12 @@ export async function ocrPdfDocument(
 async function ocrWithGeminiVision(
   base64Data: string,
   mimeType: string,
-  apiKey: string
+  apiKey: string,
+  customPrompt?: string
 ): Promise<string> {
-  const models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"];
+  const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+  const instruction = customPrompt || VISION_EXTRACTION_SYSTEM_PROMPT;
+
   for (const model of models) {
     try {
       const res = await fetch(
@@ -241,7 +315,7 @@ async function ocrWithGeminiVision(
                     },
                   },
                   {
-                    text: "Tu es un OCR médical haute fidélité. Retranscris fidèlement et intégralement tout le texte visible sur cette page d'évaluation ou d'examen médical. Conserve scrupuleusement tous les numéros de questions, énoncés, cas cliniques et propositions (A, B, C, D, E). Ne résume rien et n'invente rien.",
+                    text: instruction,
                   },
                 ],
               },

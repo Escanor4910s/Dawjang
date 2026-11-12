@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as pdfjs from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { ocrPdfDocument, ocrImageFile, isLikelyScannedText, OcrProgress } from '@/lib/ocrEngine';
+import { ocrPdfDocument, ocrImageFile, ocrCanvas, isLikelyScannedText, OcrProgress, OcrOptions } from '@/lib/ocrEngine';
 
 // Worker PDF local servi directement par Vite (aucune dépendance réseau externe vers unpkg)
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -13,12 +13,20 @@ export interface FileReaderProgress {
   pct?: number;
 }
 
+export interface ReadFileOptions {
+  onProgress?: (progress: FileReaderProgress) => void;
+  mode?: "courses" | "annales";
+  forceFullExtraction?: boolean;
+  stripHandwrittenCorrections?: boolean;
+}
+
 export interface FileReaderResult {
   content: string;
   success: boolean;
   fileName?: string;
   fileType?: string;
   wordCount?: number;
+  usedVision?: boolean;
   error?: string;
 }
 
@@ -81,31 +89,43 @@ export const useFileReader = () => {
 
   const readFile = async (
     file: File,
-    onProgress?: (progress: FileReaderProgress) => void
+    optionsOrProgress?: ((progress: FileReaderProgress) => void) | ReadFileOptions
   ): Promise<FileReaderResult> => {
+    const options: ReadFileOptions =
+      typeof optionsOrProgress === "function"
+        ? { onProgress: optionsOrProgress }
+        : optionsOrProgress || {};
+    const onProgress = options.onProgress;
     setIsReading(true);
     notifyProgress({ stage: `Lecture de ${file.name}...`, pct: 5 }, onProgress);
 
     try {
       let content = '';
+      let usedVision = false;
       const name = String(file?.name || "").toLowerCase();
       const type = file?.type || "";
 
       if (type === 'application/pdf' || name.endsWith('.pdf')) {
         // Lecture document PDF (avec bascule automatique OCR si scanné)
-        content = await readPDF(file, (p) => notifyProgress(p, onProgress));
+        const res = await readPDF(file, options);
+        content = res.text;
+        usedVision = res.usedVision;
       } else if (
         name.match(/\.(png|jpe?g|webp|bmp)$/i) ||
         type.startsWith('image/')
       ) {
         // Lecture image directe (scan / photo d'examen) par OCR
         notifyProgress({ stage: `OCR de l'image ${file.name}...`, pct: 20 }, onProgress);
-        content = await ocrImageFile(file, (p) => {
+        const res = await ocrImageFile(file, (p) => {
           notifyProgress(
             { stage: p.stage, page: p.page, total: p.total, pct: p.pct },
             onProgress
           );
+        }, {
+          stripHandwrittenCorrections: options.stripHandwrittenCorrections,
         });
+        content = res.text;
+        usedVision = res.usedVision;
       } else if (
         name.endsWith('.docx') ||
         type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -166,6 +186,7 @@ export const useFileReader = () => {
         fileName: file.name,
         fileType: file.type,
         wordCount,
+        usedVision,
       };
     } catch (error) {
       console.error('Erreur lors de la lecture du fichier:', error);
@@ -185,8 +206,9 @@ export const useFileReader = () => {
   // Bascule automatiquement sur l'OCR haute fidélité si le document est scanné / image.
   const readPDF = async (
     file: File,
-    onProgress?: (progress: FileReaderProgress) => void
-  ): Promise<string> => {
+    options?: ReadFileOptions
+  ): Promise<{ text: string; usedVision: boolean }> => {
+    const onProgress = options?.onProgress;
     return new Promise((resolve, reject) => {
       const fileReader = new FileReader();
 
@@ -199,6 +221,7 @@ export const useFileReader = () => {
           }).promise;
 
           const slidesText: string[] = [];
+          let hadVision = false;
 
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
             const page = await pdf.getPage(pageNum);
@@ -226,8 +249,6 @@ export const useFileReader = () => {
               const w = Number(rawItem.width) || 0;
               tokens.push({ str: rawStr, x: tx, y: ty, width: w });
             }
-
-            if (tokens.length === 0) continue;
 
             // Tri vertical (Y décroissant en repère PDF), puis horizontal (X croissant)
             tokens.sort((a, b) => {
@@ -274,8 +295,37 @@ export const useFileReader = () => {
               })
               .filter(Boolean);
 
-            if (pageLines.length > 0) {
-              slidesText.push(`--- Diapositive ${pageNum} ---\n` + pageLines.join("\n"));
+            let pageText = pageLines.join("\n").trim();
+
+            // Condition de bascule OCR / Vision page par page :
+            // Si la page a moins de 120 caractères numériques (photo d'examen, scan inséré dans un PDF hybride)
+            if (pageText.length < 120 || (options?.forceFullExtraction && pageText.length < 200)) {
+              try {
+                const viewport = page.getViewport({ scale: 2.2 });
+                const canvas = document.createElement("canvas");
+                canvas.width = Math.floor(viewport.width);
+                canvas.height = Math.floor(viewport.height);
+                const ctx = canvas.getContext("2d", { willReadFrequently: true });
+                if (ctx) {
+                  ctx.fillStyle = "#ffffff";
+                  ctx.fillRect(0, 0, canvas.width, canvas.height);
+                  await page.render({ canvasContext: ctx, viewport }).promise;
+                  const ocrRes = await ocrCanvas(canvas, {
+                    scale: 2.2,
+                    stripHandwrittenCorrections: options?.stripHandwrittenCorrections,
+                  });
+                  if (ocrRes.text && ocrRes.text.length > pageText.length) {
+                    pageText = ocrRes.text;
+                    if (ocrRes.usedVision) hadVision = true;
+                  }
+                }
+              } catch (err) {
+                console.warn(`[FileReader] Fallback page OCR ${pageNum} :`, err);
+              }
+            }
+
+            if (pageText.length > 0) {
+              slidesText.push(`--- Diapositive / Page ${pageNum} ---\n` + pageText);
             }
           }
 
@@ -300,8 +350,11 @@ export const useFileReader = () => {
                   total: p.total,
                   pct: p.pct,
                 });
+              }, {
+                scale: 2.2,
+                stripHandwrittenCorrections: options?.stripHandwrittenCorrections,
               });
-              resolve(ocrResult);
+              resolve({ text: ocrResult.text, usedVision: ocrResult.usedVision });
               return;
             } catch (ocrErr: any) {
               reject(
@@ -313,7 +366,7 @@ export const useFileReader = () => {
             }
           }
 
-          resolve(finalOutput);
+          resolve({ text: finalOutput, usedVision: hadVision });
         } catch (error) {
           reject(new Error(`Erreur lors de l'analyse du PDF: ${error instanceof Error ? error.message : "Inconnue"}`));
         }

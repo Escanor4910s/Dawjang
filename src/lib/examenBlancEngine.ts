@@ -928,6 +928,9 @@ export function computeCorpusAnalysis(
 ): CorpusAnalysis {
   const valid = exams.filter((e) => e.questionCount > 0);
   const lessonTitle = new Map(lessons.map((l) => [l.id, l.cleanTitle]));
+  const totalQcmGlobal = valid.reduce((s, e) => s + e.questionCount, 0);
+  const totalExams = valid.length;
+
   const stats: LessonStat[] = lessons
     .filter((l) => !l.duplicateOf)
     .map((l) => {
@@ -950,12 +953,18 @@ export function computeCorpusAnalysis(
           });
         }
       });
+
+      // Probabilité composite : 65% fréquence d'épreuve + 35% poids volumétrique en QCM
+      const examFreq = totalExams > 0 ? (perExam.length / totalExams) * 100 : 0;
+      const qcmFreq = totalQcmGlobal > 0 ? (totalQcm / totalQcmGlobal) * 100 : 0;
+      const percent = totalExams > 0 ? Math.round(0.65 * examFreq + 0.35 * qcmFreq) : 0;
+
       return {
         lessonId: l.id,
         title: lessonTitle.get(l.id) || l.title,
         examsAppeared: perExam.length,
-        totalExams: valid.length,
-        percent: valid.length ? Math.round((perExam.length / valid.length) * 100) : 0,
+        totalExams,
+        percent,
         timesOut,
         totalQcm,
         perExam,

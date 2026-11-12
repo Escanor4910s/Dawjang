@@ -4,6 +4,7 @@
 // Moteur universel (aucun biais de matière) : voir src/lib/examenBlancEngine.ts
 // ============================================================================
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { get as idbGet, set as idbSet } from "idb-keyval";
 import {
   Upload,
   Download,
@@ -83,6 +84,11 @@ export const ExamenBlanc: React.FC = () => {
   const [expandedLessonId, setExpandedLessonId] = useState<string | null>(null);
   const [expandedExamId, setExpandedExamId] = useState<string | null>(null);
 
+  // Validation séquentielle des étapes & ajustement du quota
+  const [corpusValidated, setCorpusValidated] = useState(false);
+  const [analysisValidated, setAnalysisValidated] = useState(false);
+  const [customQuota, setCustomQuota] = useState<number | null>(null);
+
   const [isReading, setIsReading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
@@ -109,44 +115,68 @@ export const ExamenBlanc: React.FC = () => {
   const coursesInputRef = useRef<HTMLInputElement>(null);
   const annalesInputRef = useRef<HTMLInputElement>(null);
 
-  // ------------------------------------------------------------------ persistance
+  // ------------------------------------------------------------------ persistance IndexedDB (100 % intégral sans troncature)
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STUDIO_KEY);
-      if (!raw) return;
-      const s = JSON.parse(raw);
-      setUeInput(s.ue || "");
-      setSubjectInput(s.subject || "");
-      setDurationMin(s.durationMin || 60);
-      setLessons(Array.isArray(s.lessons) ? s.lessons : []);
-      setAnnales(Array.isArray(s.annales) ? s.annales : []);
-      setAnalysis(s.analysis || null);
-      setAnalysisSignature(s.analysisSignature || "");
-      setSelectedLessonIds(Array.isArray(s.selectedLessonIds) ? s.selectedLessonIds : []);
-    } catch {
-      // état corrompu : on repart d'un studio vierge
-    }
+    (async () => {
+      try {
+        const idbState = await idbGet<any>(STUDIO_KEY);
+        const s = idbState || (localStorage.getItem(STUDIO_KEY) ? JSON.parse(localStorage.getItem(STUDIO_KEY)!) : null);
+        if (!s) return;
+        setUeInput(s.ue || "");
+        setSubjectInput(s.subject || "");
+        setDurationMin(s.durationMin || 60);
+        setLessons(Array.isArray(s.lessons) ? s.lessons : []);
+        setAnnales(Array.isArray(s.annales) ? s.annales : []);
+        setAnalysis(s.analysis || null);
+        setAnalysisSignature(s.analysisSignature || "");
+        setSelectedLessonIds(Array.isArray(s.selectedLessonIds) ? s.selectedLessonIds : []);
+        if (typeof s.customQuota === "number") setCustomQuota(s.customQuota);
+        if (typeof s.analysisValidated === "boolean") setAnalysisValidated(s.analysisValidated);
+      } catch (err) {
+        console.warn("[ExamenBlanc] Erreur chargement IndexedDB:", err);
+      }
+    })();
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      const base = { ue: ueInput, subject: subjectInput, durationMin, selectedLessonIds };
-      const attempts = [
-        { ...base, lessons, annales, analysis, analysisSignature },
-        { ...base, lessons, annales, analysis: null, analysisSignature: "" },
-        { ...base, lessons: lessons.map((l) => ({ ...l, content: l.content.slice(0, 40000) })), annales: [], analysis: null, analysisSignature: "" },
-      ];
-      for (const a of attempts) {
-        try {
-          localStorage.setItem(STUDIO_KEY, JSON.stringify(a));
-          return;
-        } catch {
-          // quota dépassé : tentative suivante, plus légère
-        }
+    const t = setTimeout(async () => {
+      const full = {
+        ue: ueInput,
+        subject: subjectInput,
+        durationMin,
+        selectedLessonIds,
+        lessons,
+        annales,
+        analysis,
+        analysisSignature,
+        customQuota,
+        analysisValidated,
+      };
+      try {
+        // Stockage complet dans IndexedDB : aucune limite de 5 Mo, 0 % de troncature
+        await idbSet(STUDIO_KEY, full);
+      } catch (err) {
+        console.warn("[ExamenBlanc] Erreur sauvegarde IndexedDB:", err);
       }
+      try {
+        // Sauvegarde de secours des métadonnées légères dans localStorage
+        localStorage.setItem(
+          STUDIO_KEY + "_meta",
+          JSON.stringify({
+            ue: ueInput,
+            subject: subjectInput,
+            durationMin,
+            lessonCount: lessons.length,
+            annaleCount: annales.length,
+            selectedCount: selectedLessonIds.length,
+            customQuota,
+            analysisValidated,
+          })
+        );
+      } catch {}
     }, 600);
     return () => clearTimeout(t);
-  }, [ueInput, subjectInput, durationMin, lessons, annales, analysis, analysisSignature, selectedLessonIds]);
+  }, [ueInput, subjectInput, durationMin, lessons, annales, analysis, analysisSignature, selectedLessonIds, customQuota, analysisValidated]);
 
   useEffect(() => {
     saveSessions(sessions);
@@ -158,9 +188,27 @@ export const ExamenBlanc: React.FC = () => {
     [subjectInput, lessons, annales]
   );
   const analysisStale = !!analysis && analysisSignature !== currentSignature;
-  const quota = analysis?.quota || 0;
   const activeLessons = useMemo(() => flagDuplicateLessons(lessons), [lessons]);
+
+  // Quota effectif : utilise le quota moyen déduit par l'IA (ou ajusté à la validation de l'étape 3),
+  // avec un minimum garanti de 1 pour ne jamais bloquer l'interface.
+  const quota = useMemo(() => {
+    if (customQuota !== null && customQuota > 0) return customQuota;
+    if (!analysis) return 0;
+    return Math.max(1, Math.min(analysis.quota || 1, activeLessons.filter((l) => !l.duplicateOf).length));
+  }, [analysis, customQuota, activeLessons]);
+
   const quotaReached = quota > 0 && selectedLessonIds.length >= quota;
+
+  // Fonction d'auto-sélection des N leçons les plus probables
+  const selectTopProbableLessons = () => {
+    if (!analysis || quota <= 0) return;
+    const topIds = [...analysis.lessonStats]
+      .sort((a, b) => b.percent - a.percent || b.totalQcm - a.totalQcm)
+      .slice(0, quota)
+      .map((st) => st.lessonId);
+    setSelectedLessonIds(topIds);
+  };
 
   const rankedLessons = useMemo(() => {
     if (!analysis) return [];
@@ -210,16 +258,27 @@ export const ExamenBlanc: React.FC = () => {
     const failed: Array<{ name: string; reason: string }> = [];
     const newLessons: EBLesson[] = [];
     const newAnnales: EBAnnale[] = [];
+
     for (const file of Array.from(files)) {
       try {
-        const res = await readFile(file);
-        if (!res.success || !res.content || res.content.trim().length < 40) {
-          const isPdf = file.name.toLowerCase().endsWith(".pdf");
-          const reason = res.error || (isPdf ? "PDF scanné / image sans texte numérique" : "Fichier vide ou illisible");
-          failed.push({ name: file.name, reason });
+        // 1. Lecture hybride : couche texte native + fallback Vision page par page
+        // On passe le mode ("courses" | "annales") pour activer la dé-correction manuscrite sur les annales
+        const res = await readFile(file, {
+          mode: target,
+          forceFullExtraction: true,
+          stripHandwrittenCorrections: target === "annales",
+        });
+
+        if (!res.success || !res.content || res.content.trim().length < 20) {
+          failed.push({
+            name: file.name,
+            reason: res.error || "Document illisible même après extraction visuelle IA",
+          });
           continue;
         }
+
         const id = `${target === "courses" ? "c" : "a"}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
         if (target === "courses") {
           newLessons.push(buildLesson(id, file.name, res.content, file.size, subjectInput));
         } else {
@@ -229,26 +288,34 @@ export const ExamenBlanc: React.FC = () => {
             rawText: res.content,
             year: detectYearFromName(file.name),
             wordCount: res.content.split(/\s+/).filter(Boolean).length,
-            sizeLabel: sizeLabelOf(file.size),
+            sizeLabel: `${sizeLabelOf(file.size)}${res.usedVision ? " · Vision IA" : " · Natif"}`,
           });
         }
         ok++;
       } catch (err: any) {
-        failed.push({ name: file.name, reason: err?.message || "Erreur de lecture" });
+        failed.push({ name: file.name, reason: err?.message || "Erreur d'extraction" });
       }
     }
+
     if (newLessons.length) setLessons((prev) => flagDuplicateLessons([...prev, ...newLessons]));
     if (newAnnales.length) setAnnales((prev) => [...prev, ...newAnnales]);
     setIsReading(false);
-    if (ok > 0)
+    // Toute modification du corpus invalide les étapes aval (3 et 4)
+    setAnalysisValidated(false);
+
+    if (ok > 0) {
       toast({
-        title: `${ok} fichier(s) lu(s)`,
-        description: target === "courses" ? "Cours extraits et prêts pour l'analyse." : "Épreuves extraites et prêtes pour l'analyse.",
+        title: `${ok} fichier(s) extrait(s) à 100 %`,
+        description:
+          target === "courses"
+            ? "Cours intégralement extraits (texte + schémas)."
+            : "Annales extraites et nettoyées des corrections manuscrites.",
       });
+    }
     if (failed.length) {
       toast({
-        title: "Lecture impossible",
-        description: `Fichier(s) non lisible(s) : ${failed.map((f) => f.name).join(", ")}. Vérifiez qu'ils ne sont pas protégés ou corrompus.`,
+        title: "Fichier(s) en échec",
+        description: failed.map((f) => `${f.name} (${f.reason})`).join(", "),
         variant: "destructive",
       });
     }
@@ -301,6 +368,8 @@ export const ExamenBlanc: React.FC = () => {
       } else {
         setAnalysis(result);
         setAnalysisSignature(currentSignature);
+        setAnalysisValidated(false);
+        setCustomQuota(null);
         setSelectedLessonIds([]);
         if (result.durationMin) setDurationMin(result.durationMin);
         toast({
@@ -1004,12 +1073,49 @@ export const ExamenBlanc: React.FC = () => {
                       );
                     })}
                   </div>
+
+                  {/* PORTE DE VALIDATION DE L'ÉTAPE 3 */}
+                  <div className="pt-4 border-t border-black/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="font-bold text-black/70">Quota moyen déduit par l'IA :</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={Math.max(1, activeLessons.filter((l) => !l.duplicateOf).length)}
+                        value={quota}
+                        onChange={(e) => {
+                          const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                          setCustomQuota(val);
+                          setSelectedLessonIds((prev) => prev.slice(0, val));
+                        }}
+                        className="w-16 px-2.5 py-1 rounded-lg border border-black/20 font-mono font-bold text-center bg-[#FAF8F5]"
+                      />
+                      <span className="text-black/55">leçon(s) sur {activeLessons.filter((l) => !l.duplicateOf).length} disponibles</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAnalysisValidated(true);
+                        if (selectedLessonIds.length === 0) selectTopProbableLessons();
+                      }}
+                      className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        analysisValidated
+                          ? "bg-[#1B7354] text-white"
+                          : "bg-[#121316] hover:bg-[#C96442] text-white"
+                      }`}
+                    >
+                      {analysisValidated
+                        ? "✓ Diagnostic validé — Choisir les leçons ci-dessous"
+                        : "Valider ce diagnostic & Afficher les probabilités →"}
+                    </button>
+                  </div>
                 </div>
               )}
             </section>
 
             {/* ÉTAPE 4 : CHOIX DES LEÇONS */}
-            {analysis && !analysisStale && (
+            {analysis && !analysisStale && analysisValidated && (
               <section className="bg-white rounded-2xl border border-black/10 p-6 space-y-4 shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-black/10">
                   <div>
@@ -1017,6 +1123,14 @@ export const ExamenBlanc: React.FC = () => {
                     <p className="text-xs text-black/60">Classées par pourcentage de sortie. Le reste devient flou dès que le quota est atteint.</p>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={selectTopProbableLessons}
+                      className="p-1.5 px-3 rounded-lg border border-black/15 bg-[#FAF8F5] hover:bg-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer text-[#121316]"
+                      title="Sélectionner automatiquement les leçons ayant les plus fortes probabilités d'apparition"
+                    >
+                      <Sparkles className="w-3 h-3 text-[#C96442]" /> Top {quota} probable
+                    </button>
                     <button type="button" onClick={() => setProbSortOrder(probSortOrder === "desc" ? "asc" : "desc")} className="p-1.5 rounded-lg border border-black/15 bg-[#FAF8F5] hover:bg-white text-xs font-semibold flex items-center gap-1 cursor-pointer">
                       <ArrowUpDown className="w-3 h-3" /> {probSortOrder === "desc" ? "Plus fréquentes d'abord" : "Moins fréquentes d'abord"}
                     </button>
