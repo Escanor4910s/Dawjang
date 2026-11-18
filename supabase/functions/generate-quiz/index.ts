@@ -1,4 +1,18 @@
 import { serve } from "https://deno.land/std@0.192.0/http/server.ts";
+import { aiEndpoint, hasAiKey } from "../_shared/llm.ts";
+import { getUserPlanInfo, checkExamAiActionAccess, consumeDailyQuota } from "../_shared/plan-utils.ts";
+import {
+  cleanOptionPrefix,
+  DYNAMIC_STEM_ANGLES,
+  handleAuditExamAnnale,
+  handleGenerateExamenBlancBlock,
+  handleVisionOcrExtract,
+  LETTERS,
+  preprocessLongCourseWithSonnet,
+  shuffleArray,
+  type OptionLetter,
+} from "../_shared/examen-blanc-ai.ts";
+import { callGemini25Json, callSonnet46Json, getAiPoolSummary } from "../_shared/sonnet-pool.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,52 +20,25 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type OptionLetter = "A" | "B" | "C" | "D" | "E";
-const LETTERS: OptionLetter[] = ["A", "B", "C", "D", "E"];
 const MAX_QUESTIONS_PER_BATCH = 10;
 const MAX_CONCURRENT_BATCHES = 2;
 
 const COGNITIVE_TIER_DIRECTIVES: Record<string, string> = {
   ancrage: `PALIER 1 — ANCRAGE & SÉMIOLOGIE (Fondations & Restitution Croisée) :
 - INTERDICTION ABSOLUE de copier-coller une phrase du cours mot pour mot.
-- Reformule les définitions, les seuils biologiques, les classifications et les signes cardinaux avec une terminologie médicale exacte.
-- Construis des distracteurs crédibles en inversant deux seuils chiffrés voisins du cours, en confondant un signe constant avec un signe inconstant, ou en attribuant une caractéristique à une entité voisine du même chapitre.`,
+- Reformule les définitions, les seuils, les classifications et les signes cardinaux avec une terminologie académique exacte.
+- Construis des distracteurs crédibles en inversant deux seuils chiffrés voisins du cours, en confondant un critère constant avec un critère inconstant, ou en attribuant une propriété à une entité voisine du même chapitre.`,
 
-  mecanismes: `PALIER 2 — MÉCANISMES & CORRÉLATIONS (Physiopathologie & Causalité) :
+  mecanismes: `PALIER 2 — MÉCANISMES & CORRÉLATIONS (Causalité & Raisonnement) :
 - Ne pose AUCUNE question de simple définition.
-- Chaque question doit exiger de relier une CAUSE à une CONSÉQUENCE présente dans le cours (ex: quel mécanisme physiopathologique explique tel signe clinique, telle complication ou telle anomalie paraclinique ?).
+- Chaque question doit exiger de relier une CAUSE à une CONSÉQUENCE présente dans le cours (ex: quel mécanisme explique tel signe, telle propriété, telle complication ou telle anomalie ?).
 - Construis des distracteurs redoutables : utilise des propositions VRAIES dans le cours mais dont le lien de causalité est inversé ou anachronique.`,
 
-  discernement: `PALIER 3 — DISCERNEMENT & CAS CROISÉS (Synthèse Clinique & Nuances Restrictives) :
-- Croise 2 à 3 sous-parties distinctes du cours dans une même question (ex: Terrain + Anomalie paraclinique + Contre-indication ou Traitement).
-- Utilise des micro-vignettes cliniques ou biologiques synthétiques basées à 100% sur les éléments du cours.
-- Cible les subtilités restrictives du cours (contre-indication absolue vs relative, signe pathognomonique vs fréquent, 1ère intention vs 2nde intention) sans jamais inventer hors-cours.`
+  discernement: `PALIER 3 — DISCERNEMENT & CAS CROISÉS (Synthèse & Nuances Restrictives) :
+- Croise 2 à 3 sous-parties distinctes du cours dans une même question (ex: Terrain/Contexte + Anomalie/Paramètre + Contre-indication ou Décision).
+- Utilise des micro-vignettes synthétiques basées à 100 % sur les éléments du cours.
+- Cible les subtilités restrictives du cours (contre-indication absolue vs relative, critère de certitude vs d'orientation, 1re intention vs 2e intention) sans jamais inventer hors-cours.`,
 };
-
-const DYNAMIC_STEM_ANGLES = [
-  "Attaque directe par le phénomène physiopathologique ou sémiologique sans formule scolaire répétitive.",
-  "Approche différentielle : oppose deux entités, stades ou formes cliniques du cours pour tester le critère formel de distinction.",
-  "Approche déductive : présente une constellation de 2 ou 3 signes/paramètres du cours et demande la conclusion logique qui s'impose.",
-  "Approche de hiérarchisation : interroge sur l'élément déterminant, le critère de certitude ou le mécanisme prépondérant décrit dans le texte.",
-  "Approche fonctionnelle inversée : part d'un résultat biologique, clinique ou thérapeutique mentionné dans le cours et remonte à sa cause.",
-  "Approche de restriction conditionnelle : cible une exception, une condition particulière ou un piège classique explicitement mentionné dans le support."
-];
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function shuffleArray<T>(array: T[]): T[] {
-  const copy = [...array];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
-function cleanOptionPrefix(text: string): string {
-  if (!text) return "";
-  return String(text).replace(/^[A-E][\s.\-):]+/i, "").trim();
-}
 
 /**
  * Mélangeur déterministe Fisher-Yates + Anti-Streak côté serveur :
@@ -67,7 +54,7 @@ function rebalanceAndShuffleQuestions(rawQuestions: any[]): any[] {
       rawOpts.push({
         letter: LETTERS[rawOpts.length],
         text: `Proposition complémentaire ${rawOpts.length + 1}`,
-        rationale: "Distracteur complémentaire."
+        rationale: "Distracteur complémentaire.",
       });
     }
 
@@ -76,17 +63,18 @@ function rebalanceAndShuffleQuestions(rawQuestions: any[]): any[] {
       .toUpperCase()
       .charAt(0) as OptionLetter;
 
-    const correctIndex = LETTERS.indexOf(originalCorrectLetter) !== -1
-      ? LETTERS.indexOf(originalCorrectLetter)
-      : 0;
+    const correctIndex =
+      LETTERS.indexOf(originalCorrectLetter) !== -1
+        ? LETTERS.indexOf(originalCorrectLetter)
+        : 0;
     const correctOptionObj = rawOpts[correctIndex] || rawOpts[0];
 
     const last1 = letterHistory[letterHistory.length - 1];
     const last2 = letterHistory[letterHistory.length - 2];
 
-    const candidateLetters = shuffleArray(LETTERS).filter((letter) => {
+    const candidateLetters = shuffleArray([...LETTERS]).filter((letter) => {
       if (last1 && last2 && last1 === last2 && letter === last1) return false;
-      if (last1 && letter === last1) return false; // Zéro répétition immédiate quand évitable
+      if (last1 && letter === last1) return false;
       return true;
     });
 
@@ -104,14 +92,14 @@ function rebalanceAndShuffleQuestions(rawQuestions: any[]): any[] {
         finalOptions.push({
           letter: LETTERS[i],
           text: cleanOptionPrefix(correctOptionObj.text || correctOptionObj),
-          rationale: correctOptionObj.rationale || "Proposition exacte selon le cours."
+          rationale: correctOptionObj.rationale || "Proposition exacte selon le cours.",
         });
       } else {
         const d = shuffledDistractors[dPtr++] || { text: "Proposition inexacte", rationale: "" };
         finalOptions.push({
           letter: LETTERS[i],
           text: cleanOptionPrefix(d.text || d),
-          rationale: d.rationale || "Proposition inexacte selon le cours."
+          rationale: d.rationale || "Proposition inexacte selon le cours.",
         });
       }
     }
@@ -192,56 +180,6 @@ function safeParseQuestionsJson(rawText: string): any[] {
   return [];
 }
 
-/**
- * Étape 1 : Gemini 2.5 Flash agit UNIQUEMENT comme extracteur/nettoyeur documentaire
- * sur les cours volumineux pour soulager Claude Sonnet 4.6 sans jamais rédiger de QCM.
- */
-async function preprocessCourseWithGeminiFlash(
-  rawCourseContent: string,
-  excludedConcepts: string[],
-  geminiKey?: string
-): Promise<{ cleanCourseTitle: string; structuredMedicalFacts: string }> {
-  if (!geminiKey || rawCourseContent.length < 14000) {
-    return { cleanCourseTitle: "", structuredMedicalFacts: rawCourseContent };
-  }
-
-  try {
-    const extractionPrompt = `Tu es un extracteur documentaire médical. Tu NE DOIS PAS rédiger de QCM.
-Nettoie ce cours brut pour le Maître d'Œuvre (Claude Sonnet 4.6) :
-1. Retire les numéros de page, en-têtes et sommaires.
-2. Extrais le titre médical court du sujet (ex: "Anémie").
-3. Garde 100% des faits médicaux, chiffres, seuils, mécanismes, listes et exceptions.
-${excludedConcepts.length > 0 ? `4. Mets en valeur les notions non couvertes par : ${excludedConcepts.slice(0, 35).join(" | ")}` : ""}
-Réponds en JSON : { "cleanCourseTitle": "...", "structuredMedicalFacts": "..." }`;
-
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: `${extractionPrompt}\n\nCOURS:\n${rawCourseContent}` }] }],
-          generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
-        }),
-      }
-    );
-
-    if (!resp.ok) return { cleanCourseTitle: "", structuredMedicalFacts: rawCourseContent };
-    const data = await resp.json();
-    const parsed = JSON.parse(data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
-    return {
-      cleanCourseTitle: parsed.cleanCourseTitle || "",
-      structuredMedicalFacts: parsed.structuredMedicalFacts || rawCourseContent,
-    };
-  } catch {
-    return { cleanCourseTitle: "", structuredMedicalFacts: rawCourseContent };
-  }
-}
-
-/**
- * Appel principal au Maître d'Œuvre : Claude Sonnet 4.6 (avec Prompt Caching + Retry)
- * et fallback intelligent si l'environnement Supabase utilise une autre clé.
- */
 async function callMasterLLM(params: {
   systemPrompt: string;
   courseText: string;
@@ -250,59 +188,21 @@ async function callMasterLLM(params: {
   openaiKey?: string;
   geminiKey?: string;
 }): Promise<any[]> {
-  const { systemPrompt, courseText, batchInstruction, anthropicKey, openaiKey, geminiKey } = params;
+  const { systemPrompt, courseText, batchInstruction, openaiKey } = params;
 
-  // 1. Maître d'Œuvre prioritaire : Claude Sonnet 4.6
-  if (anthropicKey) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "x-api-key": anthropicKey,
-            "anthropic-version": "2023-06-01",
-            "anthropic-beta": "prompt-caching-2024-07-31",
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-6",
-            max_tokens: 8192,
-            temperature: 0.6,
-            system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
-            messages: [
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `SUPPORT DE COURS MÉDICAL :\n\n${courseText}`,
-                    cache_control: { type: "ephemeral" },
-                  },
-                  { type: "text", text: batchInstruction },
-                ],
-              },
-            ],
-          }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const rawText = data?.content?.[0]?.text || "{}";
-          const parsed = safeParseQuestionsJson(rawText);
-          if (parsed.length > 0) return parsed;
-        } else if ([429, 500, 502, 503, 529].includes(response.status) && attempt < 2) {
-          await sleep(1500 * (attempt + 1));
-          continue;
-        } else {
-          break;
-        }
-      } catch {
-        if (attempt < 2) await sleep(1200 * (attempt + 1));
-      }
-    }
+  const sonnetPoolResult = await callSonnet46Json<{ questions?: any[] }>({
+    systemPrompt,
+    userPrompt: `SUPPORT DE COURS :\n\n${courseText}\n\n${batchInstruction}`,
+    cachedCoursePrefix: courseText,
+    temperature: 0.6,
+    maxTokens: 8192,
+    timeoutMs: 36000,
+    validate: (p) => Array.isArray(p?.questions) && p.questions.length > 0,
+  });
+  if (sonnetPoolResult?.data?.questions?.length) {
+    return sonnetPoolResult.data.questions;
   }
 
-  // 2. Fallback OpenAI / Compatible si ANTHROPIC_API_KEY absente ou saturée
   if (openaiKey) {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -327,30 +227,42 @@ async function callMasterLLM(params: {
     }
   }
 
-  // 3. Fallback Gemini si seule GEMINI_API_KEY est configurée dans les secrets Supabase
-  if (geminiKey) {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${geminiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: [
-            { role: "user", parts: [{ text: `SUPPORT DE COURS :\n${courseText}\n\n${batchInstruction}` }] },
-          ],
-          generationConfig: { temperature: 0.6, responseMimeType: "application/json" },
-        }),
-      }
-    );
+  const geminiPoolResult = await callGemini25Json<{ questions?: any[] }>({
+    systemPrompt,
+    userPrompt: `SUPPORT DE COURS :\n${courseText}\n\n${batchInstruction}`,
+    temperature: 0.6,
+    maxTokens: 8192,
+    timeoutMs: 28000,
+    validate: (p) => Array.isArray(p?.questions) && p.questions.length > 0,
+  });
+  if (geminiPoolResult?.data?.questions?.length) {
+    return geminiPoolResult.data.questions;
+  }
+
+  if (hasAiKey()) {
+    const { url, headers, model } = aiEndpoint();
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `SUPPORT DE COURS :\n${courseText}\n\n${batchInstruction}` },
+        ],
+        temperature: 0.6,
+      }),
+    });
     if (response.ok) {
       const data = await response.json();
-      const parsed = safeParseQuestionsJson(data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+      const parsed = safeParseQuestionsJson(data?.choices?.[0]?.message?.content || "{}");
       if (parsed.length > 0) return parsed;
     }
   }
 
-  throw new Error("Aucune clé IA active (ANTHROPIC_API_KEY, OPENAI_API_KEY ou GEMINI_API_KEY) n'a répondu.");
+  throw new Error(
+    "Aucune clé IA active (SONNET_API_KEY / ANTHROPIC_API_KEY / OPENROUTER_API_KEY / GEMINI_API_KEY) n'a répondu."
+  );
 }
 
 serve(async (req) => {
@@ -358,57 +270,127 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Méthode non autorisée" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json", Allow: "POST, OPTIONS" },
+    });
+  }
+
   try {
+    const userInfo = await getUserPlanInfo(req);
+    if (!userInfo) {
+      return new Response(JSON.stringify({ error: "Authentification requise" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const body = await req.json();
-    const courseContent = body.courseContent || body.content || body.text || "";
-    const courseTitle = body.courseTitle || body.title || "Cours Médical";
-    const requestedArchetypes: string[] = Array.isArray(body.archetypes) && body.archetypes.length > 0
-      ? body.archetypes
-      : body.archetype && body.archetype !== "mixte"
-      ? [body.archetype]
-      : ["complement_multiple", "groupage", "association", "censure", "jumelage"];
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return new Response(JSON.stringify({ error: "Requête invalide" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const accessError = await checkExamAiActionAccess(userInfo, body);
+    if (accessError) return accessError;
 
-    const cognitiveTier = body.cognitiveTier || body.difficulty || "mecanismes";
-    const safeQuestionCount = Math.max(1, Math.min(50, Number(body.questionCount || body.count || 10)));
-    const seriesNumber = Number(body.seriesNumber || 1);
-    const excludedConcepts: string[] = Array.isArray(body.excludedConcepts) ? body.excludedConcepts : [];
-    const examArchiveText: string = body.examArchiveText || "";
+    if (body.action === "pool_status") {
+      return new Response(JSON.stringify({ ok: true, pool: getAiPoolSummary() }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    if (!courseContent || String(courseContent).trim().length < 30) {
-      return new Response(
-        JSON.stringify({ error: "Le contenu du cours est vide ou insuffisant." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (body.action === "vision_ocr_extract") {
+      const ocrRes = await handleVisionOcrExtract(body);
+      return new Response(JSON.stringify(ocrRes), {
+        status: ocrRes.error ? ocrRes.status || 500 : 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (body.action === "generate_examen_blanc_block") {
+      const genRes = await handleGenerateExamenBlancBlock(body);
+      return new Response(JSON.stringify(genRes), {
+        status: genRes.error ? genRes.status || 500 : 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (body.action === "audit_exam_annale") {
+      const auditRes = await handleAuditExamAnnale(body);
+      return new Response(JSON.stringify(auditRes), {
+        status: auditRes.error ? auditRes.status || 500 : 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("CLAUDE_API_KEY");
     const geminiKey = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_API_KEY");
     const openaiKey = Deno.env.get("OPENAI_API_KEY");
 
-    const { cleanCourseTitle, structuredMedicalFacts } = await preprocessCourseWithGeminiFlash(
+    const courseContent = body.courseContent || body.content || body.text || "";
+    const courseTitle = body.courseTitle || body.title || "Cours Universitaire";
+    const requestedArchetypes: string[] =
+      Array.isArray(body.archetypes) && body.archetypes.length > 0
+        ? body.archetypes
+        : body.archetype && body.archetype !== "mixte"
+        ? [body.archetype]
+        : ["complement_multiple", "groupage", "association", "censure", "jumelage"];
+
+    const cognitiveTier = body.cognitiveTier || body.difficulty || "mecanismes";
+    const requestedCount = Number(body.questionCount ?? body.count ?? 10);
+    if (!Number.isFinite(requestedCount)) {
+      return new Response(JSON.stringify({ error: "Nombre de questions invalide" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const safeQuestionCount = Math.max(1, Math.min(50, Math.floor(requestedCount)));
+    const seriesNumber = Number(body.seriesNumber || 1);
+    const excludedConcepts: string[] = Array.isArray(body.excludedConcepts) ? body.excludedConcepts : [];
+    const examArchiveText: string = body.examArchiveText || "";
+
+    if (typeof courseContent !== "string" || courseContent.trim().length < 30 || courseContent.length > 120_000) {
+      return new Response(
+        JSON.stringify({ error: "Le contenu du cours est vide ou insuffisant." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const quota = await consumeDailyQuota(userInfo.userId, "qcm", safeQuestionCount, userInfo.plan);
+    if (!quota.allowed) {
+      return new Response(JSON.stringify({ error: "Limite quotidienne de QCM atteinte", upgradeRequired: true }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { cleanCourseTitle, structuredMedicalFacts } = await preprocessLongCourseWithSonnet(
       courseContent,
-      excludedConcepts,
-      geminiKey
+      excludedConcepts
     );
 
     const finalCourseTitle = cleanCourseTitle || courseTitle;
     const tierDirective = COGNITIVE_TIER_DIRECTIVES[cognitiveTier] || COGNITIVE_TIER_DIRECTIVES.mecanismes;
 
-    const exclusionBlock = excludedConcepts.length > 0
-      ? `\n=== MÉMOIRE D'EXCLUSION INTER-SÉRIES (${finalCourseTitle} #${seriesNumber}) ===
+    const exclusionBlock =
+      excludedConcepts.length > 0
+        ? `\n=== MÉMOIRE D'EXCLUSION INTER-SÉRIES (${finalCourseTitle} #${seriesNumber}) ===
 Les concepts suivants ont DÉJÀ été interrogés dans les séries précédentes (#1 à #${seriesNumber - 1}).
 INTERDICTION FORMELLE de poser à nouveau des questions sur ces points :
 ${excludedConcepts.slice(0, 60).map((c, i) => `${i + 1}. ${c}`).join("\n")}\n`
-      : "";
+        : "";
 
-    const archiveBlock = examArchiveText.trim().length > 20
-      ? `\n=== CALIBRAGE DOCIMOLOGIQUE SUR ANNALES (PÔLE B) ===
-Inspire-toi du niveau d'exigence, du ton professoral et de la subtilité des pièges de cet extrait d'annales :
-${examArchiveText.slice(0, 4000)}\n`
-      : "";
+    const archiveBlock =
+      examArchiveText.trim().length > 20
+        ? `\n=== CALIBRAGE DOCIMOLOGIQUE SUR ANNALES (PÔLE B) ===
+Copie-colle le niveau d'exigence, la syntaxe professorale et la subtilité des pièges de cet extrait d'annales :
+${examArchiveText.slice(0, 4500)}\n`
+        : "";
 
-    const masterSystemPrompt = `Tu es le Maître d'Œuvre Docimologique de DawJang Studio Académique (Professeur Agrégé de Médecine).
-Tu conçois des QCM médicaux d'une rigueur universitaire absolue à partir EXCLUSIVEMENT du cours fourni ("${finalCourseTitle}", Série #${seriesNumber}).
+    const masterSystemPrompt = `Tu es le Maître d'Œuvre Docimologique de DawJang Studio Académique.
+Tu conçois des QCM universitaires d'une rigueur absolue à partir EXCLUSIVEMENT du cours fourni ("${finalCourseTitle}", Série #${seriesNumber}).
 
 ${tierDirective}
 ${exclusionBlock}
@@ -416,7 +398,7 @@ ${archiveBlock}
 
 === RÈGLES ARCHITECTURALES OBLIGATOIRES PAR TYPE DE QCM ===
 1. "complement_multiple" (Élection / QCU) :
-   - Énoncé médical ciselé et original. 5 propositions (A à E) homogènes dont UNE SEULE est exacte.
+   - Énoncé ciselé et original. 5 propositions (A à E) homogènes dont UNE SEULE est exacte.
 2. "censure" :
    - L'étudiant doit identifier l'unique proposition FAUSSE (inexacte) parmi les 5 propositions (4 sont vraies selon le cours, 1 seule comporte une erreur subtile).
 3. "groupage" :
@@ -431,7 +413,7 @@ ${archiveBlock}
    - Ensuite seulement, les 5 \`options\` proposent des combinaisons d'appariement complètes (ex: "1-B • 2-E • 3-A • 4-C • 5-D").
 5. "jumelage" :
    - Remplis OBLIGATOIREMENT \`jumelageData\` avec \`statementOne\`, \`connector\` ("PARCE QUE" ou "D’OÙ"), et \`statementTwo\`.
-   - Les 5 \`options\` correspondent aux 5 cas canoniques du jumelage médical :
+   - Les 5 \`options\` correspondent aux 5 cas canoniques du jumelage :
      * "Les deux propositions sont vraies et ont une relation de cause à effet"
      * "Les deux propositions sont vraies mais sans relation de cause à effet"
      * "La première proposition est vraie, mais la seconde est fausse"
@@ -500,7 +482,7 @@ Réponds EXCLUSIVEMENT avec un objet JSON valide respectant ce schéma :
         instruction: `LOT ${b + 1}/${totalBatches} : Génère exactement ${countForBatch} QCM (Questions #${startIdx + 1} à #${startIdx + countForBatch}).
 Focus du cours : Tranche ${startPct}% à ${endPct}% du document pour éviter tout doublon entre les lots.
 Plan obligatoire :
-${blueprint}`
+${blueprint}`,
       });
 
       remaining -= countForBatch;
@@ -552,10 +534,11 @@ ${blueprint}`
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error: any) {
+  } catch (error) {
+    const invalidJson = error instanceof SyntaxError;
     return new Response(
-      JSON.stringify({ error: error.message || "Erreur lors de la génération docimologique." }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: invalidJson ? "Requête JSON invalide." : "Erreur lors de la génération docimologique." }),
+      { status: invalidJson ? 400 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

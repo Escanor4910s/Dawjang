@@ -1,5 +1,7 @@
 import jsPDF from "jspdf";
 import { normalizeMarkdownTables } from "@/lib/coPilotSummaryEngine";
+import { getSavedStudentProfile } from "@/lib/studentProfile";
+import { detectSubjectFromCourse } from "@/lib/disciplineProfileEngine";
 
 /**
  * Nettoie les symboles et caractères non supportés par la police ISO-Latin de jsPDF
@@ -62,6 +64,7 @@ const normalizeSymbolsAndEncoding = (
   }
 
   return text
+    // eslint-disable-next-line no-control-regex
     .replace(/[^\x00-\x7F\xC0-\xFF\u0100-\u017F\s]/g, "")
     .replace(/[ \t]+/g, " ")
     .trim();
@@ -279,6 +282,7 @@ export interface ExportArgonSummaryOptions {
   title: string;
   content: string;
   summaryType?: string;
+  subject?: string;
   createdAt?: string;
   facultyName?: string;
   authorName?: string;
@@ -299,8 +303,10 @@ export interface ExportArgonSummaryOptions {
 export const exportArgonSummaryToPDF = ({
   title,
   content,
-  facultyName = "FMPO UCAD",
-  authorName = "Master 1 Hématologie Clinique",
+  summaryType,
+  subject,
+  facultyName,
+  authorName,
 }: ExportArgonSummaryOptions) => {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = pdf.internal.pageSize.getWidth();
@@ -319,13 +325,38 @@ export const exportArgonSummaryToPDF = ({
   // Extraction des métadonnées @SYNTHESE_META_... et réparation préalable des tableaux multi-lignes
   const repairedContent = normalizeMarkdownTables(content || "");
   const allInputLines = repairedContent.split("\n");
-  let metaKicker =
-    "HIPPOCAMPUS 2026 - SYNTHESE UNIFIEE : COURS, INCIDENCE PAR OBJECTIF & DEMARCHE CAS CLINIQUE";
+  const profile = getSavedStudentProfile();
+  const detectedDiscipline =
+    (subject || "").trim() || detectSubjectFromCourse(title, content.slice(0, 6000));
+  const resolvedDiscipline = cleanTextForArgonPDF(detectedDiscipline || "Médecine Clinique");
+  const resolvedFaculty = cleanTextForArgonPDF(
+    facultyName?.trim() ||
+      profile.university?.split("—")[0]?.trim() ||
+      profile.faculty?.trim() ||
+      "Faculté de Médecine"
+  );
+  const resolvedAuthor = cleanTextForArgonPDF(
+    authorName?.trim() ||
+      [profile.studyLevel, resolvedDiscipline].filter(Boolean).join(" • ") ||
+      profile.fullName ||
+      "Étudiant en Médecine"
+  );
+  const isAuditMode =
+    summaryType === "objectives_audit" ||
+    /VOLET\s*2|PROTOCOLE\s*ARGON|INCIDENCE\s*PAR\s*OBJECTIF/i.test(content);
+
+  let metaKicker = isAuditMode
+    ? "HIPPOCAMPUS 2026 - SYNTHESE UNIFIEE : COURS, INCIDENCE PAR OBJECTIF & DEMARCHE CAS CLINIQUE"
+    : `HIPPOCAMPUS 2026 - SYNTHESE FIDELE AUX OBJECTIFS | ${resolvedDiscipline.toUpperCase()}`;
   const cleanedBaseTitle = cleanTextForArgonPDF(title)
     .replace(/^\d+\s*[-_.)\s]+\s*/, "")
     .trim();
-  let metaTitle = `${cleanedBaseTitle} : Cours Complet, Audit & Stratégie d'Examen`;
-  let metaSubtitle = `${authorName} | ${facultyName} | Croisement intégral avec les annales`;
+  let metaTitle = isAuditMode
+    ? `${cleanedBaseTitle} : Cours Complet, Audit & Stratégie d'Examen`
+    : cleanedBaseTitle;
+  let metaSubtitle = isAuditMode
+    ? `${resolvedAuthor} | ${resolvedFaculty} | Croisement intégral avec les annales`
+    : `${resolvedAuthor} | ${resolvedFaculty} | Synthèse académique fidèle au polycopié`;
 
   const bodyLines: string[] = [];
   for (const line of allInputLines) {
@@ -387,7 +418,7 @@ export const exportArgonSummaryToPDF = ({
           .split("|")
           .map((cell) => cell.trim().replace(/(?:\s*\/\s*){2,}$/g, ""));
       })
-      .filter((row) => !row.every((c) => /^[-:\s]+$/.test(c)));
+      .filter((row) => !row.every((c) => /^[\s:-]+$/.test(c)));
 
     if (parsedRows.length === 0) return;
 
@@ -513,7 +544,7 @@ export const exportArgonSummaryToPDF = ({
       const isBullet = /^[-•*◦]\s+/.test(trimmed);
       const stripped = trimmed.replace(/^[-•*◦]\s+/, "");
       const autoBold = stripped.match(
-        /^((?:\d+[\.)]\s*)?[A-Z0-9À-ÖØ-ß][^:*\n]{1,52})\s*:\s*(.+)$/
+        /^((?:\d+[.)]\s*)?[A-Z0-9À-ÖØ-ß][^:*\n]{1,52})\s*:\s*(.+)$/
       );
       const toTok =
         autoBold && !stripped.includes("**")
@@ -803,7 +834,7 @@ export const exportArgonSummaryToPDF = ({
       let headerText = innerBracket;
       if (
         innerBracket.includes(":") &&
-        !/^[ÉE]TAPE\s*\d+\s*[—\-]/i.test(innerBracket)
+        !/^[ÉE]TAPE\s*\d+\s*[—-]/i.test(innerBracket)
       ) {
         const colonIdx = innerBracket.indexOf(":");
         headerText = innerBracket.slice(0, colonIdx + 1).trim();
@@ -869,7 +900,7 @@ export const exportArgonSummaryToPDF = ({
       (leadingSpaces >= 2 && /^[-•*◦]\s+/.test(rawLine));
     const isLevel1Bullet =
       !isSubBullet && /^[-•*→✓✔]\s+/.test(rawLine);
-    const numberedMatch = rawLine.match(/^(\d+[\.)])\s+(.+)$/);
+    const numberedMatch = rawLine.match(/^(\d+[.)])\s+(.+)$/);
 
     let cleanContentLine = rawLine
       .replace(/^[-•*◦→✓✔]?\s*\[SUB\]\s*/i, "")
@@ -947,8 +978,11 @@ export const exportArgonSummaryToPDF = ({
     pdf.setFontSize(7.5);
     pdf.setTextColor(100, 116, 139); // Slate #64748B
     pdf.setFont("helvetica", "normal");
+    const footerText = isAuditMode
+      ? `Hipocampus 2026 - Synthese Unifiee : ${shortFooterTitle}, Incidence par Objectif & Demarche Cas Clinique`
+      : `Hipocampus 2026 - Synthese par Objectifs (${resolvedDiscipline}) : ${shortFooterTitle}`;
     pdf.text(
-      `Hipocampus 2026 - Synthese Unifiee : ${shortFooterTitle}, Incidence par Objectif & Demarche Cas Clinique`,
+      cleanTextForArgonPDF(footerText),
       margin,
       pageHeight - 8
     );
@@ -966,5 +1000,6 @@ export const exportArgonSummaryToPDF = ({
     .replace(/_+/g, "_")
     .substring(0, 45);
 
-  pdf.save(`Synthese_Unifiee_${safeFileName || "Medical"}.pdf`);
+  const filePrefix = isAuditMode ? "Synthese_Unifiee" : "Synthese_Objectifs";
+  pdf.save(`${filePrefix}_${safeFileName || "Medical"}.pdf`);
 };

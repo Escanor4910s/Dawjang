@@ -1,5 +1,6 @@
 import React from "react";
 import { UpgradePrompt } from "./UpgradePrompt";
+import { useUserRole } from "@/hooks/useUserRole";
 
 export interface PlanGuardProps {
   children: React.ReactNode;
@@ -10,12 +11,22 @@ export interface PlanGuardProps {
 
 export function PlanGuard({
   children,
+  requiredPlan = "premium",
   featureName,
-  allowBypass = true,
+  allowBypass = false,
 }: PlanGuardProps) {
-  // Ne bloque jamais l'accès à vos outils (QCM, Résumés, Infini) par défaut
-  if (allowBypass) {
+  const { hasAccess, loading } = useUserRole();
+
+  if (allowBypass || requiredPlan === "free" || (!loading && hasAccess(requiredPlan))) {
     return <>{children}</>;
+  }
+
+  if (loading) {
+    return (
+      <div className="py-8 text-center text-sm text-muted-foreground" role="status">
+        Vérification de votre abonnement...
+      </div>
+    );
   }
 
   return (

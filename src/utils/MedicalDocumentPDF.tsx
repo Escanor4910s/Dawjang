@@ -300,7 +300,7 @@ export function parseMedicalDocumentToSections(rawContent: string): PdfSection[]
   let sanitizedContent = rawContent
     .replace(/<blockquote\b[^>]*>[\s\S]*?(?:Synth[eèé]se|Objectif|Cadre|Sommaire|Moins de)[\s\S]*?<\/blockquote>/gi, "")
     .replace(/<h[1-3]\b[^>]*>[\s\S]*?(?:Synth[eèé]se\s*&?\s*Cadre|Sommaire\s*Ex[eèé]cutif)[\s\S]*?<\/h[1-3]>/gi, "")
-    .replace(/^\s*(?:#{1,3}\s*)?(?:SECTION\s*\d+\s*[:.\-]?\s*)?(?:Synth[eèé]se\s*&?\s*Cadre\s*Nosologique|Sommaire\s*Ex[eèé]cutif|Synth[eèé]se\s*M[eèé]dicale[^\n]*)\s*\n+/gi, "")
+    .replace(/^\s*(?:#{1,3}\s*)?(?:SECTION\s*\d+\s*[:.-]?\s*)?(?:Synth[eèé]se\s*&?\s*Cadre\s*Nosologique|Sommaire\s*Ex[eèé]cutif|Synth[eèé]se\s*M[eèé]dicale[^\n]*)\s*\n+/gi, "")
     .replace(/^\s*(?:SECTION\s*\d+\s*[^\n]*\n+)?(?:>\s*[^\n]*\n+)+(?:---\s*\n*)?/im, "")
     .replace(/\n*>\s*(?:\*\*)?Synth[eèé]se[\s\S]*?(?=\n\s*---\s*\n|\n\s*#{1,3}\s*Objectif|\n\s*#|$)(?:---\s*\n*)?/gi, "\n\n")
     .replace(/^\s*>\s*\d+\.\s*(?:\*\*)?Objectif\s*\d+.*?(?=\n\s*#{1,3}|\n\s*#|$)/gims, "")

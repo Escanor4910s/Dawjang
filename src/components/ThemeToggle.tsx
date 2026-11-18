@@ -23,7 +23,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label="Basculer le thème"
       title="Basculer le thème (Clair / Sombre)"
       className={cn(
-        "group relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-transparent hover:border-[#D5C9B3]/80 bg-transparent hover:bg-[#D5C9B3] dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 hover:text-[#D96B43] transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        "group relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-transparent hover:border-[#D5C9B3]/80 bg-transparent hover:bg-[#D5C9B3] dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 hover:text-[#D96B43] transition-all duration-200 ease-editorial",
         className
       )}
     >

@@ -38,6 +38,9 @@ export function cleanMedicalSourceText(raw: string): string {
     .replace(/ﬁ/g, "fi")
     .replace(/ﬂ/g, "fl")
     .replace(/\u00A0/g, " ")
+    .replace(/\b([Mm]an[oœ]uvre)(de|du|des|d['’])/g, "$1 $2")
+    .replace(/\b([cC])\s+lassification\b/g, "$1lassification")
+    .replace(/(^|[\s:;.!?(-])crire\s+(la|le|les|l['’]|un|une|des)\b/gi, "$1Décrire $2")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

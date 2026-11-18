@@ -6,7 +6,7 @@ import type {
   PdfFontMode,
   PdfThemeKey,
 } from "./MedicalDocumentPDF";
-import { getSavedStudentProfile } from "@/pages/Settings";
+import { getSavedStudentProfile } from "@/lib/studentProfile";
 
 export interface SummaryNode {
   title: string;

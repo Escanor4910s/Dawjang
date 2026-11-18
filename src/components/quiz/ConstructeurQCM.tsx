@@ -807,9 +807,9 @@ export const ConstructeurQCM: React.FC = () => {
         const opts = vq.options.map((o, oi) => ({
           letter: (o.letter || LETTERS[oi]) as OptionLetter,
           text: o.text,
-          rationale: o.rationale,
+          rationale: o.detailedWhy,
         }));
-        const correctOpt = vq.options.find((o) => o.isCorrect) || vq.options[0];
+        const correctOpt = vq.options.find((o) => o.isCorrectSelection) || vq.options[0];
         return {
           id: `${newSeriesId}_q_${idx + 1}`,
           index: idx + 1,
@@ -821,7 +821,7 @@ export const ConstructeurQCM: React.FC = () => {
           correctLetter: (correctOpt?.letter || "B") as OptionLetter,
           globalExplanation:
             vq.globalSynthesis ||
-            vq.options.map((o) => `${o.letter} : ${o.rationale || ""}`).join(" "),
+            vq.options.map((o) => `${o.letter} : ${o.detailedWhy || ""}`).join(" "),
         };
       });
 

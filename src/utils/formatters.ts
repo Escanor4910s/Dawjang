@@ -52,7 +52,7 @@ export function cleanAndStructureMarkdown(
       /^(?:Absolument|Bien\s+s[ûu]r|Certainement|En\s+tant\s+que\s+Professeur|Voici\s+la\s+r[ée]daction|Voici\s+les\s+sous-parties)[^\n]*\n+/gim,
       ""
     )
-    .replace(/^\s*(?:#{1,3}\s*)?(?:SECTION\s*\d+\s*[:.\-]?\s*)?(?:Synth[eèé]se\s*&?\s*Cadre\s*Nosologique|Sommaire\s*Ex[eèé]cutif|Synth[eèé]se\s*M[eèé]dicale\s*Ultra-Condens[eèé]e[^\n]*)\s*\n+/gi, "")
+    .replace(/^\s*(?:#{1,3}\s*)?(?:SECTION\s*\d+\s*[:.-]?\s*)?(?:Synth[eèé]se\s*&?\s*Cadre\s*Nosologique|Sommaire\s*Ex[eèé]cutif|Synth[eèé]se\s*M[eèé]dicale\s*Ultra-Condens[eèé]e[^\n]*)\s*\n+/gi, "")
     .replace(/\n*>\s*(?:\*\*)?Synth[eèé]se\s*M[eèé]dicale\s*Ultra-Condens[eèé]e[\s\S]*?(?=\n\s*---\s*\n|\n\s*##\s*Objectif|\n\s*#|$)(?:---\s*\n*)?/gi, "\n\n")
     .replace(/\n*>\s*(?:\*\*)?Synth[eèé]se\s*Fid[eèé]le[\s\S]*?(?=\n\s*---\s*\n|\n\s*##\s*Objectif|\n\s*#|$)(?:---\s*\n*)?/gi, "\n\n")
     .replace(/^SECTION\s*\d+\s*[^\n]*\n+/gim, "");

@@ -8,21 +8,31 @@ interface Props {
 
 interface State {
   hasError: boolean;
-  error: Error | null;
+  incidentId: string | null;
+}
+
+function createIncidentId(): string {
+  const random =
+    typeof crypto !== "undefined" && "getRandomValues" in crypto
+      ? crypto.getRandomValues(new Uint32Array(1))[0].toString(36)
+      : Math.random().toString(36).slice(2);
+  return `HPC-${Date.now().toString(36)}-${random}`.toUpperCase();
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
-    error: null,
+    incidentId: null,
   };
 
-  public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+  public static getDerivedStateFromError(): State {
+    return { hasError: true, incidentId: null };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error in component:", error, errorInfo);
+    const incidentId = createIncidentId();
+    this.setState({ incidentId });
+    console.error(`Uncaught error in component [${incidentId}]:`, error, errorInfo);
   }
 
   private handleReload = () => {
@@ -40,11 +50,10 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-sm text-[#888888] max-w-md mb-8">
             Ne vous inquiétez pas, notre système a intercepté l'erreur. Un simple rafraîchissement suffit généralement à corriger le problème.
           </p>
-          <div className="p-4 bg-black/5 dark:bg-white/5 rounded-2xl mb-8 max-w-lg overflow-auto text-left w-full border border-black/10 dark:border-white/10">
-             <code className="text-[10px] text-red-500 font-mono">
-               {this.state.error?.message || "Erreur inconnue"}
-             </code>
-          </div>
+          <p className="text-xs text-[#888888] mb-8">
+            Si le problème persiste, contactez le support en précisant l'heure de l'erreur
+            {this.state.incidentId ? ` et la référence ${this.state.incidentId}` : ""}.
+          </p>
           <Button 
             onClick={this.handleReload}
             className="rounded-full px-8 h-12 bg-[#111111] hover:bg-[#5B21B6] text-white font-bold transition-colors shadow-lg flex items-center gap-2"

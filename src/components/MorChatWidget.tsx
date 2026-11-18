@@ -677,9 +677,9 @@ export function MorChatWidget() {
           type="button"
           onClick={() => setIsOpen(true)}
           aria-label="Ouvrir le Professeur MOR"
-          className="group fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-border/90 bg-white dark:bg-[#F5F3EE] text-[#141413] shadow-[0_8px_28px_-6px_rgba(0,0,0,0.18)] hover:shadow-[0_14px_34px_-6px_rgba(0,0,0,0.28)] transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:scale-[1.05] active:scale-95 focus:outline-none"
+          className="group fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-border/90 bg-white dark:bg-[#F5F3EE] text-[#141413] shadow-[0_8px_28px_-6px_rgba(0,0,0,0.18)] hover:shadow-[0_14px_34px_-6px_rgba(0,0,0,0.28)] transition-all duration-300 ease-editorial hover:-translate-y-0.5 hover:scale-[1.05] active:scale-95 focus:outline-none"
         >
-          <MorGeometricLogo className="h-11 w-11 text-[#141413] transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.04]" />
+          <MorGeometricLogo className="h-11 w-11 text-[#141413] transition-transform duration-500 ease-editorial group-hover:scale-[1.04]" />
         </button>
       )}
 

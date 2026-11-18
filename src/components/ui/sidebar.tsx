@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -198,6 +198,7 @@ const Sidebar = React.forwardRef<
             data-mobile="true"
             data-sheet="true"
             data-slot="sheet-content"
+            aria-describedby={undefined}
             className="sidebar-mobile-drawer fixed inset-y-0 left-0 z-50 h-[100dvh] max-h-[100dvh] w-[min(86vw,305px)] bg-[#F2EDE4] dark:bg-[#161413] p-0 text-sidebar-foreground overflow-hidden border-r border-[#DFD8CA] dark:border-stone-800 rounded-none rounded-r-2xl shadow-2xl m-0 [&>button]:hidden"
             style={
               {
@@ -206,6 +207,7 @@ const Sidebar = React.forwardRef<
             }
             side="left"
           >
+            <SheetTitle className="sr-only">Menu de navigation</SheetTitle>
             <div className="flex h-full max-h-[100dvh] w-full flex-col overflow-hidden bg-[#F2EDE4] dark:bg-[#161413]">
               {children}
             </div>
@@ -281,7 +283,7 @@ const SidebarTrigger = React.forwardRef<
       {...props}
     >
       <PanelLeft />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">Afficher ou masquer le menu</span>
     </Button>
   )
 })
@@ -297,10 +299,10 @@ const SidebarRail = React.forwardRef<
     <button
       ref={ref}
       data-sidebar="rail"
-      aria-label="Toggle Sidebar"
+      aria-label="Afficher ou masquer le menu"
       tabIndex={-1}
       onClick={toggleSidebar}
-      title="Toggle Sidebar"
+      title="Afficher ou masquer le menu"
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border group-data-[side=left]:-right-4 group-data-[side=right]:left-0 sm:flex",
         "[[data-side=left]_&]:cursor-w-resize [[data-side=right]_&]:cursor-e-resize",

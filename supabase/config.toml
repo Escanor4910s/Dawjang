@@ -34,19 +34,25 @@ jwt_expiry = 3600
 enable_signup = true
 
 [functions.generate-quiz-openai]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ask-mor]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-summary]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-flashcards-openai]
-verify_jwt = false
+verify_jwt = true
 
 [functions.mor-chat]
-verify_jwt = false
+verify_jwt = true
+
+[functions.ocr-vision]
+verify_jwt = true
+
+[functions.capture-paypal-order]
+verify_jwt = true
 
 [functions.cancel-subscription]
 verify_jwt = true
@@ -56,3 +62,9 @@ verify_jwt = true
 
 [functions.paytech-webhook]
 verify_jwt = false
+
+[functions.dawjang-exam-ai]
+verify_jwt = true
+
+[functions.generate-quiz]
+verify_jwt = true

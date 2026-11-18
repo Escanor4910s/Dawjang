@@ -108,7 +108,7 @@ export function buildDynamicSynthesisPrompt(config: SynthesisConfig): string {
   1. \`## 📖 Core Concepts\` (Définitions fondamentales, seuils numériques par population et séquences biologiques avec \`⇒\`)
   2. \`## 📌 Must Remember\` (Faits incontournables, formules mathématiques en LaTeX \`$...$\`, valeurs normales, seuils décisionnels et posologies exactes de fin de cours)
   3. \`## 🔄 Key Processes\` (Démarches diagnostiques étape par étape numérotées, séquences physiologiques et arbres de prise en charge)
-  4. \`## 🔍 Key Comparisons\` (Comparaisons binaires entre concepts proches : ex. Anémie centrale vs périphérique, Carence martiale vs Anémie inflammatoire avec flèches ↑/↓)
+  4. \`## 🔍 Key Comparisons\` (Comparaisons binaires entre concepts proches de la discipline étudiée, avec critères discriminants et variations ↑/↓)
   5. \`## ⚠️ Common Misunderstandings\` (Idées reçues cliniques ou biologiques corrigées par le cours, faux positifs/négatifs)
   6. \`## 🧠 Mental Models / Intuition\` (Modèles mentaux, logique intuitive en 2 temps et mécanismes de compensation physiopathologique)
   7. \`## 🚩 Exceptions & Edge Cases\` (Cas particuliers, variations de seuils, limites de disponibilité/coût des biomarqueurs)
@@ -216,11 +216,7 @@ ${doctrineInstructions[config.doctrine] || doctrineInstructions.objectives_verba
 ${objectivesBlock}
 
 ### 2. RÈGLES DE MISE EN FORME & PARAMÈTRES ACTIFS (À RESPECTER À 100 %) :
-- **CORRECTION DES FORMULES OCR EN LATEX VALIDE** : Si le texte brut extrait d'une diapositive a cassé une fraction mathématique (ex: formules de VGM, TCMH, CCMH, Coefficient de saturation, Clairance), rétablis systématiquement la formule complète exacte en LaTeX valide :
-  - $VGM = \\frac{Ht(\\%) \\times 10}{GR\\,(millions)}$
-  - $TCMH = \\frac{Hb(g/dL) \\times 10}{GR\\,(millions)}$
-  - $CCMH = \\frac{Hb(g/dL) \\times 100}{Ht(\\%)}$
-  - $\\%\\,Sat = \\frac{Fer\\,sérique}{CTFS} \\times 100$
+- **CORRECTION DES FORMULES OCR EN LATEX VALIDE** : Si le texte brut extrait d'une diapositive a cassé une fraction ou formule mathématique (scores, mesures, indices physiologiques ou biologiques), rétablis systématiquement la formule complète exacte avec numérateur et dénominateur en LaTeX valide \`$...$\`.
 - **PROTECTION DES TABLEAUX FLÉCHÉS ET DE LA FIN DU COURS (POSOLOGIES)** : Restitue intégralement les variations fléchées (↑, ↓, N), les arbres décisionnels et 100 % des posologies thérapeutiques des dernières diapositives (doses en mg/j, mg/kg, µg, durées, contre-indications et seuils transfusionnels).
 ${verbatimRule}
 ${tablesRule}

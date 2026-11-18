@@ -317,6 +317,8 @@ export type Database = {
           id: string
           name: string | null
           plan: string | null
+          plan_expires_at: string | null
+          plan_updated_at: string | null
           student_number: string | null
           university: string | null
           year_of_study: string | null
@@ -328,6 +330,8 @@ export type Database = {
           id: string
           name?: string | null
           plan?: string | null
+          plan_expires_at?: string | null
+          plan_updated_at?: string | null
           student_number?: string | null
           university?: string | null
           year_of_study?: string | null
@@ -339,6 +343,8 @@ export type Database = {
           id?: string
           name?: string | null
           plan?: string | null
+          plan_expires_at?: string | null
+          plan_updated_at?: string | null
           student_number?: string | null
           university?: string | null
           year_of_study?: string | null
@@ -804,6 +810,8 @@ export type Database = {
           id: string
           name: string | null
           plan: string | null
+          plan_expires_at: string | null
+          plan_updated_at: string | null
           student_number: string | null
           university: string | null
           year_of_study: string | null

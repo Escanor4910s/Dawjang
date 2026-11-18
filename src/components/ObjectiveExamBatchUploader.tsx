@@ -13,6 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  COMPREHENSIVE_MEDICAL_SUBJECTS,
+  detectSubjectFromCourse,
+} from "@/lib/disciplineProfileEngine";
 
 export interface LibraryCourseMinimal {
   id: string;
@@ -50,22 +54,9 @@ export const ObjectiveExamBatchUploader: React.FC<BatchExamSummaryModalProps> = 
   defaultCourseFile = null,
   title = "",
   onTitleChange,
-  subject = "Hématologie",
+  subject = "Auto-détection selon le cours",
   onSubjectChange,
-  subjectFilters = [
-    "Hématologie",
-    "Cardiologie",
-    "Neurologie",
-    "Pneumologie",
-    "Gastro-entérologie",
-    "Néphrologie",
-    "Infectiologie",
-    "Endocrinologie",
-    "Pédiatrie",
-    "Chirurgie",
-    "Gynécologie",
-    "Pharmacologie",
-  ],
+  subjectFilters = COMPREHENSIVE_MEDICAL_SUBJECTS,
   libraryCourses = [],
 }) => {
   const [sourceMode, setSourceMode] = useState<"upload" | "library">("upload");
@@ -74,6 +65,7 @@ export const ObjectiveExamBatchUploader: React.FC<BatchExamSummaryModalProps> = 
   const [examFiles, setExamFiles] = useState<File[]>([]);
   const [isDraggingCourse, setIsDraggingCourse] = useState(false);
   const [isDraggingExams, setIsDraggingExams] = useState(false);
+  const [isCustomSubjectMode, setIsCustomSubjectMode] = useState(false);
 
   const courseInputRef = useRef<HTMLInputElement>(null);
   const examsInputRef = useRef<HTMLInputElement>(null);
@@ -82,13 +74,29 @@ export const ObjectiveExamBatchUploader: React.FC<BatchExamSummaryModalProps> = 
     (sourceMode === "upload" && Boolean(courseFile)) ||
     (sourceMode === "library" && Boolean(selectedLibCourse));
 
+  const applyUploadedCourseFile = (f: File) => {
+    setCourseFile(f);
+    setSelectedLibCourse(null);
+    const cleanedTitle = f.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
+    if (onTitleChange) {
+      onTitleChange(cleanedTitle);
+    }
+    if (onSubjectChange) {
+      const detected = detectSubjectFromCourse(cleanedTitle, "");
+      if (detected && detected !== "Médecine Clinique") {
+        setIsCustomSubjectMode(false);
+        onSubjectChange(detected);
+      } else {
+        // Réinitialise systématiquement sur Auto-détection lorsqu'un nouveau cours d'une autre matière est importé
+        setIsCustomSubjectMode(false);
+        onSubjectChange("Auto-détection selon le cours");
+      }
+    }
+  };
+
   const handleCourseSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const f = e.target.files[0];
-      setCourseFile(f);
-      if (onTitleChange && !title.trim()) {
-        onTitleChange(f.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " "));
-      }
+      applyUploadedCourseFile(e.target.files[0]);
     }
   };
 
@@ -156,22 +164,73 @@ export const ObjectiveExamBatchUploader: React.FC<BatchExamSummaryModalProps> = 
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-foreground block">
-              Discipline médicale
+            <label className="text-xs font-bold text-foreground flex items-center justify-between gap-2">
+              <span>Discipline médicale (adaptative)</span>
+              {subject && subject !== "Auto-détection selon le cours" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomSubjectMode(false);
+                    onSubjectChange?.("Auto-détection selon le cours");
+                  }}
+                  className="text-[10px] font-semibold text-primary hover:underline"
+                >
+                  Réinitialiser auto
+                </button>
+              )}
             </label>
-            <select
-              value={subject}
-              onChange={(e) => onSubjectChange?.(e.target.value)}
-              className="w-full h-10 rounded-xl border border-border bg-background px-3 text-xs sm:text-sm font-semibold text-foreground"
-            >
-              {subjectFilters
-                .filter((s) => s !== "Tous")
-                .map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-            </select>
+            {isCustomSubjectMode ||
+            (Boolean(subject) &&
+              !subjectFilters.includes(subject) &&
+              subject !== "Auto-détection selon le cours") ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={subject === "Auto-détection selon le cours" ? "" : subject}
+                  onChange={(e) => onSubjectChange?.(e.target.value)}
+                  placeholder="Ex. Traumatologie, Rhumatologie, Néphrologie..."
+                  className="w-full h-10 rounded-xl border border-border bg-background px-3 text-xs sm:text-sm font-semibold text-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomSubjectMode(false);
+                    onSubjectChange?.("Auto-détection selon le cours");
+                  }}
+                  className="shrink-0 h-10 px-2.5 rounded-xl border border-border text-xs font-semibold hover:bg-muted"
+                >
+                  Liste
+                </button>
+              </div>
+            ) : (
+              <select
+                value={
+                  subjectFilters.includes(subject)
+                    ? subject
+                    : "Auto-détection selon le cours"
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "__CUSTOM__") {
+                    setIsCustomSubjectMode(true);
+                    onSubjectChange?.("");
+                  } else {
+                    setIsCustomSubjectMode(false);
+                    onSubjectChange?.(val);
+                  }
+                }}
+                className="w-full h-10 rounded-xl border border-border bg-background px-3 text-xs sm:text-sm font-semibold text-foreground"
+              >
+                {subjectFilters
+                  .filter((s) => s !== "Tous")
+                  .map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                <option value="__CUSTOM__">+ Autre matière / saisie libre...</option>
+              </select>
+            )}
           </div>
         </div>
 
@@ -235,10 +294,7 @@ export const ObjectiveExamBatchUploader: React.FC<BatchExamSummaryModalProps> = 
                     setIsDraggingCourse(false);
                     const f = e.dataTransfer.files?.[0];
                     if (f) {
-                      setCourseFile(f);
-                      if (onTitleChange && !title.trim()) {
-                        onTitleChange(f.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " "));
-                      }
+                      applyUploadedCourseFile(f);
                     }
                   }}
                   onClick={() => courseInputRef.current?.click()}
@@ -285,8 +341,23 @@ export const ObjectiveExamBatchUploader: React.FC<BatchExamSummaryModalProps> = 
                         type="button"
                         onClick={() => {
                           setSelectedLibCourse(c);
+                          setCourseFile(null);
                           if (onTitleChange) onTitleChange(c.title);
-                          if (onSubjectChange && c.subject) onSubjectChange(c.subject);
+                          if (onSubjectChange) {
+                            const hasRealSubject =
+                              Boolean(c.subject) &&
+                              c.subject !== "Hématologie" &&
+                              !/^(m[eé]decine|g[eé]n[eé]ral)/i.test(c.subject.trim());
+                            const resolvedSubj = hasRealSubject
+                              ? c.subject
+                              : detectSubjectFromCourse(c.title, c.subject || "");
+                            setIsCustomSubjectMode(false);
+                            onSubjectChange(
+                              resolvedSubj && resolvedSubj !== "Médecine Clinique"
+                                ? resolvedSubj
+                                : "Auto-détection selon le cours"
+                            );
+                          }
                         }}
                         className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between gap-2 ${
                           active

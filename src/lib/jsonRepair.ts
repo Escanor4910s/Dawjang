@@ -110,7 +110,7 @@ export function repairAndParseQuizJson(rawLlmOutput: string): any {
       }
       if (isQuestionLikeObject(direct)) return [direct];
     }
-  } catch {}
+  } catch { /* Passe à la stratégie de réparation suivante. */ }
 
   // 3. Détection de l'indice de début du JSON ([ ou {)
   const firstArr = text.indexOf("[");
@@ -139,7 +139,7 @@ export function repairAndParseQuizJson(rawLlmOutput: string): any {
         if (Array.isArray(parsedCandidate.questions)) return parsedCandidate;
         if (Array.isArray(parsedCandidate.qcm)) return parsedCandidate;
       }
-    } catch {}
+    } catch { /* Passe à la stratégie de réparation suivante. */ }
   }
 
   // 5. Machine d'états : échappement des guillemets internes et équilibrage de pile
@@ -251,7 +251,7 @@ export function repairAndParseQuizJson(rawLlmOutput: string): any {
     if (Array.isArray(fullArray) && fullArray.length >= bestExtracted.length) {
       return fullArray;
     }
-  } catch {}
+  } catch { /* Passe à la stratégie de réparation suivante. */ }
 
   if (bestExtracted.length > 0) {
     return bestExtracted;

@@ -1,4 +1,3 @@
-import { untypedTable } from "@/lib/untypedDb";
 import { useState, useEffect } from "react";
 import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from "framer-motion";
 import { 
@@ -177,44 +176,9 @@ export const PremiumCheckoutDrawer = ({
       });
 
       if (error || !data?.redirect_url) {
-        console.warn("PayTech initialization failed, falling back to simulated checkout:", error);
-        
-        // Fallback simulation for local offline testing if Edge function is not deployed or keys are missing
-        toast.warning("L'API PayTech n'est pas encore configurée (Mode Simulation activé)");
-        
-        setTimeout(() => {
-          setProcessingStep(2);
-          playTone(587.33, 0.08);
-        }, 1200);
-
-        setTimeout(async () => {
-          setProcessingStep(3);
-          playTone(659.25, 0.08);
-
-          try {
-            if (user) {
-              const { error: profileError } = await supabase
-                .from("profiles")
-                .update({ plan: planId })
-                .eq("id", user.id);
-
-              if (profileError) throw profileError;
-            }
-
-            setTimeout(() => {
-              setIsProcessing(false);
-              setIsFinished(true);
-              uiAudio.playSuccessChime();
-              confetti({ particleCount: 200, spread: 90, colors: ["#d97706", "#c084fc", "#10b981"] });
-            }, 1200);
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } catch (err: any) {
-            console.error("Supabase upgrade error:", err);
-            setIsProcessing(false);
-            toast.error("Erreur lors de la mise à niveau de votre profil.");
-          }
-        }, 2400);
+        console.error("PayTech initialization failed:", error);
+        toast.error("Le paiement n'a pas pu être initialisé. Aucun abonnement n'a été activé.");
+        setIsProcessing(false);
         return;
       }
 
@@ -310,73 +274,26 @@ export const PremiumCheckoutDrawer = ({
           },
            
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          onApprove: async (data: any, actions: any) => {
+          onApprove: async (data: any) => {
             setIsProcessing(true);
-            setProcessingStep(1); // Connexion clinique / Initialisation
-            
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return actions.order.capture().then(async (details: any) => {
-              setProcessingStep(2); // Validation des fonds
-              
-              // Sound alert trigger
-              const playTone = (freq: number, dur: number) => {
-                try {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-                  const osc = ctx.createOscillator();
-                  const gain = ctx.createGain();
-                  osc.connect(gain);
-                  gain.connect(ctx.destination);
-                  osc.frequency.setValueAtTime(freq, ctx.currentTime);
-                  gain.gain.setValueAtTime(0.08, ctx.currentTime);
-                  gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
-                  osc.start();
-                  osc.stop(ctx.currentTime + dur);
-                // eslint-disable-next-line no-empty
-                } catch {}
-              };
+            setProcessingStep(1);
+            try {
+              const { data: result, error } = await supabase.functions.invoke("capture-paypal-order", {
+                body: { orderId: data.orderID, planId, isYearly },
+              });
+              if (error || !result?.success) throw error || new Error("Paiement non confirmé");
 
-              playTone(659.25, 0.08);
-
-              try {
-                if (user) {
-                  // Update plan in profile database!
-                  const { error: profileError } = await supabase
-                    .from("profiles")
-                    .update({ plan: planId })
-                    .eq("id", user.id);
-
-                  if (profileError) throw profileError;
-
-                  // Insert into subscriptions table
-                  const { error: subError } = await untypedTable("subscriptions").insert({
-                    user_id: user.id,
-                    plan_id: planId,
-                    status: "active",
-                    price_paid: price,
-                    payment_method: "paypal",
-                    transaction_id: details.id,
-                    metadata: { paypal_details: details }
-                  });
-                  if (subError) console.warn("Could not record subscription in database, profile was upgraded anyway:", subError);
-                }
-
-                setProcessingStep(3); // Finalisation
-                uiAudio.playSuccessChime();
-
-                setTimeout(() => {
-                  setIsProcessing(false);
-                  setIsFinished(true);
-                  confetti({ particleCount: 200, spread: 90, colors: ["#d97706", "#c084fc", "#10b981"] });
-                }, 1000);
-
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              } catch (err: any) {
-                console.error("Supabase upgrade error after PayPal payment:", err);
-                setIsProcessing(false);
-                toast.error("Paiement réussi sur PayPal, mais erreur lors de la mise à niveau de votre profil.");
-              }
-            });
+              setProcessingStep(3);
+              uiAudio.playSuccessChime();
+              setIsFinished(true);
+              window.dispatchEvent(new CustomEvent("hippocampus_plan_updated"));
+              confetti({ particleCount: 200, spread: 90, colors: ["#d97706", "#c084fc", "#10b981"] });
+            } catch (err) {
+              console.error("PayPal server validation failed:", err);
+              toast.error("Le paiement n'a pas pu être confirmé. Contactez le support si un débit apparaît.");
+            } finally {
+              setIsProcessing(false);
+            }
           },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onError: (err: any) => {
@@ -425,6 +342,7 @@ export const PremiumCheckoutDrawer = ({
               onClick={onClose}
               variant="ghost"
               size="icon"
+              aria-label="Fermer"
               className="absolute top-4 right-4 rounded-full h-8 w-8 text-muted-foreground hover:bg-muted/40"
             >
               <X className="h-4 w-4" />

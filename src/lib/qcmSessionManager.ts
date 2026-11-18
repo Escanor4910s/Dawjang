@@ -154,7 +154,7 @@ export function createDiverseSessionQuestions(
   const baseHash = computeQcmHash(baseQuestions);
 
   // Si aucune session n'existe encore ou seulement 1 question, on mélange juste l'ordre
-  let candidate = baseQuestions;
+  const candidate = baseQuestions;
   let candidateHash = baseHash;
   let attempts = 0;
   const maxAttempts = 16;

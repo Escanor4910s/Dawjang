@@ -326,204 +326,65 @@ export async function syncEntityToBackend(
 /** Dernier motif d'échec du moteur IA (diagnostic affiché à l'utilisateur). */
 export let lastAcademicEngineError = "";
 
+export function isAcademicEngineAuthOrPlanError(): boolean {
+  return /\b40[13]\b|authentif|session\s+expir|premium|abonnement|upgradeRequired/i.test(
+    lastAcademicEngineError
+  );
+}
+
 export async function callGeminiAcademicEngine(
   systemInstruction: string,
   userPrompt: string,
   temperature = 0.4
 ): Promise<string | null> {
-  const geminiKey = (
-    import.meta.env?.VITE_GEMINI_API_KEY ||
-    (typeof localStorage !== "undefined" && localStorage.getItem("dawjang_gemini_api_key")) ||
-    ""
-  ).trim().replace(/^"|"$/g, "");
+  const chunkLimit = 44000;
+  const userMessages: Array<{ role: "user"; content: string }> = [];
+  const totalChunks = Math.min(2, Math.max(1, Math.ceil(userPrompt.length / chunkLimit)));
+  for (let i = 0; i < totalChunks; i++) {
+    userMessages.push({
+      role: "user",
+      content: userPrompt.slice(i * chunkLimit, (i + 1) * chunkLimit),
+    });
+  }
 
-  // 1. Appel direct à l'API officielle Google Gemini si une clé locale est configurée
-  if (geminiKey) {
-    const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"];
-    for (const model of modelsToTry) {
+  lastAcademicEngineError = "";
+  try {
+    const { data, error } = await supabase.functions.invoke("mor-chat", {
+      body: {
+        messages: [
+          { role: "system", content: systemInstruction.slice(0, 16000) },
+          ...userMessages,
+        ],
+        temperature,
+        max_tokens: 8192,
+      },
+    });
+    const reply = data?.reply;
+    if (!error && typeof reply === "string" && reply.trim()) return reply.trim();
+
+    if (error) {
+      let detail = (error as any)?.message || "réponse vide du serveur IA";
       try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: systemInstruction }] },
-              contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-              generationConfig: { temperature, maxOutputTokens: 32768 },
-            }),
-          }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            console.log(`[Gemini Academic] Réponse reçue via ${model} (${text.length} car.)`);
-            return text;
+        const ctx = (error as any)?.context;
+        if (ctx && typeof ctx.clone === "function") {
+          const cloned = ctx.clone();
+          const errJson = await cloned.json().catch(() => null);
+          const status = ctx.status;
+          if (errJson?.message || errJson?.error) {
+            detail = `${status ? `[HTTP ${status}] ` : ""}${errJson.message || errJson.error}`;
+          } else if (status) {
+            detail = `HTTP ${status} (${detail})`;
           }
         }
       } catch {
-        // Essai du modèle suivant
+        // garde le message par défaut
       }
+      lastAcademicEngineError = detail;
+    } else {
+      lastAcademicEngineError = "réponse vide du serveur IA";
     }
+  } catch (error: any) {
+    lastAcademicEngineError = error?.message || "service IA inaccessible";
   }
-
-  // Construction des messages
-  const CHUNK_LIMIT = 44000;
-  const userMessages: Array<{ role: "user"; content: string }> = [];
-  if (userPrompt.length <= CHUNK_LIMIT) {
-    userMessages.push({ role: "user", content: userPrompt });
-  } else {
-    const totalChunks = Math.min(2, Math.ceil(userPrompt.length / CHUNK_LIMIT));
-    for (let i = 0; i < totalChunks; i++) {
-      const slice = userPrompt.slice(i * CHUNK_LIMIT, (i + 1) * CHUNK_LIMIT);
-      userMessages.push({
-        role: "user",
-        content:
-          i < totalChunks - 1
-            ? `[Partie ${i + 1}/${totalChunks} du cours] :\n${slice}`
-            : `[Partie ${i + 1}/${totalChunks} du cours — Fin du document. Applique maintenant la consigne système sur l'ensemble des parties avec respect strict de tous les paramètres] :\n${slice}`,
-      });
-    }
-  }
-
-  const messagesPayload = [
-    { role: "system", content: systemInstruction.slice(0, 16000) },
-    ...userMessages,
-  ];
-
-  // 2. Clé OpenRouter personnalisée si fournie
-  const orKey = (
-    (typeof localStorage !== "undefined" &&
-      localStorage.getItem("dawjang_openrouter_api_key")) ||
-    (import.meta as any).env?.VITE_OPENROUTER_API_KEY ||
-    ""
-  ).trim().replace(/^"|"$/g, "");
-
-  if (orKey && orKey.startsWith("sk-or-")) {
-    try {
-      const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${orKey}`,
-          "HTTP-Referer": "https://dawjang.app",
-          "X-Title": "DawJang Academic Studio — DAWIA 1",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          temperature,
-          max_tokens: 8192,
-          messages: messagesPayload,
-        }),
-      });
-      if (orRes.ok) {
-        const data = await orRes.json();
-        const reply = data?.choices?.[0]?.message?.content;
-        if (typeof reply === "string" && reply.trim().length > 0) {
-          console.log(`[OpenRouter Academic] Réponse reçue (${reply.length} car.)`);
-          return reply.trim();
-        }
-      }
-    } catch {
-      // Tentative de relais
-    }
-  }
-
-  // 3. Appel direct vers Supabase Edge Function « mor-chat » (avec relances sur erreurs transitoires)
-  const supabaseUrl = (import.meta.env?.VITE_SUPABASE_URL || "https://vhzdbhdyytvaipkbcsvs.supabase.co").trim().replace(/^"|"$/g, "");
-  const anonKey = (
-    import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoemRiaGR5eXR2YWlwa2Jjc3ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NzU0ODMsImV4cCI6MjA3MjM1MTQ4M30.7PRgMDBgf8ZSPbsgmfmBTqS46r5b0dIhxNSL97KWb7A"
-  ).trim().replace(/^"|"$/g, "");
-
-  lastAcademicEngineError = "";
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 120000);
-      const directRes = await fetch(`${supabaseUrl}/functions/v1/mor-chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${anonKey}`,
-          apikey: anonKey,
-        },
-        body: JSON.stringify({ messages: messagesPayload, max_tokens: 8192 }),
-        signal: ctrl.signal,
-      });
-      clearTimeout(timer);
-      if (directRes.ok) {
-        const data = await directRes.json();
-        const reply = data?.reply || data?.text || data?.content;
-        if (typeof reply === "string" && reply.trim().length > 0) {
-          console.log(`[Mor-Chat Academic] Réponse reçue via Edge Function (${reply.length} car.)`);
-          return reply.trim();
-        }
-        lastAcademicEngineError = "réponse vide du serveur IA";
-      } else {
-        const body = await directRes.text().catch(() => "");
-        lastAcademicEngineError = `serveur IA HTTP ${directRes.status} ${body.slice(0, 140)}`;
-        console.warn(`[Mor-Chat Academic] ${lastAcademicEngineError}`);
-        if (directRes.status < 429 && directRes.status !== 408) break; // erreur définitive (400/401/403…)
-      }
-    } catch (err: any) {
-      lastAcademicEngineError = `réseau/CORS/délai : ${err?.name === "AbortError" ? "délai de 120 s dépassé" : err?.message || err}`;
-      console.warn("[Mor-Chat Academic] Échec de la requête :", err);
-    }
-    if (attempt < 3) await new Promise((r) => setTimeout(r, 2500 * attempt));
-  }
-
-  // 4. Relais via supabase.functions.invoke
-  try {
-    const { data, error } = await supabase.functions.invoke("mor-chat", {
-      body: { messages: messagesPayload, max_tokens: 8192 },
-    });
-    const reply = data?.reply || data?.text || data?.content;
-    if (!error && typeof reply === "string" && reply.trim().length > 0) {
-      return reply.trim();
-    }
-    if (error) lastAcademicEngineError += ` | invoke : ${(error as any)?.message || error}`;
-  } catch (err: any) {
-    lastAcademicEngineError += ` | invoke : ${err?.message || err}`;
-  }
-
-  return null;
-
-  // 4. Appel direct OpenRouter avec la clé vérifiée DawJang
-  try {
-    const orKey =
-      (typeof localStorage !== "undefined" &&
-        localStorage.getItem("dawjang_openrouter_api_key")) ||
-      (import.meta as any).env?.VITE_OPENROUTER_API_KEY ||
-      "";
-
-    const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${orKey}`,
-        "HTTP-Referer": "https://dawjang.app",
-        "X-Title": "DawJang Academic Studio",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        temperature,
-        max_tokens: 8192,
-        messages: messagesPayload,
-      }),
-    });
-    if (orRes.ok) {
-      const data = await orRes.json();
-      const reply = data?.choices?.[0]?.message?.content;
-      if (typeof reply === "string" && reply.trim().length > 0) {
-        return reply.trim();
-      }
-    }
-  } catch {
-    // Fallback local
-  }
-
   return null;
 }
-

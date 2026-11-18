@@ -773,7 +773,7 @@ export function CommunityChat({ className }: { className?: string }) {
                 key={item.id}
                 onMouseEnter={() => markAsRead(item.id)}
                 className={cn(
-                  "group relative rounded-2xl border bg-card p-6 sm:p-7 transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-foreground/25 hover:shadow-[0_8px_28px_-12px_rgba(0,0,0,0.06)]",
+                  "group relative rounded-2xl border bg-card p-6 sm:p-7 transition-all duration-200 ease-editorial hover:border-foreground/25 hover:shadow-[0_8px_28px_-12px_rgba(0,0,0,0.06)]",
                   item.isPinned
                     ? "border-primary/45 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.04)]"
                     : "border-border/85"

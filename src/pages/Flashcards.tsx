@@ -35,7 +35,7 @@ import {
   getCourseQcmErrorStatus,
   buildCourseFailedQcmFlashcards,
 } from "@/lib/flashcards/qcmErrorMatcher";
-import { getSavedStudentProfile } from "./Settings";
+import { getSavedStudentProfile } from "@/lib/studentProfile";
 import { useToast } from "@/hooks/use-toast";
 import { useFileReader } from "@/hooks/useFileReader";
 import { cn } from "@/lib/utils";

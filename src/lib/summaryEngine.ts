@@ -196,8 +196,58 @@ export function extractObjectivesFromCourseText(text: string): string[] {
   const TRAILING_CONNECTOR_PATTERN =
     /\b(?:de|du|des|d['’]|l['’]|la|le|les|un|une|et|ou|à|au|aux|en|dans|par|pour|sur|chez|selon|avec|sans|contre|entre|vers|devant|notamment|particulier|suivants?|suivantes?|tels?\s+que)\s*$/i;
 
+  const CONTINUATION_START_PATTERN =
+    /^(?:de|du|des|d['’]|et|ou|à|au|aux|en|dans|par|pour|sur|chez|avec|sans|selon|entre|vers|sous|devant|notamment|ainsi|afin|pendant|après|avant|qui|que|dont|où)\b/i;
+
+  const repairObjectiveOcrText = (raw: string): string => {
+    return raw
+      .replace(/[\uE000-\uF8FF❖❑➢▪►●♦◦□■▫○◊]/g, " ")
+      .replace(
+        /(^|[\s:;.!?(-])crire\s+(la|le|les|l['’]|un|une|des|ses|son|sa|ces|principaux|principales|diff[ée]rents|diff[ée]rentes)\b/gi,
+        "$1Décrire $2"
+      )
+      .replace(
+        /(^|[\s:;.!?(-])num[ée]rer\s+(la|le|les|l['’]|un|une|des|principaux|principales)\b/gi,
+        "$1Énumérer $2"
+      )
+      .replace(
+        /(^|[\s:;.!?(-])[ée]\s*finir\s+(la|le|les|l['’]|un|une)\b/gi,
+        "$1Définir $2"
+      )
+      .replace(/\b([cC])\s+lassification\b/g, "$1lassification")
+      .replace(
+        /(^|[\s:;.!?(-])lassification\s+(de|du|des|d['’])/gi,
+        "$1Classification $2"
+      )
+      .replace(/\b([Mm]an[oœ]uvre)(de|du|des|d['’])/g, "$1 $2")
+      .replace(
+        /\b(D[ée]crire|D[ée]finir|Citer|[ÉEe]num[ée]rer|Expliquer|Classer|Classifier)(la|le|les|l['’]|un|une|des)\b/g,
+        "$1 $2"
+      );
+  };
+
+  const splitMergedObjectiveLine = (line: string, dedicatedSlide: boolean): string[] => {
+    let working = line.trim();
+    // Sépare un nouvel objectif qui commence en milieu de ligne par un marqueur ou un verbe d'action majuscule
+    working = working.replace(
+      /(?<=.{12,}(?:[A-Z0-9)]|[a-zà-ÿ]{2,}))(?<![,;:(-])\s+(?=(?:Objectif\s*\d+\s*[:.\-)]|\d+[.)]\s+[A-ZÀ-ÿ]|(?:Définir|Citer|Décrire|Énumérer|Lister|Expliquer|Interpréter|Diagnostiquer|Classer|Classifier|Comparer|Reconnaître|Reconnaitre|Traiter|Énoncer|Connaître|Connaitre|Identifier|Poser|Réunir|Établir|Proposer|Planifier|Indiquer|Préciser|Discuter|Analyser|Suspecter|Conduire|Distinguer|Différencier|Prendre|Prévenir|Dépister|Orienter|Surveiller|Maîtriser|Justifier|Hiérarchiser|Évaluer|Rechercher|Argumenter|Prescrire|Adapter|Organiser|Dégager|Rappeler|Illustrer|Schématiser|Calculer|Mesurer|Formuler|Déterminer|Synthétiser|Appliquer|Utiliser|Choisir|Sélectionner|Vérifier|Contrôler|Gérer|Assurer|Réaliser|Effectuer|Pratiquer|Caractériser|Situer|Montrer|Démontrer)\s+(?:la|le|les|l['’]|un|une|des|au|du|d['’])\b))/g,
+      "\n"
+    );
+    // Sur une diapositive dédiée aux objectifs, sépare aussi un syntagme nominal titre suivi de « : » collé après un item complet
+    if (dedicatedSlide) {
+      working = working.replace(
+        /(?<=.{15,}(?:[a-zà-ÿ]{3,}|[A-Z]{3,}|[0-9)]))\s+(?=(?!De\b|Du\b|Des\b|Et\b|Ou\b|En\b|Dans\b|Par\b|Pour\b|Sur\b|Chez\b|Avec\b|Sans\b)[A-ZÀÂÉÈÊËÎÏÔÛÙ][A-Za-zÀ-ÿ'’-]+(?:\s+(?:de|du|des|d['’]|la|le|les|[A-Za-zÀ-ÿ'’-]+)){1,6}\s*:)/g,
+        "\n"
+      );
+    }
+    return working
+      .split(/\n+/)
+      .map((part) => part.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+  };
+
   // 1. Si le document est découpé en diapositives (--- Diapositive N ---), isoler la ou les diapositives d'Objectifs
-  let candidateBlocks: string[] = [];
+  const candidateBlocks: string[] = [];
   if (/---\s*Diapositive\s*\d+\s*---/i.test(text)) {
     const slides = text.split(/---\s*Diapositive\s*\d+\s*---/i).map((s) => s.trim()).filter(Boolean);
     for (let i = 0; i < Math.min(slides.length, 12); i++) {
@@ -207,7 +257,7 @@ export function extractObjectivesFromCourseText(text: string): string[] {
         candidateBlocks.push(slide);
         // Vérifier si la diapositive suivante est la suite des objectifs
         if (i + 1 < slides.length) {
-          const nextSlide = slides[i + 1];
+          const nextSlide = repairObjectiveOcrText(slides[i + 1]);
           const nextHeader = nextSlide.split(/\r?\n/)[0]?.trim() || "";
           if (
             /\bobjectifs?\b/i.test(nextHeader) ||
@@ -241,8 +291,9 @@ export function extractObjectivesFromCourseText(text: string): string[] {
   const rawLines = candidateBlocks
     .join("\n")
     .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
+    .map((l) => repairObjectiveOcrText(l).trim())
+    .filter(Boolean)
+    .flatMap((l) => splitMergedObjectiveLine(l, hasDedicatedObjectiveSlide));
 
   const extracted: string[] = [];
 
@@ -262,10 +313,18 @@ export function extractObjectivesFromCourseText(text: string): string[] {
     if (!cleanedLine) continue;
 
     const prevObjective = extracted.length > 0 ? extracted[extracted.length - 1] : null;
+    const prevHasUnclosedParen =
+      prevObjective !== null &&
+      (prevObjective.match(/\(/g) || []).length > (prevObjective.match(/\)/g) || []).length;
     const prevNeedsContinuation =
       prevObjective !== null &&
       (TRAILING_CONNECTOR_PATTERN.test(prevObjective) ||
-        (!isExplicitItem && !isActionVerbStart && /^[a-zàâçéèêëîïôûùüÿ0-9(]/.test(cleanedLine)));
+        /[,:\-/–—(]\s*$/.test(prevObjective) ||
+        prevHasUnclosedParen ||
+        (!isExplicitItem &&
+          !isActionVerbStart &&
+          (/^[a-zàâçéèêëîïôûùüÿ0-9)]/.test(cleanedLine) ||
+            CONTINUATION_START_PATTERN.test(cleanedLine))));
 
     if (prevNeedsContinuation && extracted.length > 0) {
       extracted[extracted.length - 1] = `${prevObjective} ${cleanedLine}`.replace(/\s+/g, " ").trim();
@@ -277,9 +336,19 @@ export function extractObjectivesFromCourseText(text: string): string[] {
         extracted.push(cleanedLine);
       }
     } else if (hasDedicatedObjectiveSlide && extracted.length > 0 && cleanedLine.length > 3) {
-      // Sur une diapositive dédiée aux Objectifs, toute ligne non-titre qui suit un objectif est soit la suite de la phrase, soit un objectif
-      if (/^[A-ZÀÂÉÈÊËÎÏÔÛÙ]/.test(cleanedLine) && prevObjective && /[.;!?]$/.test(prevObjective)) {
-        extracted.push(cleanedLine);
+      // Sur une diapositive dédiée aux Objectifs, toute ligne autonome commençant par une majuscule (hors connecteur) ouvre un nouvel objectif nominal
+      const isNominalObjective =
+        /^[A-ZÀÂÉÈÊËÎÏÔÛÙ]/.test(cleanedLine) &&
+        !CONTINUATION_START_PATTERN.test(cleanedLine) &&
+        (Boolean(prevObjective && /[.;!?]$/.test(prevObjective)) ||
+          cleanedLine.includes(":") ||
+          /^Classification\s+/i.test(cleanedLine) ||
+          cleanedLine.split(/\s+/).length >= 3);
+
+      if (isNominalObjective) {
+        if (!extracted.includes(cleanedLine)) {
+          extracted.push(cleanedLine);
+        }
       } else {
         extracted[extracted.length - 1] = `${prevObjective} ${cleanedLine}`.replace(/\s+/g, " ").trim();
       }
@@ -287,6 +356,385 @@ export function extractObjectivesFromCourseText(text: string): string[] {
   }
 
   return extracted.filter((obj) => obj.length > 5);
+}
+
+// ============================================================================
+// 3B. EXTRACTEUR DÉTERMINISTE STRUCTURÉ (SECOURS HORS-LIGNE MULTI-DIAPOSITIVES)
+// ============================================================================
+
+export interface DeterministicObjectiveFallbackParams {
+  objectiveTitle: string;
+  objectiveIndex: number;
+  totalObjectives: number;
+  courseText: string;
+  courseTitle?: string;
+  allObjectives?: string[];
+  usedSlideIndices?: Set<number>;
+}
+
+const FALLBACK_STOPWORDS = new Set([
+  "dans", "pour", "avec", "sans", "chez", "entre", "sous", "vers", "selon",
+  "cette", "ces", "cet", "une", "des", "les", "aux", "par", "sur", "qui", "que",
+  "dont", "est", "sont", "etre", "avoir", "faire", "peut", "doit", "plus", "tres",
+  "tout", "tous", "toute", "toutes", "autre", "autres", "meme", "aussi", "ainsi",
+  "cours", "objectif", "objectifs", "chapitre", "diapositive", "definir", "citer",
+  "decrire", "enumerer", "lister", "expliquer", "interpreter", "diagnostiquer",
+  "classer", "comparer", "reconnaitre", "traiter", "enoncer", "savoir", "connaitre",
+  "identifier", "preciser", "aspect", "aspects", "description", "valeur",
+  "semiologique", "maladie", "patient", "patients", "prise", "charge",
+]);
+
+function normalizeStemToken(word: string): string {
+  const base = word
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  if (base.length > 4 && (base.endsWith("s") || base.endsWith("x"))) {
+    return base.slice(0, -1);
+  }
+  return base;
+}
+
+function repairFallbackCourseOcr(raw: string): string {
+  return raw
+    .replace(/[\uE000-\uF8FF❖❑➢▪►●♦◦□■▫○◊]/g, " ")
+    .replace(/˃/g, ">")
+    .replace(/˂/g, "<")
+    .replace(/\b([Mm]an[oœ]uvre)(de|du|des|d['’])/g, "$1 $2")
+    .replace(/\b([cC])\s+lassification\b/g, "$1lassification")
+    .replace(/(^|[\s:;.!?(-])crire\s+(la|le|les|l['’]|un|une|des)\b/gi, "$1Décrire $2");
+}
+
+function tokenizeNormalized(text: string): string[] {
+  return text
+    .split(/[^a-zA-ZÀ-ÿ0-9]+/)
+    .map(normalizeStemToken)
+    .filter((t) => t.length >= 3 && !FALLBACK_STOPWORDS.has(t));
+}
+
+interface ParsedFallbackSlide {
+  index: number;
+  heading: string;
+  body: string;
+  lines: string[];
+  tokenSet: Set<string>;
+  headingTokenSet: Set<string>;
+  isMeta: boolean;
+}
+
+function parseSlidesForFallback(
+  courseText: string,
+  courseTitle = "",
+  allObjectives: string[] = []
+): ParsedFallbackSlide[] {
+  const cleaned = repairFallbackCourseOcr(courseText);
+  const rawChunks = /---\s*Diapositive\s*\d+\s*---/i.test(cleaned)
+    ? cleaned.split(/---\s*Diapositive\s*\d+\s*---/i)
+    : cleaned.split(/\n(?=#{1,3}\s+)|\n{2,}/);
+
+  const objectiveJoinedTokens = new Set(tokenizeNormalized(allObjectives.join(" ")));
+  const titleTokens = new Set(tokenizeNormalized(courseTitle));
+  const actionLineRe =
+    /^(?:[-*•\d.)\s]*)(?:définir|citer|décrire|énumérer|lister|expliquer|interpréter|diagnostiquer|classer|classifier|comparer|reconnaître|traiter|énoncer|connaître|identifier|préciser|signe\s+du)\b/i;
+
+  const parsed: ParsedFallbackSlide[] = [];
+
+  rawChunks.forEach((chunk, rawIdx) => {
+    const trimmed = chunk.trim();
+    if (!trimmed || trimmed.length < 20) return;
+
+    const rawLines = trimmed
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (rawLines.length === 0) return;
+
+    const firstTwo = rawLines.slice(0, 2).join(" ");
+    const hasMetaHeader =
+      /^(?:objectifs?(?:\s+pédagogiques?|\s+du\s+cours|\s+spécifiques?|\s*\(suite\))?|plan(?:\s+du\s+cours)?|sommaire|table\s+des\s+mati[èe]res|pr[ée]requis|conclusion|bibliographie|r[ée]f[ée]rences|merci)\s*:?$/i.test(
+        rawLines[0]
+      ) ||
+      /\b(?:objectifs?\s+p[ée]dagogiques?|objectifs?\s+du\s+cours|doit\s+[êe]tre\s+capable\s+de)\b/i.test(
+        firstTwo
+      );
+
+    const actionLineCount = rawLines.filter((l) => l.length <= 160 && actionLineRe.test(l)).length;
+    const isObjectivesListSlide = actionLineCount >= 3 && rawLines.length <= 14;
+
+    const slideTokens = tokenizeNormalized(trimmed);
+    const isCoverSlide =
+      parsed.length === 0 &&
+      rawChunks.length > 2 &&
+      rawLines.length <= 9 &&
+      slideTokens.length <= 35 &&
+      (/\b(?:universit[ée]|facult[ée]|fmpos?|ucad|pr\.?\s+|dr\.?\s+|ann[ée]e|cours\s*:|module\s*:|enseignement)/i.test(
+        trimmed
+      ) ||
+        slideTokens.filter((t) => !titleTokens.has(t)).length <= 12);
+
+    let objOverlapCount = 0;
+    if (objectiveJoinedTokens.size > 0 && slideTokens.length > 0 && slideTokens.length <= 70) {
+      for (const tok of slideTokens) {
+        if (objectiveJoinedTokens.has(tok)) objOverlapCount++;
+      }
+    }
+    const heavyObjectiveEcho =
+      slideTokens.length > 0 &&
+      slideTokens.length <= 65 &&
+      objOverlapCount / slideTokens.length > 0.65 &&
+      (hasMetaHeader || actionLineCount >= 2);
+
+    const isMeta = hasMetaHeader || isObjectivesListSlide || isCoverSlide || heavyObjectiveEcho;
+
+    parsed.push({
+      index: rawIdx,
+      heading: rawLines.slice(0, 2).join(" "),
+      body: trimmed,
+      lines: rawLines,
+      tokenSet: new Set(slideTokens),
+      headingTokenSet: new Set(tokenizeNormalized(rawLines.slice(0, 2).join(" "))),
+      isMeta,
+    });
+  });
+
+  return parsed;
+}
+
+function formatSlideLinesWithoutBrokenAbbr(slides: ParsedFallbackSlide[]): string[] {
+  const abbrRe = /\b(M|Dr|Pr|Prof|St|Fig|fig|Ex|ex|Cf|cf|Env|env|Vol|vol|Art|art|[A-Z])\.(?=\s*[a-zA-ZÀ-ÿ0-9])/g;
+  const bullets: string[] = [];
+  const seen = new Set<string>();
+
+  for (const slide of slides) {
+    // Reconstitue d'abord les lignes brisées au milieu d'une phrase ou d'une parenthèse (ex: "(M.\nleprae)")
+    const joinedLines: string[] = [];
+    for (const rawLine of slide.lines) {
+      const cleanedLine = rawLine.replace(/^[•\-*▪►●♦◦]\s+/, "").trim();
+      if (!cleanedLine) continue;
+
+      const prev = joinedLines.length > 0 ? joinedLines[joinedLines.length - 1] : null;
+      const prevUnclosedParen =
+        prev !== null && (prev.match(/\(/g) || []).length > (prev.match(/\)/g) || []).length;
+      const startsLowerContinuation =
+        /^[a-zàâçéèêëîïôûùüÿ,);]/.test(cleanedLine) && !/^(?:ou|et)\b/i.test(cleanedLine);
+      const isListMarker = /^(?:\d+\s*[.)\-:]|[a-z]\s*[.)]|[•\-*▪►●♦◦])\s+/.test(rawLine);
+
+      if (
+        prev !== null &&
+        !isListMarker &&
+        (prevUnclosedParen ||
+          (startsLowerContinuation && !/[.!?:\]]$/.test(prev)) ||
+          /\b(?:de|du|des|d['’]|l['’]|la|le|les|un|une|et|ou|à|au|aux|par|pour|sur|chez|avec|sans)\s*$/i.test(
+            prev
+          ))
+      ) {
+        joinedLines[joinedLines.length - 1] = `${prev} ${cleanedLine}`.replace(/\s+/g, " ").trim();
+      } else {
+        joinedLines.push(cleanedLine);
+      }
+    }
+
+    for (const line of joinedLines) {
+      if (/^---\s*Diapositive/i.test(line)) continue;
+      if (line.length <= 2) continue;
+
+      if (line.length <= 240) {
+        const key = line.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          bullets.push(`- ${line}`);
+        }
+      } else {
+        const protectedLine = line.replace(abbrRe, "$1__ABBR_DOT__").replace(/\bc\.-à-d\./gi, "c__CAD__");
+        const parts = protectedLine
+          .split(/(?<=[.!?])\s+/)
+          .map((s) => s.replace(/__ABBR_DOT__/g, ".").replace(/c__CAD__/g, "c.-à-d.").trim())
+          .filter((s) => s.length > 15);
+        for (const p of parts) {
+          const key = p.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            bullets.push(`- ${p}`);
+          }
+        }
+      }
+    }
+  }
+
+  return bullets.slice(0, 30);
+}
+
+export function buildDeterministicObjectiveSection(
+  params: DeterministicObjectiveFallbackParams
+): string {
+  const {
+    objectiveTitle,
+    objectiveIndex,
+    totalObjectives,
+    courseText,
+    courseTitle = "",
+    allObjectives = [],
+    usedSlideIndices = new Set<number>(),
+  } = params;
+
+  const allSlides = parseSlidesForFallback(courseText, courseTitle, allObjectives);
+  let contentSlides = allSlides.filter((s) => !s.isMeta);
+  if (contentSlides.length === 0) {
+    contentSlides = allSlides.length > 1 ? allSlides.slice(1) : allSlides;
+  }
+
+  // Calcul des poids IDF pour neutraliser les mots omniprésents (ex. titre du cours sur chaque diapo)
+  const docFreq = new Map<string, number>();
+  for (const slide of contentSlides) {
+    for (const tok of slide.tokenSet) {
+      docFreq.set(tok, (docFreq.get(tok) || 0) + 1);
+    }
+  }
+  const titleTokens = new Set(tokenizeNormalized(courseTitle));
+  const idfMap = new Map<string, number>();
+  for (const [tok, df] of docFreq.entries()) {
+    const ratio = df / Math.max(1, contentSlides.length);
+    if (ratio > 0.55 || (titleTokens.has(tok) && ratio > 0.35)) {
+      idfMap.set(tok, 0.15);
+    } else {
+      idfMap.set(tok, Math.max(0.5, Math.log((contentSlides.length + 1) / (df + 0.5))));
+    }
+  }
+
+  const scoreSlideForObjective = (
+    slide: ParsedFallbackSlide,
+    posIdx: number,
+    targetObjectiveTitle: string
+  ): { score: number; discriminatingMatches: number } => {
+    const tokens = tokenizeNormalized(targetObjectiveTitle);
+    const pNames = (
+      targetObjectiveTitle.match(
+        /(?:\b[A-ZÀÂÉÈÊËÎÏÔÛÙ]{3,}\b|(?<=\b(?:de|du|d['’])\s+)[A-ZÀ-ÿ][a-zà-ÿ]{3,})/g
+      ) || []
+    ).map(normalizeStemToken);
+
+    const isDef = /^\s*(?:définir|définition)\b/i.test(targetObjectiveTitle);
+    const isComp =
+      /\b(?:citer|énumérer|lister)\b.*\b(?:complications?|signes?|manifestations?|formes?|étiologies?)\b/i.test(
+        targetObjectiveTitle
+      );
+
+    let score = 0;
+    let discriminatingMatches = 0;
+
+    for (const tok of tokens) {
+      const weight = idfMap.get(tok) ?? 1.5;
+      if (slide.headingTokenSet.has(tok)) {
+        score += weight * 3.5;
+        if (weight >= 0.7) discriminatingMatches++;
+      } else if (slide.tokenSet.has(tok)) {
+        score += weight * 1.6;
+        if (weight >= 0.7) discriminatingMatches++;
+      }
+    }
+
+    for (const pn of pNames) {
+      if (pn.length < 3) continue;
+      if (slide.headingTokenSet.has(pn)) {
+        score += 16;
+        discriminatingMatches++;
+      } else if (slide.tokenSet.has(pn)) {
+        score += 10;
+        discriminatingMatches++;
+      }
+    }
+
+    if (isDef) {
+      if (
+        /\b(?:d[ée]finition|g[ée]n[ée]ralit[ée]s|est\s+une\s+maladie|se\s+d[ée]finit|agent\s+pathog[èe]ne|bacille|mycobacterium)\b/i.test(
+          slide.body
+        )
+      ) {
+        score += 4.5;
+      }
+      if (posIdx <= Math.max(1, Math.floor(contentSlides.length * 0.25))) {
+        score += 1.5;
+      }
+    }
+
+    if (isComp) {
+      if (
+        /\b(?:complications?|atteintes?|neuropathies?|griffes?|maux\s+perforants?|paralysies?|l[ée]sions?|ost[ée]o|déformations?)\b/i.test(
+          slide.body
+        )
+      ) {
+        score += 3.5;
+      }
+      if (/\b(?:g[ée]n[ée]ralit[ée]s|d[ée]finition|historique|épidémiologie)\b/i.test(slide.heading)) {
+        score *= 0.4;
+      }
+    }
+
+    return { score, discriminatingMatches };
+  };
+
+  const scored = contentSlides.map((slide, posIdx) => {
+    const mine = scoreSlideForObjective(slide, posIdx, objectiveTitle);
+    let effectiveScore = mine.score;
+
+    // Évite qu'un objectif précoce accapare une diapositive qui appartient manifestement à un autre objectif (ex. Bouvier / Wagner / Froment)
+    if (allObjectives.length > 1) {
+      let bestOtherScore = 0;
+      for (let oi = 0; oi < allObjectives.length; oi++) {
+        if (oi === objectiveIndex - 1) continue;
+        const other = scoreSlideForObjective(slide, posIdx, allObjectives[oi]);
+        if (other.score > bestOtherScore) bestOtherScore = other.score;
+      }
+      if (bestOtherScore > effectiveScore * 1.15) {
+        effectiveScore *= 0.2;
+      }
+    }
+
+    if (usedSlideIndices.has(slide.index)) {
+      effectiveScore *= 0.12;
+    }
+
+    return { slide, posIdx, score: effectiveScore, discriminatingMatches: mine.discriminatingMatches };
+  });
+
+  const sortedByScore = [...scored].sort((a, b) => b.score - a.score || a.posIdx - b.posIdx);
+  const unusedStrong = sortedByScore.filter(
+    (item) => !usedSlideIndices.has(item.slide.index) && (item.score >= 3 || item.discriminatingMatches > 0)
+  );
+
+  const topScore = unusedStrong[0]?.score ?? 0;
+  let selectedItems = unusedStrong
+    .filter((item, idx) => idx === 0 || (item.score >= topScore * 0.55 && item.score >= 3))
+    .slice(0, 3);
+
+  if (selectedItems.length === 0) {
+    const unusedSlides = scored.filter((item) => !usedSlideIndices.has(item.slide.index));
+    if (unusedSlides.length > 0) {
+      const targetPos = Math.floor(
+        ((objectiveIndex - 1) / Math.max(1, totalObjectives)) * unusedSlides.length
+      );
+      selectedItems = unusedSlides.slice(targetPos, targetPos + 2);
+    } else {
+      selectedItems = sortedByScore.slice(0, 2);
+    }
+  }
+
+  selectedItems.sort((a, b) => a.posIdx - b.posIdx);
+  for (const item of selectedItems) {
+    usedSlideIndices.add(item.slide.index);
+  }
+
+  const bulletLines = formatSlideLinesWithoutBrokenAbbr(selectedItems.map((s) => s.slide));
+
+  return [
+    `## Objectif ${objectiveIndex} : ${objectiveTitle}`,
+    "",
+    bulletLines.length > 0
+      ? bulletLines.join("\n")
+      : `- Synthèse fidèle au cours portant sur : **${objectiveTitle}**.`,
+    "",
+  ].join("\n");
 }
 
 // ============================================================================
@@ -360,7 +808,8 @@ export function buildCourseSummaryPrompt(
   const systemInstruction = `Tu es un moteur d'ingénierie pédagogique médicale inspiré des grandes marques de synthèse clinique (AMBOSS, First Aid, Osmosis).
 Ta mission est de transformer un cours magistral en un résumé à très haute densité, gouverné par des quotas de mots stricts.
 
-EXHAUSTIVITÉ ABSOLUE : Traite l'intégralité des objectifs du premier au dernier sans restriction de longueur ni plafond de mots.
+EXHAUSTIVITÉ ABSOLUE : Traite l'intégralité des objectifs du premier au dernier.
+PLAFOND GLOBAL STRICT : ${params.targetWordCount} mots, répartis selon les quotas ci-dessous sans sacrifier les faits médicaux essentiels.
 
 ${filterRules}
 

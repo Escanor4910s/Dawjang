@@ -57,7 +57,7 @@ const CATEGORY_RULES: Array<{
   {
     category: 'interpretation',
     weight: 1.4,
-    keywords: /\b(interpréter|analyser|hémogramme|bilan|examen|constantes|biologique|radiologique)\b/i,
+    keywords: /\b(interpréter|analyser|bilan|examen|constantes|biologique|radiologique|imagerie|classification|stadification)\b/i,
   },
   {
     category: 'mechanisms_clinic',
@@ -109,23 +109,87 @@ export function calculateObjectiveQuotas(
 export function extractObjectivesFromCourseText(text: string): string[] {
   if (!text) return [];
 
+  const HEADER_IGNORE =
+    /^(?:---\s*Diapositive\s*\d+\s*---|objectifs?(?:\s+pédagogiques?|\s+du\s+cours|\s+de\s+la\s+leçon|\s+spécifiques?|\s*\(suite\))?\s*:?|(?:à|a)\s+la\s+fin\s+de\s+ce\s+cours.*|l['’]étudiant\s+doit\s+être\s+capable\s+de.*|au\s+terme\s+de\s+ce\s+cours.*)$/i;
+  const TRAILING_CONNECTOR =
+    /\b(?:de|du|des|d['’]|l['’]|la|le|les|un|une|et|ou|à|au|aux|en|dans|par|pour|sur|chez|selon|avec|sans|contre|entre|vers|devant|notamment|particulier|suivants?|suivantes?|tels?\s+que)\s*$/i;
+  const CONTINUATION_START =
+    /^(?:de|du|des|d['’]|et|ou|à|au|aux|en|dans|par|pour|sur|chez|avec|sans|selon|entre|vers|sous|devant|notamment|ainsi|afin|pendant|après|avant|qui|que|dont|où)\b/i;
+
+  const repairOcr = (raw: string): string =>
+    raw
+      .replace(/[\uE000-\uF8FF❖❑➢▪►●♦◦□■▫○◊]/g, " ")
+      .replace(/(^|[\s:;.!?(-])crire\s+(la|le|les|l['’]|un|une|des|ses|son|sa|ces|principaux|principales|diff[ée]rents|diff[ée]rentes)\b/gi, "$1Décrire $2")
+      .replace(/(^|[\s:;.!?(-])num[ée]rer\s+(la|le|les|l['’]|un|une|des|principaux|principales)\b/gi, "$1Énumérer $2")
+      .replace(/(^|[\s:;.!?(-])[ée]\s*finir\s+(la|le|les|l['’]|un|une)\b/gi, "$1Définir $2")
+      .replace(/\b([cC])\s+lassification\b/g, "$1lassification")
+      .replace(/(^|[\s:;.!?(-])lassification\s+(de|du|des|d['’])/gi, "$1Classification $2")
+      .replace(/\b([Mm]an[oœ]uvre)(de|du|des|d['’])/g, "$1 $2");
+
   const objMatch = text.match(
-    /(?:objectifs?\s*(?:pédagogiques?|du\s*cours|de\s*la\s*leçon)?)\s*[:\n]([\s\S]*?)(?=(?:--- Diapositive|\n\s*(?:plan|sommaire|chapitre|i[.)]|introduction|généralités)\b|$))/i
+    /(?:objectifs?\s*(?:pédagogiques?|du\s*cours|de\s*la\s*leçon|spécifiques?)?)\s*[:\n]([\s\S]*?)(?=(?:--- Diapositive|\n\s*(?:plan|sommaire|chapitre|i[.)]|introduction|généralités)\b|$))/i
   );
 
-  const pool = objMatch ? objMatch[1] : text.slice(0, 5000);
-  const lines = pool.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const hasDedicatedSlide = /\bobjectifs?\b/i.test(text.slice(0, 8000));
+  const pool = repairOcr(objMatch ? objMatch[1] : text.slice(0, 6000));
+  const lines = pool
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .flatMap((l) =>
+      l
+        .replace(
+          /(?<=.{12,}(?:[A-Z0-9)]|[a-zà-ÿ]{2,}))(?<![,;:(-])\s+(?=(?:Objectif\s*\d+\s*[:.\-)]|\d+[.)]\s+[A-ZÀ-ÿ]|(?:Définir|Citer|Décrire|Énumérer|Lister|Expliquer|Interpréter|Diagnostiquer|Classer|Classifier|Comparer|Reconnaître|Traiter|Énoncer|Connaître|Identifier|Préciser|Analyser|Prévenir|Dépister|Maîtriser|Évaluer|Classification)\s+(?:la|le|les|l['’]|un|une|des|au|du|d['’])\b))/g,
+          "\n"
+        )
+        .replace(
+          /(?<=.{15,}(?:[a-zà-ÿ]{3,}|[A-Z]{3,}|[0-9)]))\s+(?=(?!De\b|Du\b|Des\b|Et\b|Ou\b|En\b|Dans\b|Par\b|Pour\b|Sur\b|Chez\b|Avec\b|Sans\b)[A-ZÀÂÉÈÊËÎÏÔÛÙ][A-Za-zÀ-ÿ'’-]+(?:\s+(?:de|du|des|d['’]|la|le|les|[A-Za-zÀ-ÿ'’-]+)){1,6}\s*:)/g,
+          "\n"
+        )
+        .split(/\n+/)
+        .map((p) => p.replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+    );
 
   const extracted: string[] = [];
-  const verbRegex = /^(?:(?:\d+[.\-)]\s*|Objectif\s*\d+\s*[:.\-)]\s*|[•\-*]\s*))?(définir|citer|décrire|énumérer|lister|expliquer|interpréter|diagnostiquer|classer|comparer|reconnaître|traiter|énoncer|savoir)\b/i;
+  const verbRegex = /^(?:(?:\d+\s*[.\-):]\s*|Objectif\s*\d+\s*[:.\-)]\s*|[a-z]\s*[.)]\s*|[•\-*]\s*))?(définir|citer|décrire|énumérer|lister|expliquer|interpréter|diagnostiquer|classer|classifier|comparer|reconnaître|reconnaitre|traiter|énoncer|savoir|connaître|connaitre|identifier|préciser|analyser|prévenir|dépister|maîtriser|évaluer)\b/i;
+  const markerRegex = /^(?:Objectif\s*\d+\s*[:.\-)]|\d+\s*[.\-):]|[•\-*])\s+/i;
 
   for (const line of lines) {
-    if (verbRegex.test(line)) {
-      const cleaned = line
-        .replace(/^(?:Objectif\s*\d+\s*[:.\-)]|\d+\s*[.\-)]|[•\-*])\s*/i, "")
-        .trim();
-      if (cleaned.length > 5 && !extracted.includes(cleaned)) {
-        extracted.push(cleaned);
+    if (HEADER_IGNORE.test(line)) continue;
+    const isExplicit = markerRegex.test(line);
+    const isVerb = verbRegex.test(line);
+    const cleaned = line
+      .replace(/^(?:Objectif\s*\d+\s*[:.\-)]|\d+\s*[.\-):]|[a-z]\s*[.)]|[•\-*])\s*/i, "")
+      .trim();
+    if (!cleaned) continue;
+
+    const prev = extracted.length > 0 ? extracted[extracted.length - 1] : null;
+    const prevHasUnclosedParen =
+      prev !== null && (prev.match(/\(/g) || []).length > (prev.match(/\)/g) || []).length;
+    const needsCont =
+      prev !== null &&
+      (TRAILING_CONNECTOR.test(prev) ||
+        /[,:\-/–—(]\s*$/.test(prev) ||
+        prevHasUnclosedParen ||
+        (!isExplicit && !isVerb && (/^[a-zàâçéèêëîïôûùüÿ0-9)]/.test(cleaned) || CONTINUATION_START.test(cleaned))));
+
+    if (needsCont && prev !== null) {
+      extracted[extracted.length - 1] = `${prev} ${cleaned}`.replace(/\s+/g, " ").trim();
+      continue;
+    }
+
+    if (isExplicit || isVerb) {
+      if (cleaned.length > 5 && !extracted.includes(cleaned)) extracted.push(cleaned);
+    } else if (hasDedicatedSlide && prev !== null && cleaned.length > 4) {
+      const isNominalObj =
+        /^[A-ZÀÂÉÈÊËÎÏÔÛÙ]/.test(cleaned) &&
+        !CONTINUATION_START.test(cleaned) &&
+        (/[.;!?]$/.test(prev) || cleaned.includes(":") || /^Classification\s+/i.test(cleaned) || cleaned.split(/\s+/).length >= 3);
+      if (isNominalObj) {
+        if (!extracted.includes(cleaned)) extracted.push(cleaned);
+      } else {
+        extracted[extracted.length - 1] = `${prev} ${cleaned}`.replace(/\s+/g, " ").trim();
       }
     }
   }

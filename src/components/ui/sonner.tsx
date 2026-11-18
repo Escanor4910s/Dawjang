@@ -21,7 +21,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       position="bottom-right"
       expand={false}
       closeButton
-      duration={4000}
+      duration={4800}
       className="toaster group"
       icons={{
         success: <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />,
@@ -33,15 +33,15 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast:
-            "group toast !flex !items-start !justify-start !gap-3.5 !w-full !rounded-2xl !border !border-border/90 !bg-card/95 !backdrop-blur-xl !p-4 !text-foreground !shadow-[0_16px_40px_-10px_rgba(20,20,19,0.14)] dark:!shadow-[0_20px_48px_-12px_rgba(0,0,0,0.65)]",
+            "group toast !flex !items-start !justify-start !gap-3 !w-full !rounded-2xl !border !border-[#121316]/12 dark:!border-white/12 !bg-white/95 dark:!bg-[#16171B]/95 !backdrop-blur-2xl !p-3.5 !text-foreground !shadow-[0_18px_44px_-10px_rgba(18,19,22,0.16)] dark:!shadow-[0_22px_52px_-12px_rgba(0,0,0,0.72)]",
           icon: "!m-0 !mt-0.5 !flex !h-9 !w-9 !shrink-0 !items-center !justify-center !rounded-xl !border !border-primary/25 !bg-primary/10 !text-primary",
-          content: "!flex !flex-col !gap-0.5 !flex-1 !min-w-0",
-          title: "!text-[13.5px] !font-semibold !tracking-[-0.01em] !text-foreground !leading-tight",
-          description: "!text-[12.5px] !text-muted-foreground !leading-relaxed",
+          content: "!flex !flex-col !gap-1 !flex-1 !min-w-0",
+          title: "!text-[13px] !font-semibold !tracking-[-0.01em] !text-foreground !leading-snug",
+          description: "!text-[12px] !text-muted-foreground !leading-relaxed !line-clamp-3",
           actionButton:
-            "!rounded-xl !bg-foreground !text-background !text-[12px] !font-semibold !px-3 !py-1.5",
+            "!rounded-lg !bg-foreground !text-background !text-[11.5px] !font-semibold !px-2.5 !py-1",
           cancelButton:
-            "!rounded-xl !bg-secondary !text-muted-foreground !text-[12px] !font-medium !px-3 !py-1.5",
+            "!rounded-lg !bg-secondary !text-muted-foreground !text-[11.5px] !font-medium !px-2.5 !py-1",
           closeButton:
             "!border-border !bg-card !text-muted-foreground hover:!text-foreground",
         },

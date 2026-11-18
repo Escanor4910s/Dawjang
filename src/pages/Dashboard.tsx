@@ -28,7 +28,7 @@ import {
   BadgeDisplayModal,
   AcademicBadgeCrest,
 } from "@/components/gamification/BadgeDisplay";
-import { getSavedStudentProfile, StudentProfileSN } from "@/pages/Settings";
+import { getSavedStudentProfile, type StudentProfileSN } from "@/lib/studentProfile";
 import {
   getActivePlanBadge,
   PlanTierIconBadge,
@@ -233,7 +233,7 @@ export const Dashboard: React.FC = () => {
             setQcmList(mappedDecks);
           }
         }
-      } catch {}
+      } catch { /* Ignore les données locales illisibles. */ }
 
       // Lecture des synthèses locales
       try {
@@ -254,7 +254,7 @@ export const Dashboard: React.FC = () => {
             setSummaryList(mappedSums);
           }
         }
-      } catch {}
+      } catch { /* Ignore les données locales illisibles. */ }
     };
 
     syncProfileAndData();
@@ -590,7 +590,7 @@ export const Dashboard: React.FC = () => {
                 onClick={stepCarouselPrev}
                 onKeyDown={(e) => e.key === "Enter" && stepCarouselPrev()}
                 title={`Basculer vers ${prevMod.title}`}
-                className="hidden lg:flex flex-1 min-w-[240px] max-w-[340px] group relative rounded-2xl bg-white/75 dark:bg-[#181615]/75 backdrop-blur-md border border-[#E5DEC9] dark:border-stone-800 hover:border-[#D96B43]/70 p-5 flex-col justify-between opacity-60 hover:opacity-100 scale-[0.93] hover:scale-[0.96] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer select-none shadow-[0_12px_32px_-12px_rgba(24,24,27,0.06)] hover:shadow-[0_16px_36px_-10px_rgba(217,107,67,0.12)]"
+                className="hidden lg:flex flex-1 min-w-[240px] max-w-[340px] group relative rounded-2xl bg-white/75 dark:bg-[#181615]/75 backdrop-blur-md border border-[#E5DEC9] dark:border-stone-800 hover:border-[#D96B43]/70 p-5 flex-col justify-between opacity-60 hover:opacity-100 scale-[0.93] hover:scale-[0.96] transition-all duration-500 ease-editorial cursor-pointer select-none shadow-[0_12px_32px_-12px_rgba(24,24,27,0.06)] hover:shadow-[0_16px_36px_-10px_rgba(217,107,67,0.12)]"
               >
                 <div>
                   <div className="flex items-center justify-between mb-3.5">
@@ -633,7 +633,7 @@ export const Dashboard: React.FC = () => {
                 onClick={() => navigate(activeMod.route)}
                 onKeyDown={(e) => e.key === "Enter" && navigate(activeMod.route)}
                 className={cn(
-                  "flex-[2] w-full min-w-[320px] max-w-[840px] group relative rounded-3xl bg-white dark:bg-[#181615] border-2 border-[#18181B] dark:border-stone-600 hover:border-[#D96B43] p-6 sm:p-8 flex flex-col justify-between shadow-[0_24px_55px_-14px_rgba(24,24,27,0.14)] hover:shadow-[0_30px_70px_-12px_rgba(217,107,67,0.20)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer z-10",
+                  "flex-[2] w-full min-w-[320px] max-w-[840px] group relative rounded-3xl bg-white dark:bg-[#181615] border-2 border-[#18181B] dark:border-stone-600 hover:border-[#D96B43] p-6 sm:p-8 flex flex-col justify-between shadow-[0_24px_55px_-14px_rgba(24,24,27,0.14)] hover:shadow-[0_30px_70px_-12px_rgba(217,107,67,0.20)] transition-all duration-500 ease-editorial cursor-pointer z-10",
                   slideDirection === "left" && "animate-in slide-in-from-left-4 fade-in duration-300",
                   slideDirection === "right" && "animate-in slide-in-from-right-4 fade-in duration-300"
                 )}
@@ -721,7 +721,7 @@ export const Dashboard: React.FC = () => {
                 onClick={stepCarouselNext}
                 onKeyDown={(e) => e.key === "Enter" && stepCarouselNext()}
                 title={`Basculer vers ${nextMod.title}`}
-                className="hidden lg:flex flex-1 min-w-[240px] max-w-[340px] group relative rounded-2xl bg-white/75 dark:bg-[#181615]/75 backdrop-blur-md border border-[#E5DEC9] dark:border-stone-800 hover:border-[#D96B43]/70 p-5 flex-col justify-between opacity-60 hover:opacity-100 scale-[0.93] hover:scale-[0.96] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer select-none shadow-[0_12px_32px_-12px_rgba(24,24,27,0.06)] hover:shadow-[0_16px_36px_-10px_rgba(217,107,67,0.12)]"
+                className="hidden lg:flex flex-1 min-w-[240px] max-w-[340px] group relative rounded-2xl bg-white/75 dark:bg-[#181615]/75 backdrop-blur-md border border-[#E5DEC9] dark:border-stone-800 hover:border-[#D96B43]/70 p-5 flex-col justify-between opacity-60 hover:opacity-100 scale-[0.93] hover:scale-[0.96] transition-all duration-500 ease-editorial cursor-pointer select-none shadow-[0_12px_32px_-12px_rgba(24,24,27,0.06)] hover:shadow-[0_16px_36px_-10px_rgba(217,107,67,0.12)]"
               >
                 <div>
                   <div className="flex items-center justify-between mb-3.5">

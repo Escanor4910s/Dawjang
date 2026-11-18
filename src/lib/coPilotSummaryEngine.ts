@@ -1,6 +1,9 @@
+import { callGeminiAcademicEngine } from "@/lib/syncEngine";
 // src/lib/coPilotSummaryEngine.ts
 // Architecture Tandem Inversé : Gemini 2.5 Flash (Cartographe / Suggestions) ➔ Claude Sonnet 5.5 (Rédacteur Synthétique Ultra-Condensé)
-// Objectif : ~350 à 450 mots au total (2 à 3 pages PDF) • Budget strict de 50 à 75 mots par objectif • Exclusif Sonnet 5.5
+// Objectif : ~350 à 450 mots au total (2 à 3 pages PDF) • Budget strict par objectif • Adaptatif toutes matières
+
+import { getAdaptiveConfrontationRows } from "@/lib/disciplineProfileEngine";
 
 export interface CourseObjectiveSuggestion {
   objectiveNumber: number;
@@ -25,25 +28,6 @@ export interface MasterSummaryResult {
   markdown: string;
 }
 
-const DEFAULT_OPENROUTER_KEY =
-  (import.meta as any).env?.VITE_OPENROUTER_API_KEY || "";
-
-/**
- * Récupère la clé API la plus appropriée
- */
-function getActiveKey(overrideKey?: string): string {
-  if (overrideKey && overrideKey.trim().length > 10) return overrideKey.trim();
-  const stored =
-    (typeof localStorage !== "undefined" &&
-      (localStorage.getItem("dawjang_openrouter_api_key") ||
-        localStorage.getItem("dawjang_claude_api_key"))) ||
-    "";
-  if (stored && stored.trim().length > 10) return stored.trim();
-  const envKey = (import.meta as any).env?.VITE_OPENROUTER_API_KEY || "";
-  if (envKey && envKey.trim().length > 10) return envKey.trim();
-  return DEFAULT_OPENROUTER_KEY;
-}
-
 /**
  * ============================================================================
  * 1. NETTOYEUR & NORMALISATEUR DE TABLEAUX / OBJECTIFS (ZÉRO "supérieur à" PARASITE)
@@ -56,7 +40,7 @@ export function sanitizeAndFormatForDawJang(markdown: string): string {
     // 0. PURGE CIBLÉE DES PRÉAMBULES REDONDANTS (sans jamais supprimer les blockquotes `>` de Partie III / IV ni PARTIE I)
     .replace(/<blockquote\b[^>]*>[\s\S]*?(?:Synth[eèé]se\s*M[eèé]dicale\s*Ultra-Condens|Sommaire\s*Ex[eèé]cutif|Moins de)[\s\S]*?<\/blockquote>/gi, "")
     .replace(/<h[1-3]\b[^>]*>[\s\S]*?(?:Synth[eèé]se\s*&?\s*Cadre|Sommaire\s*Ex[eèé]cutif)[\s\S]*?<\/h[1-3]>/gi, "")
-    .replace(/^\s*(?:#{1,3}\s*)?(?:SECTION\s*\d+\s*[:.\-]?\s*)?(?:Synth[eèé]se\s*&?\s*Cadre\s*Nosologique|Sommaire\s*Ex[eèé]cutif|Synth[eèé]se\s*M[eèé]dicale\s*Ultra-Condens[eèé]e[^\n]*)\s*\n+/gi, "")
+    .replace(/^\s*(?:#{1,3}\s*)?(?:SECTION\s*\d+\s*[:.-]?\s*)?(?:Synth[eèé]se\s*&?\s*Cadre\s*Nosologique|Sommaire\s*Ex[eèé]cutif|Synth[eèé]se\s*M[eèé]dicale\s*Ultra-Condens[eèé]e[^\n]*)\s*\n+/gi, "")
     .replace(/\n*>\s*(?:\*\*)?Synth[eèé]se\s*M[eèé]dicale\s*Ultra-Condens[eèé]e[\s\S]*?(?=\n\s*---\s*\n|\n\s*#{1,3}\s*Objectif|\n\s*#|$)(?:---\s*\n*)?/gi, "\n\n")
     .replace(/\n*>\s*(?:\*\*)?Synth[eèé]se\s*Fid[eèé]le\s*aux\s*Objectifs[\s\S]*?(?=\n\s*---\s*\n|\n\s*#{1,3}\s*Objectif|\n\s*#|$)(?:---\s*\n*)?/gi, "\n\n")
     .replace(/^SECTION\s*\d+\s*[^\n]*\n+/gim, "");
@@ -117,7 +101,7 @@ export function sanitizeAndFormatForDawJang(markdown: string): string {
       ""
     )
     .replace(
-      /\n+(?:Absolument\s*!?|Bien\s+s[ûu]r\s*!?|Certainement\s*!?|En\s+tant\s+que\s+Professeur)[^\n]*(?:\n+[^\n#*•◦|\[\-][^\n]*)?\n+/gi,
+      /\n+(?:Absolument\s*!?|Bien\s+s[ûu]r\s*!?|Certainement\s*!?|En\s+tant\s+que\s+Professeur)[^\n]*(?:\n+[^\n#*•◦|[-][^\n]*)?\n+/gi,
       "\n\n"
     )
 
@@ -139,84 +123,7 @@ export const cleanForDawJangPdf = sanitizeAndFormatForDawJang;
  * si jamais le flux IA a été interrompu juste après l'en-tête à 5 colonnes.
  */
 function buildFallbackConfrontationRows(headers: string[]): string[][] {
-  const joined = headers.join(" ").toLowerCase();
-  if (/coagulation|fibrinolyse|civd|h[ée]mophilie|willebrand|pti|hémostase|hemostase/.test(joined)) {
-    return [
-      [
-        "**Terrain & Mode d'installation**",
-        "**Acquis**, début souvent aigu/secondaire (**sepsis, choc, obstétrique, chirurgie, hépatopathie, AVK**) ; aucun antécédent familial hémorragique",
-        "**Constitutionnel lié à l'X** (garçon), révélation dès la marche ; antécédents familiaux sur la lignée maternelle",
-        "**Acquis auto-immun** (enfant post-viral ou jeune femme) ; début brutal, isolé, **sans splénomégalie**",
-        "**Constitutionnel autosomique** (H = F) ; histoire personnelle et familiale d'hémorragies cutanéo-muqueuses",
-      ],
-      [
-        "**Clinique (rate, ganglions, type de saignement)**",
-        "**Saignements diffus en nappe** (points de ponction, muqueuses, viscères) ± **microthromboses** et défaillance d'organes (CIVD) ; signes de la cause",
-        "**Hémarthroses** spontanées ou provoquées et **hématomes profonds** musculaires ; pas de purpura pétéchial",
-        "**Purpura pétéchial et ecchymotique** cutanéo-muqueux (épistaxis, gingivorragies, bulles endobuccales) ; **examen physique normal (rate = 0)**",
-        "**Hémorragies cutanéo-muqueuses** (épistaxis, ménorragies, gingivorragies, saignement post-extraction dentaire) ; pas d'hémarthrose (sauf type 3)",
-      ],
-      [
-        "**Hémogramme, Plaquettes & Frottis sanguin**",
-        "**Thrombopénie de consommation** (< 100 G/L dans la CIVD, normale dans l'hypovitaminose K et la fibrinolyse primitive) ; **schizocytes** au frottis (CIVD)",
-        "**Plaquettes normales** ; hémogramme normal en dehors d'une anémie post-hémorragique ; frottis normal",
-        "**Thrombopénie isolée** souvent profonde (< 20 G/L) ; Hb et GB normaux ; absence de schizocytes et de blastes au frottis",
-        "**Plaquettes normales** (sauf type 2B) ; anémie microcytaire ferriprive possible en cas de saignements chroniques",
-      ],
-      [
-        "**Bilan d'hémostase (TP, TCA, Fibrinogène)**",
-        "**TP abaissé + TCA allongé** • **Fibrinogène effondré (< 1,5 g/L)** + **Facteur V abaissé** (CIVD, IHC, fibrinolyse) ou **Facteur V normal** (Hypovitaminose K)",
-        "**TCA allongé isolé** corrigé par le plasma témoin (Rosner < 12 %) ; **TP, Fibrinogène et TS/PFA normaux**",
-        "**TP, TCA et Fibrinogène strictement normaux** ; allongement du TS / temps d'occlusion plaquettaire lié à la thrombopénie",
-        "**TS / PFA-100 allongé** ± **TCA allongé** (par baisse secondaire du FVIII) ; **TP et Fibrinogène normaux**",
-      ],
-      [
-        "**Examen de certitude & Traitement spécifique**",
-        "**CIVD :** **D-dimères / PDF très élevés** + complexes solubles (traitement étiologique + PFC/plaquettes) • **Fibrinolyse primitive :** **D-dimères normaux**, euglobulines < 3h (**antifibrinolytiques**)",
-        "**Dosage spécifique du Facteur VIII (Hémophilie A)** ou **Facteur IX (Hémophilie B)** < 40 % • Concentrés de **FVIII / FIX** ou desmopressine (forme mineure A)",
-        "**Diagnostic d'exclusion** (myélogramme riche en mégacaryocytes si signe d'appel) • **Corticoïdes, IgIV** (si score hémorragique élevé), agonistes du R-TPO",
-        "**Dosage du vWF:RCo (< 50 %)**, **vWF:Ag** et **FVIII** • **Desmopressine (DDAVP)** en 1re intention (type 1) ou concentrés de facteur Willebrand",
-      ],
-    ];
-  }
-
-  return [
-    [
-      "**Clinique (rate, ganglions, os, signes spécifiques)**",
-      "Signes cardinaux spécifiques du cours ; vérifier systématiquement la présence ou l'absence d'**organomégalie (rate, ganglions, foie)** et le terrain",
-      "Présentation clinique distincte par le mode d'installation, l'âge de révélation et le tropisme organique",
-      "Tableau clinique différencié par l'examen physique (présence ou absence de syndrome tumoral ou hémolytique)",
-      "Signes cliniques d'orientation propres nécessitant un croisement immédiat avec l'hémogramme",
-    ],
-    [
-      "**Hémogramme & Réticulocytes**",
-      "Anomalies caractéristiques des lignées sanguines (**Hb, VGM, TCMH, GB/PNN, Plaquettes**) et interprétation du seuil des **réticulocytes (120 000/mm³)**",
-      "Profil d'hémogramme distinct sur les constantes érythrocytaires, leucocytaires ou plaquettaires",
-      "Atteinte mono-, bi- ou pancytopénique de mécanisme différent (central vs périphérique)",
-      "Cinétique hématologique et régénération médullaire distinctes",
-    ],
-    [
-      "**Frottis sanguin**",
-      "Recherche des anomalies morphologiques spécifiques du cours ou confirmation d'un frottis sans cellules anormales selon l'entité",
-      "Morphologie cellulaire caractéristique orientant vers ce diagnostic différentiel",
-      "Signes cytologiques périphériques discriminants au microscope optique",
-      "Absence des signes pathognomoniques du cours principal",
-    ],
-    [
-      "**Examen médullaire / Bilan biochimique ou d'hémostase**",
-      "Profil biochimique, hémostatique ou médullaire conforme aux seuils officiels du polycopié",
-      "Bilan complémentaire discordant permettant d'écarter le diagnostic principal",
-      "Marqueurs biologiques spécifiques de cette entité différentielle",
-      "Paramètres fonctionnels ou médullaires distincts",
-    ],
-    [
-      "**Examen / Critère de certitude**",
-      "**Examen de confirmation de référence** défini dans le cours (exigé aux QCM d'élection et de jumelage)",
-      "Test diagnostique spécifique de certitude propre à cette pathologie",
-      "Critère formel de validation ou d'exclusion diagnostique",
-      "Examen de confirmation spécifique et prise en charge dédiée",
-    ],
-  ];
+  return getAdaptiveConfrontationRows(headers);
 }
 
 /**
@@ -258,7 +165,7 @@ export function normalizeMarkdownTables(markdown: string): string {
       mergedLines.length > 0
     ) {
       const prev = mergedLines[mergedLines.length - 1].trim();
-      if (prev.startsWith("|") && !prev.endsWith("|") && !/^[\|\s:-]+$/.test(prev)) {
+      if (prev.startsWith("|") && !prev.endsWith("|") && !/^[|\s:-]+$/.test(prev)) {
         const cleanedFrag = trimmed.replace(/^[-•*◦]\s+/, "• ");
         mergedLines[mergedLines.length - 1] = `${prev} ${cleanedFrag}`;
         continue;
@@ -348,7 +255,7 @@ export function normalizeMarkdownTables(markdown: string): string {
     const pipeCount = (rawLine.match(/\|/g) || []).length;
 
     if (rawLine.startsWith("|") && pipeCount >= 2) {
-      if (/^[\|\s:-]+$/.test(rawLine)) {
+      if (/^[|\s:-]+$/.test(rawLine)) {
         continue;
       }
 
@@ -502,31 +409,28 @@ export function deduplicateAndCleanSections(rawSections: FinalSectionOutput[]): 
  * 3. PROMPT DE COMPRESSION ULTRA-HAUTE DENSITÉ (MAX 450 MOTS / 2-3 PAGES PDF)
  * ============================================================================
  */
-export const ULTRA_COMPRESSED_SONNET_PROMPT = `Tu es le Rédacteur Synthétique Chef des Éditions DawJang Press, propulsé exclusivement par Claude Sonnet 5.5.
-Ta mission : produire une MONOGRAPHIE DE SYNTHÈSE HAUTE PRÉCISION (format "High-Yield Pédagogique"), parfaitement équilibrée entre concision chirurgicale et clarté logique.
+export const ULTRA_COMPRESSED_SONNET_PROMPT = `Tu es un Rédacteur Synthétique Médical Universitaire multi-spécialités des Éditions DawJang Press.
+Ta mission : produire une MONOGRAPHIE DE SYNTHÈSE HAUTE PRÉCISION (format "High-Yield Pédagogique"), 100 % adaptée à la discipline réelle du cours fourni, parfaitement équilibrée entre concision chirurgicale et clarté logique.
 BUDGET GLOBAL : 550 à 750 mots AU TOTAL pour l'ensemble du cours (soit environ 80 à 120 mots par objectif).
-RÈGLE D'OR : Moins de mots que le diaporama original, mais avec toute la logique clinique nécessaire pour que l'étudiant comprenne et retienne la marche à suivre.
+RÈGLE D'OR : Moins de mots que le diaporama original, mais avec toute la logique clinique, anatomo-radiologique, biologique ou thérapeutique propre à la matière pour que l'étudiant comprenne et retienne la marche à suivre.
 
-LOIS PÉDAGOGIQUES ET RÉDACTIONNELLES (CLAUDE SONNET 5.5) :
-1. CALIBRAGE : 80 à 120 mots par objectif. Ni trop sec, ni encyclopédique : juste l'explication logique et les repères clés.
-2. DÉMARCHE LOGIQUE D'INTERPRÉTATION (EX. HÉMOGRAMME / BILAN BIOLOGIQUE) :
-   - Ne fais PAS de simple copier-coller de chiffres bruts.
-   - Développe une véritable démarche en étapes ordonnées pour guider l'étudiant face aux données :
-     * Étape 1 : Poser le diagnostic (ex. Hb inférieure aux seuils).
-     * Étape 2 : Qualifier la taille / volume (ex. VGM : microcytaire < 80 fL, normocytaire 80-100 fL, macrocytaire > 100 fL).
-     * Étape 3 : Qualifier la couleur / teneur (ex. CCMH < 32 % = hypochrome, 32-36 % = normochrome. Rappel : l'hyperchromie n'existe pas).
-     * Étape 4 : Déduire la formule globale (ex. anémie microcytaire hypochrome, macrocytaire normochrome).
-     * Étape 5 : Évaluer la régénération médullaire (Réticulocytes : régénérative > 80 000 ou 120 000/mm³ vs arégénérative).
-3. DÉMARCHE DIAGNOSTIQUE ÉTIOLOGIQUE :
-   - Structure un arbre décisionnel clair liant chaque type d'anémie à ses examens de 1re intention et ses causes maîtresses.
-4. DÉFINITION & EXCEPTIONS :
-   - Définition officielle en 1-2 phrases avec seuils précis et rappel des fausses anémies (hémodilution).
-5. TRIADES & SIGNES CLÉS :
-   - Indique la triade ou le signe cardinal nettement, suivi d'une courte mise en relief clinique.
+LOIS PÉDAGOGIQUES ET RÉDACTIONNELLES ADAPTATIVES :
+1. CALIBRAGE STRICT : 80 à 120 mots par objectif. Ni trop sec, ni encyclopédique : juste l'explication logique et les repères clés authentiquement présents dans le cours.
+2. DÉMARCHE LOGIQUE D'ANALYSE ET D'INTERPRÉTATION ADAPTÉE À LA MATIÈRE DU COURS :
+   - Adapte IMPÉRATIVEMENT ta grille de lecture à la discipline réelle du support (sans jamais plaquer les critères d'une autre matière) :
+     * Si le cours relève de la Traumatologie / Orthopédie / Chirurgie : structure mécanisme lésionnel (haute/basse énergie, choc direct/indirect), bilan vasculo-nerveux et cutané (ouverture Gustilo), lecture radiographique & classifications de référence (Garden, Schatzker, Neer, Salter-Harris, Pauwels, etc. si présentes dans le cours), urgence et choix orthopédique vs chirurgical, complications précoces et tardives (loge, pseudarthrose, nécrose, raideur).
+     * Si le cours relève d'une spécialité Médicale d'organe (Cardiologie, Pneumologie, Neurologie, Néphrologie, Hépato-Gastro, Endocrinologie, Infectiologie, Rhumatologie, Pédiatrie, Gynécologie...) : structure signes positifs et seuils de gravité, examens paracliniques clés (ECG, imagerie, endoscopie, sérologies, bilans biologiques du cours), scores et diagnostics différentiels, conduite à tenir d'urgence et de fond.
+     * Si et SEULEMENT SI le cours porte sur un bilan biologique ou hématologique : développe l'interprétation méthodique des paramètres et seuils fournis par ce cours.
+3. DÉMARCHE DIAGNOSTIQUE ÉTIOLOGIQUE & DIFFÉRENTIELLE :
+   - Structure un arbre décisionnel clair reliant les tableaux cliniques du cours aux examens de 1re intention, aux étiologies maîtresses et aux diagnostics différentiels.
+4. DÉFINITION, SCORES & EXCEPTIONS :
+   - Définition officielle en 1-2 phrases avec seuils chiffrés, stades ou pièges diagnostiques précisés dans le support.
+5. TRIADES, SIGNES CLÉS & URGENCES :
+   - Indique les signes cardinaux, complications vitales ou fonctionnelles et éléments pronostiques nettement mis en relief.
 6. ÉLÉMENTS À ÉVITER & TRAITEMENTS :
-   - Précise les molécules clés, posologies usuelles, durées pour recharger les réserves et contre-indications.
+   - Précise les molécules, gestes, immobilisations, indications opératoires, posologies/durées et contre-indications formelles du cours.
 7. ZÉRO INTRO / ZÉRO CONCLUSION / ZÉRO SOMMAIRE / ZÉRO ROBOTIQUE :
-   - N'écris jamais "Voici la rédaction...", "L'anémie est définie comme...", "Ce cours aborde...".
+   - N'écris jamais "Voici la rédaction...", "Cette pathologie est définie comme...", "Ce cours aborde...".
    - Attaque directement le contenu sous le titre ## Objectif X.
    - STRICTEMENT INTERDIT : Ne génère JAMAIS de sommaire introductif, de cartouche de synthèse préalable, de citation blockquote listant les objectifs (ex: jamais de "> Synthèse Médicale Ultra-Condensée..."), ni de liste numérotée des objectifs en tête de document. Le document commence directement et exclusivement à l'Objectif 1 !
 8. FORMATAGE STRICT SÉCURISÉ POUR LE PDF :
@@ -542,8 +446,6 @@ export async function getGeminiProgressiveSuggestions(
   geminiApiKey?: string,
   predefinedObjectives?: string[]
 ): Promise<CourseObjectiveSuggestion[]> {
-  const apiKey = getActiveKey(geminiApiKey);
-
   const prompt = `Tu es l'Assistant Cartographe Médical des Éditions DawJang Press.
 Analyse ce support de cours et extrais la liste exacte des objectifs pédagogiques annoncés au début du cours (sans jamais en inventer ni les dédoubler).
 
@@ -580,66 +482,11 @@ Renvoie UNIQUEMENT un objet JSON valide au format :
 SUPPORT DE COURS :
 ${courseText.slice(0, 50000)}`;
 
-  let rawJson = "";
-
-  // 1. Essai direct Google API si clé Gemini disponible
-  const googleKey =
-    geminiApiKey ||
-    (typeof localStorage !== "undefined" &&
-      localStorage.getItem("dawjang_gemini_api_key")) ||
-    (import.meta as any).env?.VITE_GEMINI_API_KEY ||
-    "";
-
-  if (googleKey && !googleKey.startsWith("sk-or-")) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${googleKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            generationConfig: {
-              temperature: 0.1,
-              responseMimeType: "application/json",
-            },
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-          }),
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        rawJson = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      }
-    } catch (e) {
-      console.warn("[CoPilot] Échec direct Gemini, bascule sur passerelle :", e);
-    }
-  }
-
-  // 2. Si pas de clé Google directe ou échec, appel via OpenRouter
-  if (!rawJson && apiKey.startsWith("sk-or-")) {
-    try {
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://dawjang.app",
-          "X-Title": "DawJang Academic Studio",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          temperature: 0.1,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        rawJson = data?.choices?.[0]?.message?.content || "";
-      }
-    } catch (e) {
-      console.warn("[CoPilot] Échec OpenRouter Gemini :", e);
-    }
-  }
+  const rawJson = await callGeminiAcademicEngine(
+    "Tu produis uniquement le JSON demandé, sans commentaire.",
+    prompt,
+    0.1,
+  ) || "";
 
   let parsedSuggestions: CourseObjectiveSuggestion[] = [];
   try {
@@ -694,11 +541,9 @@ export async function writeCondensedSummaryWithSonnet(
   suggestions: CourseObjectiveSuggestion[],
   anthropicApiKey?: string
 ): Promise<FinalSectionOutput[]> {
-  const apiKey = getActiveKey(anthropicApiKey);
-
-  const userPrompt = `Voici le support de cours original et les suggestions directrices préparées par Gemini 2.5 Flash pour les ${suggestions.length} objectifs uniques.
+  const userPrompt = `Voici le support de cours original et les suggestions directrices préparées pour les ${suggestions.length} objectifs uniques.
 Rédige chaque objectif avec la logique clinique et le format demandé (80 à 120 mots par objectif, total du cours entre 550 et 750 mots).
-Pour l'interprétation de l'hémogramme ou des bilans, structure la démarche étape par étape (taille, couleur, réticulocytes) pour que l'étudiant sache interpréter tout profil clinique !
+Adapte strictement les critères d'analyse, d'interprétation (sémiologique, radiologique, morphologique, biologique, classifications, scores ou prise en charge) à la discipline réelle du support, étape par étape, sans jamais importer de paramètres d'une autre matière !
 
 === PLAN DES ${suggestions.length} OBJECTIFS UNIQUES DE GEMINI 2.5 FLASH ===
 ${JSON.stringify(suggestions, null, 2)}
@@ -717,79 +562,11 @@ Renvoie UNIQUEMENT un objet JSON strict :
   ]
 }`;
 
-  let rawText = "";
-
-  // 1. Clé OpenRouter — Exclusif Claude Sonnet 5.5
-  if (apiKey.startsWith("sk-or-")) {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer": "https://dawjang.app",
-        "X-Title": "DawJang Academic Studio",
-      },
-      body: JSON.stringify({
-        model: "anthropic/claude-sonnet-5.5",
-        max_tokens: 4000, // Budget calibré incluant les reasoning tokens obligatoires d'OpenRouter + le JSON
-        temperature: 0.1,
-        messages: [
-          { role: "system", content: ULTRA_COMPRESSED_SONNET_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
-
-    if (!res.ok) {
-      const fallback = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://dawjang.app",
-          "X-Title": "DawJang Academic Studio",
-        },
-        body: JSON.stringify({
-          model: "anthropic/claude-sonnet-5",
-          max_tokens: 4000,
-          temperature: 0.1,
-          messages: [
-            { role: "system", content: ULTRA_COMPRESSED_SONNET_PROMPT },
-            { role: "user", content: userPrompt },
-          ],
-        }),
-      });
-      if (fallback.ok) {
-        const data = await fallback.json();
-        rawText = data?.choices?.[0]?.message?.content || "";
-      }
-    } else {
-      const data = await res.json();
-      rawText = data?.choices?.[0]?.message?.content || "";
-    }
-  } else {
-    // 2. Clé Anthropic API directe — Sonnet 5.5
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-5-5",
-        max_tokens: 4000,
-        temperature: 0.1,
-        system: ULTRA_COMPRESSED_SONNET_PROMPT,
-        messages: [{ role: "user", content: userPrompt }],
-      }),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      rawText = data?.content?.[0]?.text || "";
-    }
-  }
+  const rawText = await callGeminiAcademicEngine(
+    ULTRA_COMPRESSED_SONNET_PROMPT,
+    userPrompt,
+    0.1,
+  ) || "";
 
   const cleanJsonText = rawText.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
   const match = cleanJsonText.match(/\{[\s\S]*\}/);

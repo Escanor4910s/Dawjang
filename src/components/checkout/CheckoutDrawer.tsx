@@ -1,4 +1,3 @@
-import { untypedTable } from "@/lib/untypedDb";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Lock, ShieldCheck, Smartphone, CheckCircle2, ChevronRight, Sparkles } from "lucide-react";
@@ -94,60 +93,28 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
           },
            
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          onApprove: async (data: any, actions: any) => {
+          onApprove: async (data: any) => {
             setIsProcessing(true);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return actions.order.capture().then(async (details: any) => {
-              try {
-                if (user) {
-                  const { error: profileError } = await supabase
-                    .from("profiles")
-                    .update({ plan: plan.id })
-                    .eq("id", user.id);
+            try {
+              const { data: result, error } = await supabase.functions.invoke("capture-paypal-order", {
+                body: { orderId: data.orderID, planId: plan.id, isYearly: isAnnual },
+              });
+              if (error || !result?.success) throw error || new Error("Paiement non confirmé");
 
-                  if (profileError) throw profileError;
-
-              window.dispatchEvent(
-                new CustomEvent("hippocampus_plan_updated", {
-                  detail: { plan: plan.id },
-                })
-              );
-
-                  window.dispatchEvent(
-                    new CustomEvent("hippocampus_plan_updated", {
-                      detail: { plan: plan.id },
-                    })
-                  );
-
-                  // Insert into subscriptions table
-                  const { error: subError } = await untypedTable("subscriptions").insert({
-                    user_id: user.id,
-                    plan_id: plan.id,
-                    status: "active",
-                    price_paid: totalBill,
-                    payment_method: "paypal",
-                    transaction_id: details.id,
-                    metadata: { paypal_details: details }
-                  });
-                  if (subError) console.warn("Could not record subscription in database:", subError);
-                }
-
-                setIsProcessing(false);
-                setIsSuccess(true);
-                toast.success("Paiement validé. Bienvenue dans l'excellence.");
-                onSuccess();
-                setTimeout(() => {
-                  setIsSuccess(false);
-                  onClose();
-                }, 2000);
-
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              } catch (err: any) {
-                console.error("Supabase upgrade error after PayPal payment:", err);
-                setIsProcessing(false);
-                toast.error("Paiement réussi sur PayPal, mais erreur lors de la mise à niveau de votre profil.");
-              }
-            });
+              window.dispatchEvent(new CustomEvent("hippocampus_plan_updated"));
+              setIsSuccess(true);
+              toast.success("Paiement validé. Bienvenue dans l'excellence.");
+              onSuccess();
+              setTimeout(() => {
+                setIsSuccess(false);
+                onClose();
+              }, 2000);
+            } catch (err) {
+              console.error("PayPal server validation failed:", err);
+              toast.error("Le paiement n'a pas pu être confirmé. Contactez le support si un débit apparaît.");
+            } finally {
+              setIsProcessing(false);
+            }
           },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onError: (err: any) => {
@@ -183,40 +150,9 @@ export const CheckoutDrawer = ({ isOpen, onClose, plan, initialIsAnnual, user, o
       });
 
       if (error || !data?.redirect_url) {
-        console.warn("PayTech initialization failed", error);
-        toast.warning("L'API PayTech n'est pas encore configurée (Mode Simulation activé)");
-        
-        setTimeout(async () => {
-          try {
-            if (user) {
-              const { error: profileError } = await supabase
-                .from("profiles")
-                .update({ plan: plan.id })
-                .eq("id", user.id);
-
-              if (profileError) throw profileError;
-
-              window.dispatchEvent(
-                new CustomEvent("hippocampus_plan_updated", {
-                  detail: { plan: plan.id },
-                })
-              );
-            }
-            setIsProcessing(false);
-            setIsSuccess(true);
-            toast.success("Paiement validé. Bienvenue dans l'excellence.");
-            onSuccess();
-            setTimeout(() => {
-              setIsSuccess(false);
-              onClose();
-            }, 2000);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } catch (err: any) {
-            console.error("Supabase upgrade error:", err);
-            setIsProcessing(false);
-            toast.error("Erreur lors de la mise à niveau de votre profil.");
-          }
-        }, 2000);
+        console.error("PayTech initialization failed", error);
+        toast.error("Le paiement n'a pas pu être initialisé. Aucun abonnement n'a été activé.");
+        setIsProcessing(false);
         return;
       }
 

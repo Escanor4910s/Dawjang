@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.1";
-import { getUserPlanInfo } from "../_shared/plan-utils.ts";
+import { consumeDailyQuota, getUserPlanInfo } from "../_shared/plan-utils.ts";
 import { extractCompletionText, logDiagnostic } from "../_shared/ai-utils.ts";
 
 const corsHeaders = {
@@ -345,6 +345,13 @@ serve(async (req) => {
     }
 
     const targetCount = Math.min(Math.max(Number(nbQuestions) || 20, 1), 50);
+    const quota = await consumeDailyQuota(userInfo.userId, "qcm", targetCount, userInfo.plan);
+    if (!quota.allowed) {
+      return new Response(
+        JSON.stringify({ error: "Limite quotidienne atteinte", message: `Votre offre gratuite permet 5 QCM par jour (${quota.remaining} restant(s)).`, upgradeRequired: true }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // Récupérer la mémoire permanente des questions déjà posées (même supprimées)
     const previousQuestions = await fetchPastQuestionsMemory(

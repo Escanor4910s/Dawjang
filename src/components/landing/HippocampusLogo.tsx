@@ -180,7 +180,7 @@ export const DawJangLogo = React.memo(function DawJangLogo({
       <DawJangDragonIcon
         className={cn(
           iconDimensions,
-          "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover/brand:scale-[1.06]",
+          "transition-transform duration-300 ease-editorial group-hover/brand:scale-[1.06]",
           variant === "white" ? "text-white" : "text-current",
           iconClassName
         )}

@@ -2,6 +2,9 @@
 import { cleanAndStructureMarkdown } from "./formatters";
 import { summaryDocToStructuredMarkdown, type SummaryDoc } from "@/lib/summaryDocConverter";
 import type { SynthesisDoctrine } from "@/pages/Summaries";
+import type { invokeWithRetry } from "@/lib/edgeRetry";
+
+type SummaryInvoker = typeof invokeWithRetry;
 
 export type Doctrine = "objectives_verbatim" | "harvard_method" | "arva" | "world_number_one";
 
@@ -9,7 +12,7 @@ export interface GenerateSummaryWithRetryOptions {
   objectives: string[];
   doctrine: SynthesisDoctrine | string;
   targetWordCount: number;
-  invokeWithRetry: Function;
+  invokeWithRetry: SummaryInvoker;
   courseText?: string;
   courseTitle?: string;
   maxRetries?: number;
@@ -87,7 +90,7 @@ export async function generateSummary({
   objectives: string[];
   wordLimit?: number;
   wordCount?: number;
-  invokeWithRetry: Function;
+  invokeWithRetry: SummaryInvoker;
 }): Promise<string> {
   const effectiveLimit = wordCount || wordLimit;
   const promptFn = PROMPTS[doctrine] || PROMPTS.objectives_verbatim;
@@ -116,7 +119,7 @@ export async function generateSummary({
 export async function generateArvaSummary(
   objectives: string[],
   wordLimit: number = 3000,
-  invokeWithRetry: Function
+  invokeWithRetry: SummaryInvoker
 ): Promise<string> {
   const prompt = buildArvaPrompt(objectives);
   const { data, error } = await invokeWithRetry("generate-summary", {

@@ -34,7 +34,7 @@ import {
   UNIFIED_DAWJANG_PLANS,
   UnifiedPlanDefinition,
 } from "./Subscription";
-import { getSavedStudentProfile, saveStudentProfile } from "./Settings";
+import { getSavedStudentProfile, saveStudentProfile } from "@/lib/studentProfile";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -143,10 +143,11 @@ export default function Pricing() {
         : selectedOffer.interestBonusDays;
 
     const stats = getStoredUserStats();
+    const safeCredits = Number.isFinite(Number(stats.credits)) ? Number(stats.credits) : 0;
     const nextStats = {
       ...stats,
       isPremium: true,
-      credits: stats.credits + selectedOffer.creditsIncluded,
+      credits: safeCredits + selectedOffer.creditsIncluded,
       daysRemaining: durationToAdd + bonusDays,
     };
 

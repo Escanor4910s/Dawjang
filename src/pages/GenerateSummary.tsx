@@ -35,10 +35,19 @@ import { useFileReader } from "@/hooks/useFileReader";
 import { supabase } from "@/integrations/supabase/client";
 import { untypedTable } from "@/lib/untypedDb";
 import { cleanMedicalSourceText } from "@/lib/summaryDocConverter";
-import { filterOutTombstoned, callGeminiAcademicEngine, unTombstoneEntity } from "@/lib/syncEngine";
+import {
+  filterOutTombstoned,
+  callGeminiAcademicEngine,
+  unTombstoneEntity,
+  lastAcademicEngineError,
+  isAcademicEngineAuthOrPlanError,
+} from "@/lib/syncEngine";
 import { cleanAndStructureMarkdown } from "@/utils/formatters";
 import { DOCTRINE_LABELS } from "@/config/doctrineConfig";
-import { extractObjectivesFromCourseText } from "@/lib/summaryEngine";
+import {
+  extractObjectivesFromCourseText,
+  buildDeterministicObjectiveSection,
+} from "@/lib/summaryEngine";
 import { getSavedCourses, type StoredCourse } from "@/pages/Library";
 import { grantDawJangXP, DAWJANG_XP_REWARDS } from "@/hooks/useGamification";
 import { pushAppNotification } from "@/hooks/useNotifications";
@@ -60,96 +69,17 @@ import {
   type UploadedExamInput,
 } from "@/lib/objectiveExamEngine";
 import { ObjectiveExamBatchUploader } from "@/components/ObjectiveExamBatchUploader";
+import {
+  SUBJECT_FILTERS,
+  detectSubjectFromCourse,
+  inferDisciplineProfile,
+} from "@/lib/disciplineProfileEngine";
+import { getLocalSummaries, saveLocalSummaries } from "@/lib/summaryStorage";
 
 export type PureSynthesisMode =
   | "objectives_verbatim"
   | "drive_objective_strategy";
 type SourceTabMode = "upload" | "library" | "paste";
-
-export const LOCAL_SUMMARIES_KEY = "hippocampus_clean_summaries_v2";
-export const LEGACY_SUMMARIES_KEY = "hippocampus_clean_summaries";
-
-export const SUBJECT_FILTERS = [
-  "Tous",
-  "Cardiologie",
-  "Pneumologie",
-  "Neurologie",
-  "Néphrologie",
-  "Maladies Infectieuses",
-  "Hématologie",
-  "Hépato-Gastro",
-  "Endocrinologie",
-  "Pédiatrie",
-  "Gynécologie-Obstétrique",
-];
-
-export function getLocalSummaries(): EditorSummaryItem[] {
-  try {
-    const rawKeys = [
-      LOCAL_SUMMARIES_KEY,
-      LEGACY_SUMMARIES_KEY,
-      "hippocampus_local_summaries_v2",
-      "hippocampus_clean_summaries_v4",
-    ];
-    const itemMap = new Map<string, EditorSummaryItem>();
-    for (const key of rawKeys) {
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            for (const it of parsed) {
-              if (it && it.id && !itemMap.has(it.id)) {
-                const normalized: EditorSummaryItem = {
-                  id: String(it.id),
-                  title: String(it.title || "Synthèse sans titre"),
-                  subject: String(it.subject || it.discipline || "Médecine"),
-                  updatedAt: String(it.updatedAt || "Aujourd'hui"),
-                  wordCount: Number(it.wordCount) || 100,
-                  doctrineLabel: String(
-                    it.doctrineLabel ||
-                    DOCTRINE_LABELS.objectives_verbatim
-                  ),
-                  htmlContent: String(it.htmlContent || it.content || ""),
-                };
-                itemMap.set(it.id, normalized);
-              }
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-    }
-    if (itemMap.size > 0) {
-      const allItems = Array.from(itemMap.values());
-      return filterOutTombstoned("summary", allItems);
-    }
-  } catch {
-    // ignore
-  }
-  return [];
-}
-
-export function saveLocalSummaries(items: EditorSummaryItem[]) {
-  try {
-    for (const item of items) {
-      if (item && (item.id || item.title)) {
-        unTombstoneEntity("summary", item.id, item.title);
-      }
-    }
-    const serialized = JSON.stringify(items);
-    localStorage.setItem(LOCAL_SUMMARIES_KEY, serialized);
-    localStorage.setItem(LEGACY_SUMMARIES_KEY, serialized);
-    localStorage.setItem("hippocampus_local_summaries_v2", serialized);
-    localStorage.setItem("hippocampus_clean_summaries_v4", serialized);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event("dawjang_summaries_updated"));
-    }
-  } catch {
-    // ignore
-  }
-}
 
 /**
  * Extrait le texte brut de la diapositive « OBJECTIFS » du professeur pour affichage et vérification verbatim
@@ -177,69 +107,26 @@ function extractRawObjectivesSlideSnippet(text: string): string | null {
 }
 
 /**
- * Fallback déterministe riche pour un objectif précis si hors-ligne
+ * Fallback déterministe structuré pour un objectif précis si hors-ligne
  */
 function buildFallbackObjectiveSection(
   objectiveTitle: string,
   objectiveIndex: number,
   totalObjectives: number,
-  courseText: string
+  courseText: string,
+  courseTitle = "",
+  allObjectives: string[] = [],
+  usedSlideIndices?: Set<number>
 ): string {
-  const paragraphs = courseText
-    .split(/\n{2,}/)
-    .map((p) => p.replace(/^---\s*Diapositive\s*\d+\s*---\s*/i, "").trim())
-    .filter((p) => p.length > 30);
-
-  const keywords = (objectiveTitle || "")
-    .toLowerCase()
-    .replace(/[^a-zàâçéèêëîïôûùüÿñæœ0-9\s]/gi, " ")
-    .split(/\s+/)
-    .filter((w) => w.length > 3);
-
-  const scored = paragraphs.map((p, idx) => {
-    const lower = (p || "").toLowerCase();
-    let score = 0;
-    for (const kw of keywords) {
-      if (lower.includes(kw)) score += 3;
-    }
-    return { p, idx, score };
+  return buildDeterministicObjectiveSection({
+    objectiveTitle,
+    objectiveIndex,
+    totalObjectives,
+    courseText,
+    courseTitle,
+    allObjectives,
+    usedSlideIndices,
   });
-
-  const matching = scored
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 8)
-    .sort((a, b) => a.idx - b.idx)
-    .map((item) => item.p);
-
-  const sliceStart = Math.floor(
-    ((objectiveIndex - 1) / Math.max(1, totalObjectives)) * paragraphs.length
-  );
-  const sliceEnd = Math.max(
-    sliceStart + 3,
-    Math.ceil((objectiveIndex / Math.max(1, totalObjectives)) * paragraphs.length)
-  );
-  const selectedParagraphs =
-    matching.length >= 2 ? matching : paragraphs.slice(sliceStart, sliceEnd);
-
-  const bulletLines = selectedParagraphs
-    .flatMap((para) =>
-      para
-        .split(/(?<=[.!?])\s+|\n+/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 15 && !/^---\s*Diapositive/i.test(s))
-    )
-    .slice(0, 14)
-    .map((line) => `- ${line}`);
-
-  return [
-    `## Objectif ${objectiveIndex} : ${objectiveTitle}`,
-    "",
-    bulletLines.length > 0
-      ? bulletLines.join("\n")
-      : `- Synthèse fidèle au cours portant sur : **${objectiveTitle}**.`,
-    "",
-  ].join("\n");
 }
 
 /**
@@ -294,6 +181,8 @@ async function generateExhaustiveObjectivesSummary(params: {
 
   const sections: string[] = [];
   const failedObjectives: number[] = [];
+  const usedFallbackSlideIndices = new Set<number>();
+  let abortAiDueToAuthOrPlan = isAcademicEngineAuthOrPlanError();
 
   // Boucle stricte 1 OBJECTIF PAR PASSE : garantit mathématiquement que chaque objectif 1..N est rédigé de façon claire et logique
   for (let i = 0; i < totalObjs; i++) {
@@ -305,32 +194,48 @@ async function generateExhaustiveObjectivesSummary(params: {
       .map((o, idx) => `${idx + 1}. Objectif ${idx + 1} : ${o}${idx === i ? "  <-- [OBJECTIF À TRAITER MAINTENANT]" : ""}`)
       .join("\n");
 
-    const isHemogramme = /h[eéè]mogramme|nfs|formule\s*sanguine|interpr[eéè]ter/i.test(objTitle);
+    const profile = inferDisciplineProfile({
+      courseTitle: title,
+      courseText: cleanedCourse,
+      subjectHint: subject,
+      isExplicitSubjectChoice: Boolean(
+        subject &&
+          subject !== "Hématologie" &&
+          !/^(auto|m[eé]decine|discipline|g[eé]n[eé]ral)/i.test(subject.trim())
+      ),
+    });
 
-    const specificDirective = isHemogramme
-      ? `\nDIRECTIVE SPÉCIALE D'EXPLICATION LOGIQUE (OBJECTIF CLÉ D'INTERPRÉTATION) :
-Ne fais SURTOUT PAS de copier-coller brut du cours. Développe par toi-même une LOGIQUE CLINIQUE ÉTAPE PAR ÉTAPE pour expliquer à l'étudiant comment raisonner devant les résultats :
-- Étape 1 : Diagnostic de certitude de l'anémie (Taux d'Hb < seuils officiels : Homme < 13 g/dL, Femme/Enfant < 12 g/dL, Grossesse T2/T3 < 10,5 g/dL).
-- Étape 2 : Taille des hématies via le VGM : Microcytaire (< 80 fL), Normocytaire (80-100 fL), Macrocytaire (> 100 fL).
-- Étape 3 : Coloration / charge en Hb via la CCMH et TCMH : Hypochrome (CCMH < 32 %, TCMH < 27 pg) vs Normochrome (CCMH 32-36 %, TCMH 27-32 pg).
-- Étape 4 : Réponse médullaire via les Réticulocytes : Régénérative (> 120 G/L ou 150 G/L = origine périphérique : hémolyse ou hémorragie aiguë) vs Arégénérative (< 120 G/L = origine centrale : carence en fer/vitamines, infiltration médullaire).
-- Qualification finale : Montre la démarche d'assemblage (ex: « anémie microcytaire hypochrome arégénérative » ou « anémie normocytaire normochrome régénérative »).
+    const matchedDirective =
+      profile.interpretationDirectives.find((d) => d.trigger.test(objTitle)) ||
+      (/\b(interpr[eéè]ter|radiograph|imagerie|bilan|examin|diagnosti|classifier|conduite|prise\s+en\s+charge)\b/i.test(
+        objTitle
+      )
+        ? profile.interpretationDirectives[0]
+        : undefined);
+
+    const specificDirective = matchedDirective
+      ? `\nDIRECTIVE SPÉCIALE D'EXPLICATION LOGIQUE ADAPTÉE À LA DISCIPLINE (${profile.subjectLabel.toUpperCase()} — ${matchedDirective.title}) :
+Ne fais SURTOUT PAS de copier-coller brut du cours. Développe une LOGIQUE CLINIQUE ÉTAPE PAR ÉTAPE propre à ${profile.subjectLabel} pour guider l'étudiant :
+${matchedDirective.steps.map((s) => `- ${s}`).join("\n")}
 Reste limpide, logique, structuré et synthétique (environ 100 à 135 mots).`
       : "";
 
-    const systemPrompt = `Tu es le Rédacteur Médical Synthétique DawJang pour le cours « ${title} » (${subject}).
+    const systemPrompt = `Tu es le Rédacteur Médical Synthétique DawJang (${profile.specialistPersona}) pour le cours « ${title} » (${profile.subjectLabel}).
 MISSION EXCLUSIVE DE CETTE PASSE (${objNum} / ${totalObjs}) :
-Rédige une section CLAIRE, LOGIQUE ET CONDENSÉE pour :
+Rédige une section CLAIRE, LOGIQUE ET CONDENSÉE 100 % adaptée à la spécialité (${profile.subjectLabel}) pour :
 **Objectif ${objNum} : ${objTitle}**
 ${specificDirective}
 
+AXES CLÉS À PRIVILÉGIER EN ${profile.subjectLabel.toUpperCase()} :
+${profile.examFocusAxes.map((ax) => `- ${ax}`).join("\n")}
+
 RÈGLES D'OR STRICTES (BUDGET DE 80 À 135 MOTS POUR CET OBJECTIF) :
-1. PÉDAGOGIE LOGIQUE : Pour l'interprétation d'un hémogramme ou bilan, explique à l'étudiant la logique pas à pas (taille VGM, couleur CCMH/TCMH, réticulocytes, qualification globale) plutôt qu'un copier-coller brut.
-2. DÉFINITION : Si cet objectif est une définition, donne la définition officielle et les fausses anémies (hémodilution).
-3. TRIADES & SIGNES CARDINAUX : Cite la triade et les signes clés nettement sans dilution.
-4. ÉLÉMENTS À ÉVITER / DÉCLENCHANTS : Liste à puces brève et percutante.
-5. TRAITEMENT : Buts, seuils d'urgence et posologies/durées de recharge des réserves.
-6. ZÉRO INTRO / ZÉRO ROBOTIQUE : N'écris jamais "Voici la rédaction...", "L'anémie est définie...". Attaque directement le contenu clinique.
+1. PÉDAGOGIE LOGIQUE ADAPTATIVE : Explique la démarche d'analyse et d'interprétation (sémiologique, anatomo-radiologique, biologique ou thérapeutique) propre à ce cours précis de ${profile.subjectLabel}, sans jamais importer de critères d'une autre matière.
+2. DÉFINITION & CLASSIFICATIONS : Si cet objectif porte sur la définition ou une classification, donne la définition officielle, les stades/types exacts et les pièges ou diagnostics différentiels cités dans le support.
+3. SIGNES CARDINAUX & COMPLICATIONS : Cite les signes clés, scores, lésions associées ou urgences vitales/fonctionnelles nettement sans dilution.
+4. ÉLÉMENTS À ÉVITER / CONTRE-INDICATIONS : Liste à puces brève et percutante.
+5. TRAITEMENT / PRISE EN CHARGE : Buts, indications (orthopédique/chirurgicale ou médicamenteuse selon la spécialité), gestes, molécules/posologies et surveillance.
+6. ZÉRO INTRO / ZÉRO ROBOTIQUE : N'écris jamais "Voici la rédaction...", "Cette pathologie est définie...". Attaque directement le contenu clinique.
 7. FORMATAGE :
    - Commence OBLIGATOIREMENT par le titre exact :
      ## Objectif ${objNum} : ${objTitle}
@@ -356,18 +261,24 @@ Rédige maintenant l'intégralité de la section :
 
     // Jusqu'à 4 tentatives avec attente progressive (anti rate-limit / coupure réseau)
     let aiResponse: string | null = null;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      if (attempt > 0) await sleep(1500 * attempt);
-      try {
-        aiResponse = await callGeminiAcademicEngine(
-          systemPrompt,
-          userPrompt,
-          attempt === 0 ? 0.15 : 0.25
-        );
-      } catch {
-        aiResponse = null;
+    if (!abortAiDueToAuthOrPlan) {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt > 0) await sleep(1500 * attempt);
+        try {
+          aiResponse = await callGeminiAcademicEngine(
+            systemPrompt,
+            userPrompt,
+            attempt === 0 ? 0.15 : 0.25
+          );
+        } catch {
+          aiResponse = null;
+        }
+        if (aiResponse && aiResponse.trim().length >= 90) break;
+        if (isAcademicEngineAuthOrPlanError()) {
+          abortAiDueToAuthOrPlan = true;
+          break;
+        }
       }
-      if (aiResponse && aiResponse.trim().length >= 90) break;
     }
 
     // Continuation automatique si la réponse semble coupée en plein milieu
@@ -385,14 +296,22 @@ Rédige maintenant l'intégralité de la section :
     }
 
     // Petite pause entre deux objectifs pour éviter le blocage du quota
-    if (i < totalObjs - 1) await sleep(700);
+    if (!abortAiDueToAuthOrPlan && i < totalObjs - 1) await sleep(700);
 
     if (aiResponse && aiResponse.trim().length >= 90) {
       sections.push(normalizeSingleObjectiveMarkdown(aiResponse, objNum, objTitle));
     } else {
       failedObjectives.push(objNum);
       sections.push(
-        buildFallbackObjectiveSection(objTitle, objNum, totalObjs, cleanedCourse)
+        buildFallbackObjectiveSection(
+          objTitle,
+          objNum,
+          totalObjs,
+          cleanedCourse,
+          title,
+          effectiveObjectives,
+          usedFallbackSlideIndices
+        )
       );
     }
   }
@@ -442,7 +361,8 @@ export default function GenerateSummary() {
 
   // Données du cours
   const [newTitle, setNewTitle] = useState("");
-  const [newSubject, setNewSubject] = useState("Hématologie");
+  const [newSubject, setNewSubject] = useState("Auto-détection selon le cours");
+  const [isCustomSubjectMode, setIsCustomSubjectMode] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [uploadedCourseFile, setUploadedCourseFile] = useState<File | null>(null);
   const [uploadedRawText, setUploadedRawText] = useState("");
@@ -618,11 +538,22 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
       if (rawShortcut) {
         const shortcutCourse = JSON.parse(rawShortcut) as StoredCourse;
         if (shortcutCourse && shortcutCourse.content) {
-          setNewTitle(shortcutCourse.title || "Synthèse de cours");
-          setNewSubject(shortcutCourse.subject || "Hématologie");
           const cleaned = repairMedicalFormulasInText(
             cleanMedicalSourceText(shortcutCourse.content)
           );
+          const resolvedProfile = inferDisciplineProfile({
+            courseTitle: shortcutCourse.title || "",
+            courseText: cleaned,
+            subjectHint: shortcutCourse.subject || "",
+            isExplicitSubjectChoice: Boolean(
+              shortcutCourse.subject &&
+                shortcutCourse.subject !== "Hématologie" &&
+                !/^(m[eé]decine|g[eé]n[eé]ral)/i.test(shortcutCourse.subject.trim())
+            ),
+          });
+          setNewTitle(shortcutCourse.title || "Synthèse de cours");
+          setIsCustomSubjectMode(false);
+          setNewSubject(resolvedProfile.subjectLabel || "Auto-détection selon le cours");
           setUploadedRawText(cleaned);
           setUploadedFileName(`${shortcutCourse.title} (Bibliothèque)`);
           setSelectedLibraryCourseId(shortcutCourse.id);
@@ -639,9 +570,20 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
     if (courseIdParam && libraryCourses.length > 0) {
       const found = libraryCourses.find((c) => c.id === courseIdParam);
       if (found) {
-        setNewTitle(found.title);
-        setNewSubject(found.subject || "Hématologie");
         const cleaned = repairMedicalFormulasInText(cleanMedicalSourceText(found.content));
+        const resolvedProfile = inferDisciplineProfile({
+          courseTitle: found.title || "",
+          courseText: cleaned,
+          subjectHint: found.subject || "",
+          isExplicitSubjectChoice: Boolean(
+            found.subject &&
+              found.subject !== "Hématologie" &&
+              !/^(m[eé]decine|g[eé]n[eé]ral)/i.test(found.subject.trim())
+          ),
+        });
+        setNewTitle(found.title);
+        setIsCustomSubjectMode(false);
+        setNewSubject(resolvedProfile.subjectLabel || "Auto-détection selon le cours");
         setUploadedRawText(cleaned);
         setUploadedFileName(`${found.title} (Bibliothèque)`);
         setSelectedLibraryCourseId(found.id);
@@ -667,18 +609,29 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
     );
   }, [libraryCourses, librarySearchQuery]);
 
-  // Lecture d'un fichier uploadé
+  // Lecture d'un fichier uploadé (réinitialise proprement les métadonnées/objectifs du cours précédent)
   const processSelectedFile = async (file: File) => {
+    const cleanedTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
     setUploadedCourseFile(file);
+    setSelectedLibraryCourseId(null);
     setUploadedFileName(file.name);
-    if (!newTitle.trim()) {
-      setNewTitle(file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " "));
-    }
+    setNewTitle(cleanedTitle);
+    setObjectivesList([]);
+    setRawObjectivesSlideSnippet(null);
+    setHadExplicitObjectivesInCourse(null);
 
     const result = await readFile(file);
     if (result.success && result.content) {
       const cleaned = repairMedicalFormulasInText(cleanMedicalSourceText(result.content));
       setUploadedRawText(cleaned);
+
+      const detectedSubject = detectSubjectFromCourse(cleanedTitle, cleaned);
+      setIsCustomSubjectMode(false);
+      setNewSubject(
+        detectedSubject && detectedSubject !== "Médecine Clinique"
+          ? detectedSubject
+          : "Auto-détection selon le cours"
+      );
 
       scanCourseForObjectives(cleaned);
       const detected = extractObjectivesFromCourseText(cleaned);
@@ -688,7 +641,9 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
         description: `${file.name} (${cleaned
           .split(/\s+/)
           .filter(Boolean)
-          .length.toLocaleString("fr-FR")} mots${
+          .length.toLocaleString("fr-FR")} mots · Matière : ${
+          detectedSubject !== "Médecine Clinique" ? detectedSubject : "Auto-détection"
+        }${
           detected.length > 0
             ? ` · ${detected.length} objectifs extraits de la diapositive`
             : " · Vérification des objectifs en cours"
@@ -722,16 +677,28 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
 
   const handleSelectLibraryCourse = (course: StoredCourse) => {
     setSelectedLibraryCourseId(course.id);
+    setUploadedCourseFile(null);
     setNewTitle(course.title);
-    if (course.subject) setNewSubject(course.subject);
     const cleaned = repairMedicalFormulasInText(cleanMedicalSourceText(course.content));
+    const resolvedProfile = inferDisciplineProfile({
+      courseTitle: course.title,
+      courseText: cleaned,
+      subjectHint: course.subject || "",
+      isExplicitSubjectChoice: Boolean(
+        course.subject &&
+          course.subject !== "Hématologie" &&
+          !/^(m[eé]decine|g[eé]n[eé]ral)/i.test(course.subject.trim())
+      ),
+    });
+    setIsCustomSubjectMode(false);
+    setNewSubject(resolvedProfile.subjectLabel || "Auto-détection selon le cours");
     setUploadedRawText(cleaned);
     setUploadedFileName(`${course.title} (Bibliothèque)`);
     scanCourseForObjectives(cleaned);
 
     toast({
       title: "Cours sélectionné depuis la Bibliothèque",
-      description: `« ${course.title} » est prêt à être synthétisé.`,
+      description: `« ${course.title} » (${resolvedProfile.subjectLabel}) est prêt à être synthétisé.`,
     });
   };
 
@@ -796,13 +763,17 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
       }
 
       if (proposed.length === 0) {
-        proposed = [
-          `Définir ${newTitle || "la pathologie"}, ses critères biologiques et ses constantes de référence`,
-          "Expliquer la physiopathologie et les mécanismes étiopathogéniques du cours",
-          "Identifier le tableau clinique typique, les formes cliniques et le bilan paraclinique",
-          "Établir le diagnostic positif, différentiel et étiologique complet",
-          "Maîtriser la prise en charge thérapeutique (molécules, posologies exactes, surveillance et contre-indications)",
-        ];
+        const adaptiveProfile = inferDisciplineProfile({
+          courseTitle: newTitle || "Pathologie médicale",
+          courseText: uploadedRawText,
+          subjectHint: newSubject,
+          isExplicitSubjectChoice: Boolean(
+            newSubject &&
+              newSubject !== "Hématologie" &&
+              !/^(auto|m[eé]decine|discipline|g[eé]n[eé]ral)/i.test(newSubject.trim())
+          ),
+        });
+        proposed = adaptiveProfile.fallbackObjectives(newTitle || "cette pathologie");
       }
 
       setObjectivesList(proposed);
@@ -844,18 +815,21 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
     const libCourse = options?.libraryCourse || null;
     if (courseFile) {
       setUploadedCourseFile(courseFile);
+      setSelectedLibraryCourseId(null);
       setUploadedFileName(courseFile.name);
     } else if (libCourse) {
+      setUploadedCourseFile(null);
+      setSelectedLibraryCourseId(libCourse.id);
       setUploadedFileName(libCourse.title);
     }
 
-    const effectiveSubj = options?.customSubject || newSubject;
-    if (options?.customSubject) setNewSubject(options.customSubject);
+    const rawSubjectHint = (options?.customSubject ?? newSubject ?? "").trim();
 
     const title =
-      (options?.customTitle || newTitle).trim() ||
+      (options?.customTitle || "").trim() ||
       (courseFile ? courseFile.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ") : "") ||
       libCourse?.title ||
+      newTitle.trim() ||
       "Synthèse Médicale Protocole Argon";
     setNewTitle(title);
 
@@ -882,6 +856,28 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
 
       setUploadedRawText(courseText);
 
+      // Recalibre la matière et les objectifs UNIQUEMENT depuis le nouveau cours (zéro fuite d'une matière précédente)
+      const isExplicitChoice =
+        Boolean(rawSubjectHint) &&
+        rawSubjectHint !== "Hématologie" &&
+        !/^(auto|m[eé]decine|discipline|g[eé]n[eé]ral)/i.test(rawSubjectHint);
+      const resolvedProfile = inferDisciplineProfile({
+        courseTitle: title,
+        courseText,
+        subjectHint: rawSubjectHint,
+        isExplicitSubjectChoice: isExplicitChoice,
+      });
+      const effectiveSubj = isExplicitChoice
+        ? rawSubjectHint
+        : resolvedProfile.subjectLabel || "Médecine Clinique";
+      setIsCustomSubjectMode(false);
+      setNewSubject(effectiveSubj);
+
+      const extractedFromCurrentCourse = extractObjectivesFromCourseText(courseText);
+      setObjectivesList(extractedFromCurrentCourse);
+      setHadExplicitObjectivesInCourse(extractedFromCurrentCourse.length > 0 ? true : false);
+      setRawObjectivesSlideSnippet(extractRawObjectivesSlideSnippet(courseText));
+
       const parsedExams: UploadedExamInput[] = [];
       for (let i = 0; i < examFiles.length; i++) {
         const ef = examFiles[i];
@@ -901,7 +897,8 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
         courseText,
         examFiles: parsedExams,
         forcedMatiere: effectiveSubj,
-        predefinedObjectives: objectivesList.length > 0 ? objectivesList : undefined,
+        predefinedObjectives:
+          extractedFromCurrentCourse.length > 0 ? extractedFromCurrentCourse : undefined,
         onProgress: (step, total, label) => {
           setCurrentStepIndex(step);
           setTotalStepsCount(total);
@@ -993,23 +990,35 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
     const rawCourse = cleanMedicalSourceText(uploadedRawText.trim());
     const title = newTitle.trim() || "Synthèse Médicale Universitaire";
 
-    // Si aucun objectif n'est encore saisi, initialiser les 5 objectifs académiques types
+    const trimmedHint = newSubject.trim();
+    const isExplicitHint =
+      Boolean(trimmedHint) &&
+      trimmedHint !== "Hématologie" &&
+      !/^(auto|m[eé]decine|discipline|g[eé]n[eé]ral)/i.test(trimmedHint);
+    const resolvedProfile = inferDisciplineProfile({
+      courseTitle: title,
+      courseText: rawCourse,
+      subjectHint: trimmedHint,
+      isExplicitSubjectChoice: isExplicitHint,
+    });
+    const resolvedSubject = isExplicitHint
+      ? trimmedHint
+      : resolvedProfile.subjectLabel || "Médecine Clinique";
+    if (resolvedSubject !== newSubject && !isExplicitHint) {
+      setNewSubject(resolvedSubject);
+    }
+
+    // Si aucun objectif n'est encore saisi, initialiser les 5 objectifs adaptatifs propres à la spécialité du cours
     let effectiveObjectives = [...objectivesList];
     if (selectedMode === "objectives_verbatim" && effectiveObjectives.length === 0) {
-      effectiveObjectives = [
-        `Définir les critères diagnostiques et seuils biologiques de référence relatifs à « ${title} »`,
-        `Expliquer la physiopathologie et la démarche d'interprétation des examens de première intention`,
-        `Établir le diagnostic positif, différentiel et la classification étiologique (centrale vs périphérique)`,
-        `Identifier les signes de gravité immédiate et les complications à dépister`,
-        `Planifier la prise en charge thérapeutique complète (traitements de 1re intention, posologies et surveillance)`,
-      ];
+      effectiveObjectives = resolvedProfile.fallbackObjectives(title);
       setObjectivesList(effectiveObjectives);
     }
 
     const effectiveCourseText =
       rawCourse.length >= 25
         ? rawCourse
-        : `Cours médical universitaire sur : ${title} (${newSubject}).\nObjectifs pédagogiques officiels de la faculté :\n${effectiveObjectives
+        : `Cours médical universitaire sur : ${title} (${resolvedSubject}).\nObjectifs pédagogiques officiels de la faculté :\n${effectiveObjectives
             .map((o, idx) => `${idx + 1}. ${o}`)
             .join("\n")}`;
 
@@ -1056,7 +1065,7 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
           courseTitle: title,
           courseText: effectiveCourseText,
           examFiles: parsedExams,
-          forcedMatiere: newSubject,
+          forcedMatiere: resolvedSubject,
           predefinedObjectives: effectiveObjectives.length > 0 ? effectiveObjectives : undefined,
           onProgress: (step, total, label) => {
             setCurrentStepIndex(step);
@@ -1112,10 +1121,38 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
           }
         }
 
+        if (!generatedMarkdown && !isAcademicEngineAuthOrPlanError()) {
+          try {
+            const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
+              "generate-summary",
+              {
+                body: {
+                  mode: "objectives",
+                  type: "objectives",
+                  title,
+                  content: effectiveCourseText.slice(0, 120000),
+                  synthesisConfig: {
+                    doctrine: "objectives_verbatim",
+                    objectives: effectiveObjectives,
+                  },
+                },
+              }
+            );
+            if (!edgeErr && typeof edgeData?.summary === "string" && edgeData.summary.trim().length > 200) {
+              generatedMarkdown = edgeData.summary.trim();
+            }
+          } catch (edgeFallbackErr) {
+            console.warn(
+              "[GenerateSummary] Repli generate-summary indisponible :",
+              edgeFallbackErr
+            );
+          }
+        }
+
         if (!generatedMarkdown) {
           generatedMarkdown = await generateExhaustiveObjectivesSummary({
             title,
-            subject: newSubject,
+            subject: resolvedSubject,
             courseText: effectiveCourseText,
             objectives: effectiveObjectives,
             onProgress: (currentObj, totalObjs, objTitle) => {
@@ -1165,7 +1202,7 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
               content: finalMarkdown,
               summary_type: selectedMode,
               metadata: {
-                subject: newSubject,
+                subject: resolvedSubject,
                 doctrine: selectedMode,
                 doctrineLabel,
                 objectives: objectivesList,
@@ -1183,7 +1220,7 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
       const createdItem: EditorSummaryItem = {
         id: insertedRow?.id || `sum-${Date.now()}`,
         title,
-        subject: newSubject,
+        subject: resolvedSubject,
         updatedAt: "Aujourd'hui",
         wordCount: wc,
         doctrineLabel,
@@ -1223,7 +1260,9 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
       if (selectedMode === "objectives_verbatim" && lastFailedObjectives.length > 0) {
         toast({
           title: "Certains objectifs n'ont pas pu être rédigés par l'IA",
-          description: `Objectif(s) ${lastFailedObjectives.join(", ")} : service IA indisponible ou quota atteint (version extraite du cours insérée). Relancez la synthèse plus tard.`,
+          description: `Objectif(s) ${lastFailedObjectives.join(", ")} : ${
+            lastAcademicEngineError || "service IA indisponible ou quota atteint"
+          } (extraction structurée du cours insérée).`,
           variant: "destructive",
         });
       }
@@ -1640,20 +1679,81 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-[#52525B] dark:text-zinc-400">
-                    Discipline / Unité d&apos;Enseignement
-                  </label>
-                  <select
-                    value={newSubject}
-                    onChange={(e) => setNewSubject(e.target.value)}
-                    className="w-full h-10 rounded-xl border border-[#E5DEC9] dark:border-zinc-700 bg-[#FAF8F5] dark:bg-zinc-800 px-3 text-xs text-[#18181B] dark:text-zinc-100 focus:outline-none focus:border-[#D96B43]"
-                  >
-                    {SUBJECT_FILTERS.filter((s) => s !== "Tous").map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-[11px] font-semibold text-[#52525B] dark:text-zinc-400">
+                      Discipline / Unité d&apos;Enseignement
+                    </label>
+                    {newSubject !== "Auto-détection selon le cours" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCustomSubjectMode(false);
+                          const reDetected = uploadedRawText.trim() || newTitle.trim()
+                            ? detectSubjectFromCourse(newTitle, uploadedRawText)
+                            : "";
+                          setNewSubject(
+                            reDetected && reDetected !== "Médecine Clinique"
+                              ? reDetected
+                              : "Auto-détection selon le cours"
+                          );
+                        }}
+                        className="text-[10px] font-semibold text-[#D96B43] hover:underline"
+                      >
+                        Re-détecter
+                      </button>
+                    )}
+                  </div>
+                  {isCustomSubjectMode ||
+                  (Boolean(newSubject) &&
+                    !SUBJECT_FILTERS.includes(newSubject) &&
+                    newSubject !== "Auto-détection selon le cours") ? (
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        value={newSubject === "Auto-détection selon le cours" ? "" : newSubject}
+                        onChange={(e) => setNewSubject(e.target.value)}
+                        placeholder="Ex : Traumatologie, Rhumatologie..."
+                        className="h-10 text-xs rounded-xl border-[#E5DEC9] dark:border-zinc-700 bg-[#FAF8F5] dark:bg-zinc-800"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setIsCustomSubjectMode(false);
+                          setNewSubject("Auto-détection selon le cours");
+                        }}
+                        className="h-10 rounded-xl text-xs"
+                      >
+                        Liste
+                      </Button>
+                    </div>
+                  ) : (
+                    <select
+                      value={
+                        SUBJECT_FILTERS.includes(newSubject)
+                          ? newSubject
+                          : "Auto-détection selon le cours"
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "__CUSTOM__") {
+                          setIsCustomSubjectMode(true);
+                          setNewSubject("");
+                        } else {
+                          setIsCustomSubjectMode(false);
+                          setNewSubject(val);
+                        }
+                      }}
+                      className="w-full h-10 rounded-xl border border-[#E5DEC9] dark:border-zinc-700 bg-[#FAF8F5] dark:bg-zinc-800 px-3 text-xs text-[#18181B] dark:text-zinc-100 focus:outline-none focus:border-[#D96B43]"
+                    >
+                      {SUBJECT_FILTERS.filter((s) => s !== "Tous").map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                      <option value="__CUSTOM__">+ Autre matière / saisie libre...</option>
+                    </select>
+                  )}
                 </div>
               </div>
 

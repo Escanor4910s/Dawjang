@@ -93,7 +93,7 @@ export function normalizeQuestionForDisplay(rawQ: any, index: number, deckTitle?
         : opt?.text || opt?.proposition || opt?.assertion || opt?.label || opt?.content || "";
 
     const cleanText = sanitizeQcmOptionText(
-      String(rawText).replace(/^[A-F][\.\)\-\s]+/i, "").trim()
+      String(rawText).replace(/^[A-F][.)\-\s]+/i, "").trim()
     );
 
     const isCorrect =

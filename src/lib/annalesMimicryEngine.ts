@@ -28,7 +28,7 @@ export function cleanMedicalCourseTitle(title: string): string {
     .replace(/\s*\(\d+\)(?:\.pdf)?$/i, "") // "(7).pdf"
     .replace(/\.pdf$/i, "")
     .replace(/\b20\d\d(?:[-/]\d{2,4})?\b/g, "") // "2026", "2025-2026"
-    .replace(/[_\-]+/g, " ")
+    .replace(/[_-]+/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
 
@@ -50,7 +50,7 @@ export function sanitizeQcmOptionText(text: string): string {
   let s = String(text).trim();
 
   // 1. Enlever la lettre ou puce en début : "A.", "B)", "1.", "- ", "▪ "
-  s = s.replace(/^[A-E][\.\)\-\s]+/i, "");
+  s = s.replace(/^[A-E][.)\-\s]+/i, "");
   s = s.replace(/^[-•*▪▸\d.)\s]+/, "");
 
   // 2. Nettoyer les faux suffixes répétitifs ou absurdes inventés par les modèles
@@ -849,17 +849,17 @@ function coerceQuestionToTargetFormat(
     ];
     const chosenCombo = comboKeys[(qIdx + sessionNumber) % comboKeys.length];
 
-    let groupStatements =
+    const groupStatements =
       Array.isArray(q.groupStatements) && q.groupStatements.length >= 4
         ? q.groupStatements.slice(0, 5).map((s, idx) => ({
             num: idx + 1,
-            text: String(s.text || pickFact(idx)).replace(/^[1-5][\.\)\-\s]+/, "").trim(),
+            text: String(s.text || pickFact(idx)).replace(/^[1-5][.)\-\s]+/, "").trim(),
             isTrue: chosenCombo.trueNums.includes(idx + 1),
           }))
         : [1, 2, 3, 4, 5].map((num, idx) => {
             const shouldBeTrue = chosenCombo.trueNums.includes(num);
             const rawOpt = baseOptions[idx];
-            let text =
+            const text =
               rawOpt &&
               rawOpt.text.length > 20 &&
               !/combinaison|exactes uniquement|assertions sont/i.test(rawOpt.text)
@@ -869,7 +869,7 @@ function coerceQuestionToTargetFormat(
                 : mutateFactIntoSubtleFalsehood(pickFact(idx), qIdx + idx).falseText;
             return {
               num,
-              text: text.replace(/^[1-5A-E][\.\)\-\s]+/, "").trim(),
+              text: text.replace(/^[1-5A-E][.)\-\s]+/, "").trim(),
               isTrue: shouldBeTrue,
             };
           });
@@ -1015,7 +1015,7 @@ function coerceQuestionToTargetFormat(
     ];
     const correctDerangement = derangements[(qIdx + sessionNumber) % derangements.length];
 
-    let associationPairs =
+    const associationPairs =
       Array.isArray(q.associationPairs) && q.associationPairs.length >= 3
         ? q.associationPairs.slice(0, 4).map((p, idx) => ({
             leftIndex: idx + 1,
@@ -1377,7 +1377,7 @@ export function sanitizeAndValidateQuestions(
               : opt?.text || opt?.proposition || opt?.assertion || opt?.label || "";
 
           rawText = String(rawText)
-            .replace(/^[A-E][\.\)\-\s]+/i, "")
+            .replace(/^[A-E][.)\-\s]+/i, "")
             .trim();
 
           const isPlaceholder =

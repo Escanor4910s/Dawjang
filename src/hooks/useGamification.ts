@@ -437,6 +437,7 @@ export const useGamification = () => {
       quizzesCompleted: 84,
       flashcardsReviewed: 145,
       perfectQuizzes: 6,
+      credits: getStoredUserStats().credits,
       isPremium: true,
       planTier: "ELITE",
       daysRemaining: 180,
@@ -472,57 +473,136 @@ export interface UserStatsState {
   nextLevelXp: number;
   totalXp: number;
   currentStreak: number;
+  streak: number;
   longestStreak: number;
   totalQuizzesCompleted: number;
   quizzesCompleted: number;
   flashcardsReviewed: number;
   perfectQuizzes: number;
+  credits: number;
   isPremium?: boolean;
   planTier?: string;
-  daysRemaining?: number;
+  daysRemaining: number;
   rankTitle?: string;
   [key: string]: any;
 }
 
+export const DEFAULT_USER_STATS: UserStatsState = {
+  level: 9,
+  xp: 21540,
+  nextLevelXp: 26500,
+  totalXp: 21540,
+  currentStreak: 7,
+  streak: 7,
+  longestStreak: 14,
+  totalQuizzesCompleted: 84,
+  quizzesCompleted: 84,
+  flashcardsReviewed: 145,
+  perfectQuizzes: 6,
+  credits: 600,
+  isPremium: true,
+  planTier: "ELITE",
+  daysRemaining: 180,
+  rankTitle: "Master 1 • Commandant",
+};
+
+const toFiniteNumber = (value: unknown, fallback: number): number => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+};
+
+/**
+ * Normalise un état de statistiques stocké afin qu'aucun champ numérique
+ * requis (crédits, série, jours restants, XP) ne soit indéfini ou NaN.
+ */
+export const normalizeUserStats = (
+  raw?: Partial<UserStatsState> | null
+): UserStatsState => {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const streak = Math.max(
+    0,
+    toFiniteNumber(
+      source.streak ?? source.currentStreak,
+      DEFAULT_USER_STATS.streak
+    )
+  );
+  const xp = Math.max(0, toFiniteNumber(source.xp ?? source.totalXp, DEFAULT_USER_STATS.xp));
+  const totalXp = Math.max(
+    xp,
+    toFiniteNumber(source.totalXp ?? source.xp, DEFAULT_USER_STATS.totalXp)
+  );
+
+  return {
+    ...DEFAULT_USER_STATS,
+    ...source,
+    level: Math.max(1, toFiniteNumber(source.level, DEFAULT_USER_STATS.level)),
+    xp,
+    totalXp,
+    nextLevelXp: Math.max(
+      1,
+      toFiniteNumber(source.nextLevelXp, DEFAULT_USER_STATS.nextLevelXp)
+    ),
+    currentStreak: streak,
+    streak,
+    longestStreak: Math.max(
+      streak,
+      toFiniteNumber(source.longestStreak, DEFAULT_USER_STATS.longestStreak)
+    ),
+    totalQuizzesCompleted: Math.max(
+      0,
+      toFiniteNumber(
+        source.totalQuizzesCompleted ?? source.quizzesCompleted,
+        DEFAULT_USER_STATS.totalQuizzesCompleted
+      )
+    ),
+    quizzesCompleted: Math.max(
+      0,
+      toFiniteNumber(
+        source.quizzesCompleted ?? source.totalQuizzesCompleted,
+        DEFAULT_USER_STATS.quizzesCompleted
+      )
+    ),
+    flashcardsReviewed: Math.max(
+      0,
+      toFiniteNumber(
+        source.flashcardsReviewed,
+        DEFAULT_USER_STATS.flashcardsReviewed
+      )
+    ),
+    perfectQuizzes: Math.max(
+      0,
+      toFiniteNumber(source.perfectQuizzes, DEFAULT_USER_STATS.perfectQuizzes)
+    ),
+    credits: Math.max(
+      0,
+      toFiniteNumber(source.credits, DEFAULT_USER_STATS.credits)
+    ),
+    daysRemaining: Math.max(
+      0,
+      toFiniteNumber(source.daysRemaining, DEFAULT_USER_STATS.daysRemaining)
+    ),
+    rankTitle:
+      typeof source.rankTitle === "string" && source.rankTitle.trim()
+        ? source.rankTitle
+        : DEFAULT_USER_STATS.rankTitle,
+  };
+};
+
 export const getStoredUserStats = (): UserStatsState => {
   if (typeof window === "undefined") {
-    return {
-      level: 9,
-      xp: 21540,
-      nextLevelXp: 26500,
-      totalXp: 21540,
-      currentStreak: 7,
-      longestStreak: 14,
-      totalQuizzesCompleted: 84,
-      quizzesCompleted: 84,
-      flashcardsReviewed: 145,
-      perfectQuizzes: 6,
-      isPremium: true,
-      planTier: "ELITE",
-      daysRemaining: 180,
-      rankTitle: "Master 1 • Commandant",
-    };
+    return { ...DEFAULT_USER_STATS };
   }
   try {
     const raw = localStorage.getItem(USER_GAMIFICATION_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return {
-    level: 9,
-    xp: 21540,
-    nextLevelXp: 26500,
-    totalXp: 21540,
-    currentStreak: 7,
-    longestStreak: 14,
-    totalQuizzesCompleted: 84,
-    quizzesCompleted: 84,
-    flashcardsReviewed: 145,
-    perfectQuizzes: 6,
-    isPremium: true,
-    planTier: "ELITE",
-    daysRemaining: 180,
-    rankTitle: "Master 1 • Commandant",
-  };
+    if (raw) {
+      return normalizeUserStats(JSON.parse(raw));
+    }
+  } catch { /* Ignore la progression locale illisible. */ }
+  return { ...DEFAULT_USER_STATS };
 };
 
 export interface XpGainEventDetail {
@@ -555,12 +635,11 @@ export const grantDawJangXP = (
 ) => {
   if (typeof window === "undefined" || !amount || amount <= 0) return;
   try {
-    const raw = localStorage.getItem(USER_GAMIFICATION_KEY);
-    const stats: UserStatsState = raw ? JSON.parse(raw) : getStoredUserStats();
+    const stats = getStoredUserStats();
     stats.xp = (stats.xp || 0) + amount;
     stats.totalXp = (stats.totalXp || 0) + amount;
     localStorage.setItem(USER_GAMIFICATION_KEY, JSON.stringify(stats));
-  } catch {}
+  } catch { /* Ignore la progression locale illisible. */ }
   window.dispatchEvent(
     new CustomEvent("dawjang:xp-gain", {
       detail: { amount, reason, source, timestamp: Date.now() },

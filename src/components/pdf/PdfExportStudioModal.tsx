@@ -32,10 +32,9 @@ import {
 } from "@/utils/MedicalDocumentPDF";
 import { exportSummaryToPDF } from "@/utils/pdfEngine";
 import { exportQuizToPDF } from "@/utils/pdfExport";
-import { exportSummaryToWord } from "@/utils/wordEngine";
 import { exportArgonSummaryToPDF } from "@/utils/argonPdfExport";
 import type { QuizData } from "@/utils/QuizPDF";
-import { getSavedStudentProfile } from "@/pages/Settings";
+import { getSavedStudentProfile } from "@/lib/studentProfile";
 import { cn } from "@/lib/utils";
 
 export interface PdfExportStudioModalProps {
@@ -142,6 +141,9 @@ export const PdfExportStudioModal: React.FC<PdfExportStudioModalProps> = ({
             title,
             content: htmlOrMarkdownContent,
             summaryType: "objectives_audit",
+            subject,
+            facultyName,
+            authorName,
             createdAt: new Date().toISOString(),
           });
         } else {
@@ -185,6 +187,7 @@ export const PdfExportStudioModal: React.FC<PdfExportStudioModalProps> = ({
         .replace(/<p[^>]*>(.*?)<\/p>/gi, "\n$1\n")
         .replace(/<(strong|b)[^>]*>(.*?)<\/\1>/gi, "**$2**")
         .replace(/<[^>]+>/g, "");
+      const { exportSummaryToWord } = await import("@/utils/wordEngine");
       await exportSummaryToWord(title, plainOrMd);
     } finally {
       setIsExportingWord(false);

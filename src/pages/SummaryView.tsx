@@ -1,19 +1,21 @@
 // src/pages/SummaryView.tsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { lazy, Suspense, useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EditorView, type EditorSummaryItem } from "@/components/synthesis/EditorView";
-import { PdfExportStudioModal } from "@/components/pdf/PdfExportStudioModal";
-import { exportSummaryToWord } from "@/utils/wordEngine";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { untypedTable } from "@/lib/untypedDb";
 import { cleanAndStructureMarkdown } from "@/utils/formatters";
 import { sanitizeAndFormatForDawJang } from "@/lib/coPilotSummaryEngine";
 import { DOCTRINE_LABELS, type Doctrine } from "@/config/doctrineConfig";
-import { getLocalSummaries, saveLocalSummaries } from "@/pages/GenerateSummary";
+import { getLocalSummaries, saveLocalSummaries } from "@/lib/summaryStorage";
 import { unTombstoneEntity } from "@/lib/syncEngine";
+
+const PdfExportStudioModal = lazy(() => import("@/components/pdf/PdfExportStudioModal").then((module) => ({
+  default: module.PdfExportStudioModal,
+})));
 
 export default function SummaryView() {
   const { id } = useParams<{ id: string }>();
@@ -173,6 +175,7 @@ export default function SummaryView() {
   });
   const [loading, setLoading] = useState<boolean>(!summary);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [hasOpenedPdfStudio, setHasOpenedPdfStudio] = useState(false);
 
   const loadSummaryById = useCallback(async () => {
     if (!id) {
@@ -290,6 +293,7 @@ export default function SummaryView() {
 
   const handleExportWord = async () => {
     if (!summary) return;
+    const { exportSummaryToWord } = await import("@/utils/wordEngine");
     await exportSummaryToWord(summary.title, summary.htmlContent);
     toast({
       title: "Export Word (.docx) réussi",
@@ -346,20 +350,27 @@ export default function SummaryView() {
         summary={summary}
         onBack={() => navigate("/summaries")}
         onSave={handleSaveSummary}
-        onExportPDF={() => setIsPdfModalOpen(true)}
+        onExportPDF={() => {
+          setHasOpenedPdfStudio(true);
+          setIsPdfModalOpen(true);
+        }}
         onExportWord={handleExportWord}
         onRecalibrate={() => navigate("/summaries/new")}
       />
 
-      <PdfExportStudioModal
-        open={isPdfModalOpen}
-        onOpenChange={setIsPdfModalOpen}
-        mode="summary"
-        title={summary.title}
-        htmlOrMarkdownContent={summary.htmlContent}
-        subject={summary.subject}
-        architectureLabel={summary.doctrineLabel}
-      />
+      {hasOpenedPdfStudio && (
+        <Suspense fallback={<p role="status">Chargement du studio PDF...</p>}>
+          <PdfExportStudioModal
+            open={isPdfModalOpen}
+            onOpenChange={setIsPdfModalOpen}
+            mode="summary"
+            title={summary.title}
+            htmlOrMarkdownContent={summary.htmlContent}
+            subject={summary.subject}
+            architectureLabel={summary.doctrineLabel}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -38,12 +38,11 @@ import { permanentlyDeleteEntity, filterOutTombstoned } from "@/lib/syncEngine";
 import { cleanAndStructureMarkdown } from "@/utils/formatters";
 import { DOCTRINE_LABELS, type Doctrine } from "@/config/doctrineConfig";
 import { getSavedCourses, type StoredCourse } from "@/pages/Library";
-import {
-  getLocalSummaries,
-  saveLocalSummaries,
-  SUBJECT_FILTERS,
-} from "@/pages/GenerateSummary";
+import { SUBJECT_FILTERS, detectSubjectFromCourse } from "@/lib/disciplineProfileEngine";
+import { getLocalSummaries, saveLocalSummaries } from "@/lib/summaryStorage";
 import { exportArgonSummaryToPDF } from "@/utils/argonPdfExport";
+import { exportSummaryToPDF } from "@/utils/pdfEngine";
+import { getSavedStudentProfile } from "@/lib/studentProfile";
 
 export type SynthesisDoctrine =
   | "objectives_verbatim"
@@ -70,7 +69,7 @@ function buildCleanSummaryExcerpt(rawHtml: string): string {
     .replace(/^\[\s*(?:RAPPEL\s+CLINIQUE|R[ÈE]GLE\s+D['’]OR|AVERTISSEMENT|PI[ÈE]GE|[ÉE]TAPE)[^\]]*\]/gim, " ")
     .replace(/\|[^\n]+\|/g, " ")
     .replace(/==/g, "")
-    .replace(/[#*`>|•◦✓→\-]/g, " ")
+    .replace(/[#*`>|•◦✓→-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -277,22 +276,48 @@ export default function Summaries() {
     });
   };
 
-  const handleDirectPdfDownload = (item: EditorSummaryItem, e: React.MouseEvent) => {
+  const handleDirectPdfDownload = async (item: EditorSummaryItem, e: React.MouseEvent) => {
     e.stopPropagation();
     const isAudit =
       (item.doctrineLabel || "").toLowerCase().includes("argon") ||
       (item.doctrineLabel || "").toLowerCase().includes("audit") ||
       (item.htmlContent || "").includes("VOLET 2");
 
-    exportArgonSummaryToPDF({
-      title: item.title,
-      content: item.htmlContent,
-      summaryType: isAudit ? "objectives_audit" : "objectives_only",
-    });
+    const resolvedSubject =
+      (item.subject || "").trim() ||
+      detectSubjectFromCourse(item.title, item.htmlContent || "");
+    const profile = getSavedStudentProfile();
+    const facultyName =
+      profile.university?.split("—")[0]?.trim() ||
+      profile.faculty?.trim() ||
+      "Faculté de Médecine • Cursus Hospitalo-Universitaire";
+    const authorName =
+      profile.fullName?.trim() ||
+      [profile.studyLevel, resolvedSubject].filter(Boolean).join(" • ") ||
+      "Étudiant en Médecine";
+
+    if (isAudit) {
+      exportArgonSummaryToPDF({
+        title: item.title,
+        content: item.htmlContent,
+        summaryType: "objectives_audit",
+        subject: resolvedSubject,
+        facultyName,
+        authorName,
+      });
+    } else {
+      await exportSummaryToPDF(item.title, item.htmlContent, {
+        subject: resolvedSubject,
+        type: "Monographie de Synthèse",
+        architectureLabel: item.doctrineLabel || "Fidèle aux Objectifs",
+        authorName,
+        facultyName,
+      });
+    }
 
     toast({
-      title: "Export PDF lancé",
-      description: `Le fichier PDF « ${item.title} » a été généré à votre demande.`,
+      title: isAudit ? "PDF Synthèse Unifiée téléchargé" : "Monographie PDF téléchargée",
+      description: `« ${item.title} » (${resolvedSubject}) exporté avec succès.`,
     });
   };
 
@@ -308,7 +333,9 @@ export default function Summaries() {
       id: item.id,
       code: (item.subject || "COURS").slice(0, 8).toUpperCase(),
       title: item.title,
-      subject: item.subject || "Hématologie",
+      subject:
+        (item.subject || "").trim() ||
+        detectSubjectFromCourse(item.title, item.htmlContent || ""),
       updatedAt: item.updatedAt,
       wordCount: item.wordCount,
       content: item.htmlContent,

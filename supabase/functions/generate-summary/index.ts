@@ -3,7 +3,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.1";
 import { encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
-import { getUserPlanInfo } from "../_shared/plan-utils.ts";
+import { consumeDailyQuota, getUserPlanInfo } from "../_shared/plan-utils.ts";
 import { logDiagnostic } from "../_shared/ai-utils.ts";
 import { cleanSourceText, sourceStats, validateSummary, wc, type SummaryDoc } from "../_shared/summary-gate.ts";
 import {
@@ -25,7 +25,7 @@ const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 const MODEL = Deno.env.get("SUMMARY_MODEL") || "google/gemini-2.5-flash"; // qualité max : "google/gemini-2.5-pro"
-const ENFORCE_PLAN = false; // true = flash gratuit, objectives/harvard réservés au Premium
+const ENFORCE_PLAN = true;
 const BUCKET = "course-files";
 const DENSITY: Record<string, number> = { essential: 0.25, balanced: 0.35, detailed: 0.5 };
 const MODE_ALIAS: Record<string, "objectives" | "harvard" | "flash"> = {
@@ -183,19 +183,20 @@ serve(async (req: Request) => {
   let userId: string | null = null;
   try {
     const user = await getUserPlanInfo(req).catch(() => null);
+    if (!user) return json({ error: "Authentification requise." }, 401);
     const body = await req.json().catch(() => ({}));
-
-    // Protection des cours privés en base : authentification obligatoire si courseId fourni
-    if (body.courseId && !user) {
-      return json({ error: "Authentification requise pour charger un cours enregistré." }, 401);
-    }
-    userId = user?.userId ?? "guest_student";
+    userId = user.userId;
 
     const mode = MODE_ALIAS[String(body.mode ?? body.type ?? "objectives")] ?? "objectives";
     const ratio = DENSITY[String(body.density ?? "balanced")] ?? 0.35;
 
-    if (ENFORCE_PLAN && user && !user.isAdmin && mode !== "flash" && user.plan === "gratuit")
+    if (ENFORCE_PLAN && !user.isAdmin && mode !== "flash" && user.plan === "gratuit")
       return json({ error: "Accès refusé", message: "Ce type de fiche est réservé aux abonnés Premium.", upgradeRequired: true }, 403);
+
+    const quota = await consumeDailyQuota(user.userId, "summary", 1, user.plan);
+    if (!quota.allowed) {
+      return json({ error: "Limite quotidienne atteinte", message: "Votre offre gratuite permet 1 résumé par jour.", upgradeRequired: true }, 429);
+    }
 
     // 1) Charger le cours (par id : propriétaire vérifié) ─ ou texte brut en secours
     let text = typeof body.content === "string"
@@ -238,19 +239,21 @@ serve(async (req: Request) => {
     if (isArgonAudit) {
       console.log(`[Argon Saint Graal] Generating unified 4-part summary for "${title}" with ${body.examFiles?.length || 0} exam files`);
 
-      const extractRelevantExamContent = (fullExamText: string, courseTitleStr: string): string => {
+      const extractRelevantExamContent = (fullExamText: string, courseTitleStr: string, targetSubjStr = ""): string => {
         if (!fullExamText) return "";
         if (fullExamText.length <= 26000) return fullExamText;
-        const keywords = [
-          ...courseTitleStr.toLowerCase().split(/\s+/),
-          "hématologie", "hematologie", "hémogramme", "hemogramme", "aplasie", "médullaire",
-          "medullaire", "hémophilie", "hemophilie", "willebrand", "plaquettes", "thrombopénie",
-          "thrombopenie", "anémie", "anemie", "pancytopénie", "pancytopenie", "myélogramme",
-          "médullogramme", "biopsie", "bom", "lymphome", "leucémie", "leucemie", "myélome",
-          "groupage", "censure", "jumelage", "cas clinique"
-        ].filter((w) => w.length >= 3);
+        const stopW = new Set(["dans", "pour", "avec", "sans", "cours", "objectif", "patient", "examen", "clinique", "traitement"]);
+        const keywords = Array.from(
+          new Set(
+            [
+              ...courseTitleStr.toLowerCase().split(/\s+/),
+              ...targetSubjStr.toLowerCase().split(/\s+/),
+              "groupage", "censure", "jumelage", "cas clinique", "qcm"
+            ].filter((w) => w.length >= 4 && !stopW.has(w))
+          )
+        );
 
-        const chunks = fullExamText.split(/(?=--- Page |Cas [Cc]linique|UNIVERSITE|EPREUVES|Module)/g);
+        const chunks = fullExamText.split(/(?=--- Page |Cas [Cc]linique|UNIVERSITE|EPREUVES|SECTION|PARTIE|Module)/g);
         if (chunks.length <= 1) {
           return fullExamText.slice(0, 13000) + "\n...\n" + fullExamText.slice(-15000);
         }
@@ -258,7 +261,7 @@ serve(async (req: Request) => {
           const lower = chunk.toLowerCase();
           let score = 0;
           for (const kw of keywords) {
-            if (lower.includes(kw)) score += 2;
+            if (lower.includes(kw)) score += 3;
           }
           return { chunk, idx, score };
         });
@@ -295,6 +298,7 @@ serve(async (req: Request) => {
         return result.join("\n").trim();
       };
 
+      const targetSubject = String(body.subject ?? body.matiere ?? body.forcedMatiere ?? "").trim();
       const examFiles = Array.isArray(body.examFiles)
         ? body.examFiles.filter((ef: any) => ef && (ef.content || ef.text) && String(ef.content || ef.text).trim().length > 20)
         : [];
@@ -302,30 +306,31 @@ serve(async (req: Request) => {
       const uploadedNamesList =
         examFiles.length > 0
           ? examFiles.map((f: any) => f.fileName || f.name || "Examen").join(", ")
-          : "Annales universitaires de référence (UCAD)";
+          : "Annales universitaires de référence de la spécialité";
 
       let examAuditDossier = "";
       if (examFiles.length > 0) {
         const compiledExams = examFiles
           .map((ef: any, idx: number) => {
             const fname = ef.fileName || ef.name || `Examen ${idx + 1}`;
-            const relevantText = extractRelevantExamContent(String(ef.content || ef.text || ""), title || "");
+            const relevantText = extractRelevantExamContent(String(ef.content || ef.text || ""), `${targetSubject} ${title || ""}`.trim());
             return `=== FICHIER D'EXAMEN N°${idx + 1} : "${fname}" ===\n${relevantText}`;
           })
           .join("\n\n====================\n\n");
 
-        const stage1SystemPrompt = `Tu es un Professeur Agrégé de Médecine à l'UCAD et Auditeur Docimologique.
-Analyse le COURS et les ${examFiles.length} FICHIERS D'EXAMENS fournis.
-Attention : certains PDF contiennent deux matières (ex: Maladies Systémiques pages 1-15 et Hématologie pages 16-23). Fouille chaque fichier jusqu'à la dernière page.
+        const stage1SystemPrompt = `Tu es un Professeur Agrégé Universitaire et Auditeur Docimologique multi-spécialités.
+Analyse le COURS et les ${examFiles.length} FICHIERS D'EXAMENS fournis en adaptant strictement tes critères à la discipline réelle du cours${targetSubject ? ` (${targetSubject})` : ""}.
+IMPORTANT — ISOLATION MULTI-MATIÈRES D'UNE MÊME UE : certains fascicules d'annales contiennent plusieurs matières d'une même UE (par ex. TOR : Orthopédie + Traumatologie + Rhumatologie ; ou Maladies Systémiques + Hématologie ; ou Cardio + Pneumo). Fouille chaque fichier jusqu'à la dernière page, mais N'EXTRAIS ET NE COMPTABILISE QUE la section et les questions appartenant à la discipline cible du cours (ignore totalement les questions d'une autre discipline de l'UE).
 
 Extrais un DOSSIER FACTUEL contenant :
 1. Les OBJECTIFS officiels exacts du cours et toutes ses sous-parties.
-2. Le BILAN TRANSPARENT DES APPARITIONS dans les ${examFiles.length} fichiers d'examens :
-   - Indique honnêtement combien de fois la leçon est tombée en Cas Clinique principal ET combien de fois elle est apparue comme LEURRE / DISTRACTEUR ou diagnostic différentiel dans les QCM des autres cas cliniques.
-   - Pour chaque apparition trouvée, note la RÉFÉRENCE EXACTE : [Nom du fichier / Année de session + N° du Cas Clinique + N° exact du QCM + Texte de la proposition concernée + Valeurs biologiques de l'énoncé].
-3. Pour chaque sous-partie / objectif du cours : sa fréquence d'apparition passée et sa probabilité de sortie future (Critique / Très Élevée / Élevée / Modérée) avec le format attendu (Cas clinique, Groupage 1+2+3, Censure, Jumelage).`;
+2. Le BILAN TRANSPARENT DES APPARITIONS dans les ${examFiles.length} fichiers d'examens (uniquement dans la matière du cours) :
+   - Indique honnêtement combien de fois la leçon est tombée en Cas Clinique principal ET combien de fois elle est apparue comme LEURRE / DISTRACTEUR ou diagnostic différentiel dans les QCM des autres cas cliniques de cette matière.
+   - Pour chaque apparition trouvée, note la RÉFÉRENCE EXACTE : [Nom du fichier / Année de session + N° du Cas Clinique + N° exact du QCM + Texte de la proposition concernée + Données cliniques, radiologiques ou biologiques de l'énoncé].
+3. Pour chaque sous-partie / objectif du cours : sa fréquence d'apparition passée et sa probabilité de sortie future (Critique / Très Élevée / Élevée / Modérée) avec le format attendu (Cas clinique, Groupage 1+2+3, Censure, Jumelage, QCM simple/multiple).`;
 
-        const stage1UserPrompt = `TITRE DU COURS : ${title || "Cours médical"}
+        const stage1UserPrompt = `MATIÈRE / DISCIPLINE CIBLE : ${targetSubject || "À détecter strictement depuis le cours"}
+TITRE DU COURS : ${title || "Cours médical"}
 
 EXTRAIT DU COURS (OBJECTIFS ET PLAN) :
 ${text.substring(0, 14000)}
@@ -344,7 +349,7 @@ ${compiledExams}`;
           0.1
         );
       } else {
-        examAuditDossier = "Aucun fichier d'annale joint : analyse l'incidence et la probabilité de sortie de chaque sous-partie selon les standards docimologiques de la FMPO-UCAD.";
+        examAuditDossier = `Aucun fichier d'annale joint : analyse l'incidence et la probabilité de sortie de chaque sous-partie selon les standards docimologiques universitaires de la spécialité (${targetSubject || title || "discipline du cours"}).`;
       }
 
       const commonFormattingRules = `
@@ -353,7 +358,7 @@ RÈGLES TYPOGRAPHIQUES STRICTES (POUR LE MOTEUR PDF SAINT GRAAL) :
    - Utilise === TITRE === sur une ligne seule pour les grandes parties et les Objectifs.
    - Utilise -- Sous-titre -- sur une ligne seule pour les sous-sections.
 2. MISE EN GRAS INLINE OBLIGATOIRE :
-   - Entoure systématiquement les termes clés, seuils chiffrés, noms de gènes, médicaments et conclusions par **deux astérisques** (ex: **< 200/mm3**, **BOM indispensable**, **gène PIG-A**, **Allogreffe de CSH**).
+   - Entoure systématiquement les termes clés, seuils chiffrés, classifications, signes radiologiques ou biologiques, médicaments/gestes et conclusions par **deux astérisques**.
 3. TABLEAUX MARKDOWN COMPLETS :
    - Utilise la syntaxe | Colonne 1 | Colonne 2 | Colonne 3 | Colonne 4 | avec une ligne d'en-tête et la ligne de séparation | :--- | :--- | :--- | :--- |.
    - Ne laisse JAMAIS un tableau inachevé ou vide.
@@ -367,18 +372,18 @@ RÈGLES TYPOGRAPHIQUES STRICTES (POUR LE MOTEUR PDF SAINT GRAAL) :
    - Utilise ✓ en début de ligne pour les parades et règles validées.
    - Utilise → en début de ligne pour les étapes chronologiques de la démarche clinique.`;
 
-      const blocASystemPrompt = `Tu es un Professeur Agrégé de Médecine de l'UCAD.
-Tu rédiges la première moitié (PARTIE 1 et PARTIE 2) de la SYNTHÈSE UNIFIÉE (Protocole Argon Saint Graal).
+      const blocASystemPrompt = `Tu es un Professeur Agrégé Universitaire spécialiste de la discipline réelle du cours${targetSubject ? ` (${targetSubject})` : ""}.
+Tu rédiges la première moitié (PARTIE 1 et PARTIE 2) de la SYNTHÈSE UNIFIÉE (Protocole Argon Saint Graal), 100 % adaptée à cette spécialité.
 ${commonFormattingRules}
 
 STRUCTURE EXACTE ET OBLIGATOIRE À PRODUIRE DANS CET APPEL :
 
 === PARTIE 1 : BILAN D'INCIDENCE DANS LES ANNALES & PROBABILITÉ DE SORTIE PAR SOUS-PARTIE ===
 
--- 1.1. Bilan transparent des apparitions dans les annales de l'université (${uploadedNamesList}) --
-• Explique avec une transparence totale combien de fois ce cours est tombé comme **Cas Clinique principal** et combien de fois il a été utilisé comme **Leurre / Distracteur différentiel** dans les QCM des annales analysées, et ce que cela implique sur le risque de sortie à la prochaine session.
+-- 1.1. Bilan transparent des apparitions dans les annales (${uploadedNamesList}) --
+• Explique avec une transparence totale combien de fois ce cours est tombé comme **Cas Clinique principal** et combien de fois il a été utilisé comme **Leurre / Distracteur différentiel** dans les QCM de cette discipline, et ce que cela implique sur le risque de sortie à la prochaine session.
 • Produis le tableau complet des apparitions réelles dans les annales :
-| Session & Référence Exacte | Rôle dans l'Épreuve (Sujet ou Leurre) | Énoncé & Données Biologiques de l'Examen | Pourquoi la leçon est confirmée ou éliminée |
+| Session & Référence Exacte | Rôle dans l'Épreuve (Sujet ou Leurre) | Énoncé & Données Clés de l'Examen | Pourquoi la leçon est confirmée ou éliminée |
 
 -- 1.2. Matrice d'incidence passée et probabilité de sortie future pour chaque sous-partie du cours --
 • Produis un tableau analytique complet évaluant CHAQUE sous-partie / objectif du cours :
@@ -389,12 +394,13 @@ STRUCTURE EXACTE ET OBLIGATOIRE À PRODUIRE DANS CET APPEL :
 Traite maintenant INTÉGRALEMENT et SANS AUCUN RACCOURCI tous les objectifs officiels du cours (de l'Objectif 1 au dernier objectif) ainsi que les compléments indispensables :
 
 Pour chaque Objectif (=== OBJECTIF 1 : ... ===, === OBJECTIF 2 : ... ===, etc.) :
-[ RENDEMENT EXAMEN : Probabilité (Critique / Très Élevée / Élevée) — Format cible (Cas clinique / Groupage / Censure) — Points chauds à maîtriser ]
+[ RENDEMENT EXAMEN : Probabilité (Critique / Très Élevée / Élevée) — Format cible (Cas clinique / Groupage / Censure / QCM) — Points chauds à maîtriser ]
 -- Sous-sections détaillées du cours --
-• Développe 100% des définitions, mécanismes, seuils chiffrés en **gras**, particularités cliniques/cytologiques/histologiques, notes "NB" et tableaux comparatifs Markdown (| ... |).
+• Développe 100% des définitions, mécanismes, seuils chiffrés en **gras**, particularités cliniques, radiologiques, morphologiques ou biologiques propres à la spécialité, classifications, notes "NB" et tableaux comparatifs Markdown (| ... |).
 [ RÈGLE D'OR : Synthèse incontournable de l'objectif ]`;
 
-      const blocAUserPrompt = `TITRE DU COURS : ${title || "Cours médical"}
+      const blocAUserPrompt = `MATIÈRE / DISCIPLINE CIBLE : ${targetSubject || "À détecter strictement depuis le cours"}
+TITRE DU COURS : ${title || "Cours médical"}
 FICHIERS D'EXAMENS ANALYSÉS (${examFiles.length}) : ${uploadedNamesList}
 
 === DOSSIER D'AUDIT DOCIMOLOGIQUE DES ANNALES ===
@@ -405,49 +411,49 @@ ${text.substring(0, 38000)}
 
 Rédige maintenant l'intégralité de la PARTIE 1 et de la PARTIE 2 (tous les objectifs jusqu'au traitement complet) sans aucune coupure.`;
 
-      const blocBSystemPrompt = `Tu es un Professeur Agrégé de Médecine de l'UCAD.
-Tu rédiges la seconde moitié (PARTIE 3 et PARTIE 4) de la SYNTHÈSE UNIFIÉE (Protocole Argon Saint Graal) sans aucune répétition avec le résumé du cours.
+      const blocBSystemPrompt = `Tu es un Professeur Agrégé Universitaire spécialiste de la discipline réelle du cours${targetSubject ? ` (${targetSubject})` : ""}.
+Tu rédiges la seconde moitié (PARTIE 3 et PARTIE 4) de la SYNTHÈSE UNIFIÉE (Protocole Argon Saint Graal) sans aucune répétition avec le résumé du cours et en adaptant STRICTEMENT chaque axe d'analyse à la discipline réelle du support.
 ${commonFormattingRules}
 
-INTERDICTION FORMELLE : Ne génère pas de QCM à choix multiples artificiels. Produis uniquement les outils tactiques, les pièges, la table de discrimination, le décodeur Groupage/Jumelage et la démarche opérationnelle devant un cas clinique.
+INTERDICTION FORMELLE : Ne génère pas de QCM à choix multiples artificiels. N'importe JAMAIS de paramètres d'une autre discipline (par ex. hémogramme/VGM sur un cours de Traumatologie ou Orthopédie). Produis uniquement les outils tactiques, les pièges, la table de discrimination, le décodeur docimologique et la démarche opérationnelle propres à la spécialité du cours.
 
 STRUCTURE EXACTE ET OBLIGATOIRE À PRODUIRE DANS CET APPEL :
 
 === PARTIE 3 : LES PIÈGES DES PROFESSEURS, LA TABLE DE DISCRIMINATION & LES QUESTIONS PRÉ-RÉSOLUES ===
 
 -- 3.1. Table de discrimination inter-cours (Comment départager cette leçon des pathologies proches dans les annales) --
-• Produis un tableau comparatif opposant la pathologie du cours aux 4 ou 5 pathologies concurrentes qui tombent dans les annales de l'UCAD :
-| Pathologie concurrente dans les annales | Référence Examen UCAD | Points communs trompeurs (Le piège) | Le Critère Tranchant qui confirme ou élimine la leçon |
+• Produis un tableau comparatif opposant la pathologie du cours aux 4 ou 5 pathologies concurrentes de la même discipline qui tombent dans les annales :
+| Pathologie concurrente dans les annales | Référence Annales | Points communs trompeurs (Le piège) | Le Critère Tranchant qui confirme ou élimine la leçon |
 
 -- 3.2. Décorticage des 6 à 7 pièges internes du cours et des évaluations --
-Pour chaque piège majeur (notes NB du cours, exceptions biologiques, paradoxes des tableaux, contre-indications thérapeutiques), utilise strictement ce format :
-[ AVERTISSEMENT / PIÈGE N°X : Titre précis du piège (Réf. Diapo du cours ou Examen UCAD) ]
+Pour chaque piège majeur (notes NB du cours, exceptions sémiologiques/radiologiques/biologiques, paradoxes de classifications, contre-indications thérapeutiques ou erreurs de geste), utilise strictement ce format :
+[ AVERTISSEMENT / PIÈGE N°X : Titre précis du piège (Réf. Diapo du cours ou Annale) ]
 • **Le problème qui fait échouer l'étudiant :** explication précise de l'erreur de raisonnement.
 • **Le mécanisme du piège du professeur :** comment le distracteur est construit.
-✓ **La parade absolue à retenir :** la règle chiffrée ou clinique infaillible pour déjouer le piège.
+✓ **La parade absolue à retenir :** la règle chiffrée, anatomo-clinique ou thérapeutique infaillible pour déjouer le piège.
 
--- 3.3. Décodeur spécial Groupage (1+2+3) & Jumelage (PARCE QUE) de l'UCAD --
+-- 3.3. Décodeur spécial Groupage (1+2+3) & Jumelage / Raisonnement causal --
 • Liste les 5 combinaisons de **Groupage (A = 1+2+3)** ou **B = 1+3** / **C = 2+4** les plus susceptibles de tomber sur ce cours.
 • Produis le tableau des 4 questions de **Jumelage (PARCE QUE)** pré-résolues sur les mécanismes clés du cours :
 | Proposition 1 | Lien | Proposition 2 | Code à cocher (A, B, C, D, E) & Justification exacte |
 
 === PARTIE 4 : DÉMARCHE OPÉRATIONNELLE DEVANT UN CAS CLINIQUE À L'EXAMEN & CHECK-LIST ULTIME ===
 
--- 4.1. Marche à suivre étape par étape lorsque la leçon tombe en Cas Clinique (La Cascade des 5 Temps) --
-Décris exactement comment l'étudiant doit traiter un cas clinique sur cette leçon de la Question 1 à la Question 5 :
-→ **Temps 1 (Reconnaissance syndromique et lecture de l'énoncé) :** quoi repérer dans l'observation clinique et quels pièges d'emblée écarter.
-→ **Temps 2 (Interprétation de l'hémogramme et du frottis) :** comment qualifier les lignées et quelles constantes vérifier.
-→ **Temps 3 (Examens de confirmation cytologique / histologique / spécifique) :** quel examen de 1re intention vs examen de certitude cocher et quels critères décrire.
-→ **Temps 4 (Classification pronostique et recherche étiologique) :** quel score/stade calculer et quel bilan étiologique/clonal prescrire selon l'âge.
-→ **Temps 5 (Décision thérapeutique d'urgence et de fond) :** quelles mesures symptomatiques urgentes, quelles contre-indications / précautions transfusionnelles et quel traitement curatif choisir selon l'arbre décisionnel.
+-- 4.1. Marche à suivre étape par étape lorsque la leçon tombe en Cas Clinique (La Cascade des 5 Temps adaptée à la spécialité) --
+Décris exactement comment l'étudiant doit traiter un cas clinique de cette discipline de la Question 1 à la Question 5 :
+→ **Temps 1 (Reconnaissance syndromique, mécanisme et lecture de l'énoncé) :** terrain, circonstances/mécanisme, signes de gravité ou lésions associées à repérer dès l'énoncé et pièges initiaux à écarter.
+→ **Temps 2 (Examen physique discriminant & analyse des examens clés de 1re intention) :** recherche orientée (vasculo-nerveuse, cutanée, fonctionnelle, ECG, radio standard, biologie de base) adaptée strictement au cours.
+→ **Temps 3 (Examens de confirmation diagnostique & bilan lésionnel / d'extension) :** examen de référence, critères morphologiques/radiologiques/anatomopathologiques ou biologiques de certitude.
+→ **Temps 4 (Classifications pronostiques, étiologies et complications) :** scores ou classifications exactes du cours, recherche étiologique et complications précoces/tardives à surveiller.
+→ **Temps 5 (Décision thérapeutique d'urgence, indications et contre-indications) :** mise en condition urgente, choix thérapeutique (orthopédique vs chirurgical, médicamenteux curatif/symptomatique), surveillance et contre-indications formelles.
 
 -- 4.2. Traducteur instantané d'énoncés (Réflexe mental immédiat en salle d'examen) --
 • Produis le tableau de traduction rapide :
 | Si l'énoncé de l'examen mentionne... | Traduction immédiate dans votre tête | Action immédiate sur la grille QCM |
 
--- 4.3. Check-list ultime "5 minutes avant d'entrer en salle" (Tous les chiffres, seuils, gènes et posologies) --
-• Produis le tableau récapitulatif de toutes les valeurs numériques et marqueurs du cours :
-| Paramètre / Repère du cours | Valeur chiffrée / Gène / Formule exacte | Signification diagnostique, pronostique ou thérapeutique |`;
+-- 4.3. Check-list ultime "5 minutes avant d'entrer en salle" (Tous les chiffres, seuils, classifications et posologies) --
+• Produis le tableau récapitulatif de toutes les valeurs numériques, scores, repères anatomiques et marqueurs du cours :
+| Paramètre / Repère du cours | Valeur chiffrée / Classification / Formule exacte | Signification diagnostique, pronostique ou thérapeutique |`;
 
       const blocBUserPrompt = `TITRE DU COURS : ${title || "Cours médical"}
 FICHIERS D'EXAMENS ANALYSÉS (${examFiles.length}) : ${uploadedNamesList}

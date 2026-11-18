@@ -1,12 +1,14 @@
 // src/lib/objectiveExamEngine.ts
 import { supabase } from "@/integrations/supabase/client";
-import { getActivePoliceApiKey } from "@/lib/aiPolicePipeline";
 import { callGeminiAcademicEngine } from "@/lib/syncEngine";
 import { extractObjectivesFromCourseText } from "@/lib/summaryEngine";
 import { normalizeMarkdownTables } from "@/lib/coPilotSummaryEngine";
-
-const DEFAULT_OPENROUTER_KEY =
-  (import.meta as any).env?.VITE_OPENROUTER_API_KEY || "";
+import {
+  inferDisciplineProfile,
+  isolateExamContentForSubject,
+  getAdaptiveConfrontationRows,
+  type DisciplineProfile,
+} from "@/lib/disciplineProfileEngine";
 
 export interface UploadedExamInput {
   name?: string;
@@ -346,20 +348,6 @@ export function sanitizeArgonMarkdown(raw: string): string {
 /**
  * Résout de façon étanche une clé API valide pour OpenRouter.
  */
-function resolveOpenRouterApiKey(userProvidedKey?: string): string {
-  if (userProvidedKey && userProvidedKey.startsWith("sk-or-")) {
-    return userProvidedKey.trim();
-  }
-  const storedOr =
-    typeof localStorage !== "undefined"
-      ? localStorage.getItem("dawjang_openrouter_api_key")
-      : null;
-  if (storedOr && storedOr.startsWith("sk-or-")) {
-    return storedOr.trim();
-  }
-  return DEFAULT_OPENROUTER_KEY;
-}
-
 /**
  * Moteur d'appel IA Haute Réflexion (Gemini 2.5 Pro / Claude Sonnet 4.6 / Gemini 2.5 Flash)
  * Calibré avec max_tokens élevé (12 000 tokens) pour ne jamais tronquer les tableaux ni les sous-parties.
@@ -371,114 +359,11 @@ async function callArgonAIModel(params: {
   openRouterKey?: string;
   geminiApiKey?: string;
 }): Promise<string> {
-  const {
-    systemPrompt,
-    userPrompt,
-    temperature = 0.15,
-    openRouterKey,
-    geminiApiKey,
-  } = params;
-
-  // 1. Si une clé directe Google Gemini est configurée, tenter Gemini 2.5 Pro puis Gemini 2.5 Flash en direct
-  const directGeminiKey =
-    geminiApiKey ||
-    (import.meta as any).env?.VITE_GEMINI_API_KEY ||
-    (typeof localStorage !== "undefined" ? localStorage.getItem("dawjang_gemini_api_key") : null);
-
-  if (directGeminiKey) {
-    for (const gModel of ["gemini-2.5-pro", "gemini-2.5-flash"]) {
-      try {
-        const ctrl = new AbortController();
-        const timeoutId = setTimeout(() => ctrl.abort(), 90000);
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${directGeminiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: systemPrompt }] },
-              contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-              generationConfig: { temperature, maxOutputTokens: 16384 },
-            }),
-            signal: ctrl.signal,
-          }
-        );
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          const data = await res.json();
-          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text && text.trim().length > 100) {
-            return text.trim();
-          }
-        }
-      } catch {
-        // Bascule sur OpenRouter
-      }
-    }
-  }
-
-  // 2. Appel OpenRouter avec les modèles haute réflexion (Gemini 2.5 Pro, Claude Sonnet 4.6, Claude 3.7 Sonnet, Gemini 2.5 Flash)
-  const keyToUse = resolveOpenRouterApiKey(openRouterKey);
-  const candidateModels = [
-    "google/gemini-2.5-pro",
-    "anthropic/claude-sonnet-4.6",
-    "anthropic/claude-3.7-sonnet",
-    "google/gemini-2.5-flash",
-  ];
-
-  for (const model of candidateModels) {
-    try {
-      const ctrl = new AbortController();
-      const timeoutId = setTimeout(() => ctrl.abort(), 90000);
-
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${keyToUse}`,
-          "HTTP-Referer": "https://dawjang.app",
-          "X-Title": "Hipocampus 2026 — Synthese Unifiee Argon",
-        },
-        body: JSON.stringify({
-          model,
-          temperature,
-          max_tokens: 12000,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-        }),
-        signal: ctrl.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const json = await res.json();
-        const text = json?.choices?.[0]?.message?.content;
-        if (text && text.trim().length > 100) {
-          return text.trim();
-        }
-      } else {
-        const errText = await res.text().catch(() => "");
-        console.warn(`[ArgonAI] Modèle ${model} HTTP ${res.status}:`, errText.slice(0, 180));
-      }
-    } catch (e) {
-      console.warn(`[ArgonAI] Exception réseau sur ${model}:`, e);
-    }
-  }
-
-  // 3. Repli de secours sur callGeminiAcademicEngine
-  try {
-    const fallbackText = await callGeminiAcademicEngine(systemPrompt, userPrompt, temperature);
-    if (fallbackText && fallbackText.trim().length > 100) {
-      return fallbackText.trim();
-    }
-  } catch (e) {
-    console.warn("[ArgonAI] Échec fallback callGeminiAcademicEngine :", e);
-  }
-
-  return "";
+  return (await callGeminiAcademicEngine(
+    params.systemPrompt,
+    params.userPrompt,
+    params.temperature ?? 0.15,
+  )) || "";
 }
 
 /**
@@ -499,18 +384,18 @@ function extractCourseSlide1Metadata(params: {
   authorName: string;
   facultyName: string;
   yearsRange: string;
+  profile: DisciplineProfile;
 } {
   const { courseTitle, courseText, examFiles, forcedMatiere, forcedSemestre } = params;
 
-  // Nettoyage élégant du titre du cours (ex: "15-Aplasies médullaires" -> "Les Aplasies Médullaires")
-  let cleanCourseTitle = (courseTitle || "Cours Magistral")
+  // Nettoyage élégant du titre du cours (ex: "15-Fractures ouvertes de jambe" -> "Fractures ouvertes de jambe")
+  const cleanCourseTitle = (courseTitle || "Cours Magistral")
     .replace(/\.(pdf|docx?|pptx?|txt)$/i, "")
     .replace(/^\d+\s*[-_.)\s]+\s*/, "")
     .replace(/[_]+/g, " ")
     .trim();
 
-  // Chercher le vrai titre sur la Diapo 1 si le nom du fichier est abrégé
-  const slide1Slice = courseText.slice(0, 2200);
+  const slide1Slice = courseText.slice(0, 2500);
   const authorMatch = slide1Slice.match(
     /\b((?:Dr|Pr|Prof\.?|Docteur|Professeur)\s+[A-ZÀ-ÖØ-ß][A-Za-zÀ-ÿ\s\-'.]{3,45})/
   );
@@ -518,8 +403,24 @@ function extractCourseSlide1Metadata(params: {
     ? authorMatch[1].replace(/\s+/g, " ").trim()
     : "Enseignement Magistral";
 
-  const facultyMatch = slide1Slice.match(/\b(FMPO\s*UCAD|UCAD|UASZ|UFR\s*2S|CHU\s+[A-Za-zÀ-ÿ\-]+)\b/i);
-  const facultyName = facultyMatch ? facultyMatch[1].toUpperCase().trim() : "FMPO UCAD";
+  const facultyMatch = slide1Slice.match(
+    /\b(FMPO\s*UCAD|UCAD|UASZ|UFR\s*2S|CHU\s+[A-Za-zÀ-ÿ-]+|Facult[eé]\s+de\s+M[eé]decine[^\n,]{0,30})\b/i
+  );
+  const facultyName = facultyMatch ? facultyMatch[1].trim() : "Faculté de Médecine";
+
+  const isExplicitSubject =
+    Boolean(forcedMatiere && forcedMatiere.trim()) &&
+    !/^(auto|auto[-\s]*d[eé]tection|m[eé]decine|m[eé]decine\s+g[eé]n[eé]rale|g[eé]n[eé]ral)$/i.test(
+      forcedMatiere.trim()
+    ) &&
+    forcedMatiere.trim() !== "Hématologie";
+
+  const profile = inferDisciplineProfile({
+    subjectHint: forcedMatiere,
+    isExplicitSubjectChoice: isExplicitSubject,
+    courseTitle: cleanCourseTitle,
+    courseText,
+  });
 
   // Détecter la plage d'années des annales uploadées (ex: 2019–2025)
   const yearsFound = new Set<number>();
@@ -538,16 +439,13 @@ function extractCourseSlide1Metadata(params: {
       ? `${sortedYears[0]}`
       : "Annales Officielles";
 
-  const matiereLabel =
-    forcedMatiere && forcedMatiere !== "Médecine Générale"
-      ? `Master 1 ${forcedMatiere} Clinique`
-      : /aplasie|an[ée]mie|leuc[ée]mie|my[ée]lome|lymphome|h[ée]mostase|h[ée]moglobinopathie|dr[ée]panocytose|enzymopathie/i.test(
-          `${cleanCourseTitle} ${slide1Slice}`
-        )
-      ? "Master 1 Hématologie Clinique"
-      : forcedSemestre
-      ? `${forcedSemestre} • ${forcedMatiere || "Médecine"}`
-      : "Cursus Médical Universitaire";
+  const levelMatch = slide1Slice.match(/\b(L[1-3]|M[1-2]|Master\s*[12]|Licence\s*[1-3]|D[CF]G[SM]\d?|S\d{1,2})\b/i);
+  const levelPrefix = levelMatch
+    ? `${levelMatch[1].trim()} • `
+    : forcedSemestre
+    ? `${forcedSemestre} • `
+    : "";
+  const matiereLabel = `${levelPrefix}${profile.subjectLabel}`;
 
   const kicker =
     "HIPPOCAMPUS 2026 • SYNTHÈSE UNIFIÉE : COURS, INCIDENCE PAR OBJECTIF & DÉMARCHE CAS CLINIQUE";
@@ -562,6 +460,7 @@ function extractCourseSlide1Metadata(params: {
     authorName,
     facultyName,
     yearsRange,
+    profile,
   };
 }
 
@@ -589,12 +488,13 @@ async function buildCompleteCourseSousParties(params: {
   predefinedObjectives?: string[];
   openRouterKey: string;
   geminiApiKey?: string;
+  profile?: DisciplineProfile;
 }): Promise<{
   totalSlides: number;
   rawObjectives: string[];
   sousParties: CourseSousPartie[];
 }> {
-  const { courseTitle, courseText, predefinedObjectives } = params;
+  const { courseTitle, courseText, predefinedObjectives, profile } = params;
 
   // 1. Découpage en diapositives/pages individuelles
   const slideRegex = /---\s*(?:Diapositive|Page)\s*(\d+)\s*---/gi;
@@ -636,7 +536,7 @@ async function buildCompleteCourseSousParties(params: {
       return subParts
         .map((p) =>
           p
-            .replace(/^(?:Objectif\s*\d+\s*[:.\-–]\s*|\d+[\s.)\-]+)/i, "")
+            .replace(/^(?:Objectif\s*\d+\s*[:.\-–]\s*|\d+[\s.)-]+)/i, "")
             .trim()
         )
         .filter((p) => p.length > 6);
@@ -644,13 +544,15 @@ async function buildCompleteCourseSousParties(params: {
     .filter((v, idx, arr) => arr.findIndex((x) => x.toLowerCase() === v.toLowerCase()) === idx);
 
   if (rawObjectives.length === 0) {
-    rawObjectives = [
-      `Définir ${courseTitle} et énoncer ses mécanismes physiopathologiques`,
-      `Décrire les circonstances de découverte et les signes cliniques`,
-      `Décrire les anomalies de l'hémogramme, du frottis et les examens de certitude`,
-      `Énoncer les critères pronostiques, les formes cliniques et les diagnostics différentiels`,
-      `Énoncer les principes, moyens et indications du traitement`,
-    ];
+    rawObjectives = profile
+      ? profile.fallbackObjectives(courseTitle)
+      : [
+          `Définir ${courseTitle} et énoncer ses mécanismes physiopathologiques`,
+          `Décrire les circonstances de découverte et les signes cliniques`,
+          `Décrire les examens paracliniques clés, classifications et critères de certitude`,
+          `Énoncer les critères pronostiques, les formes cliniques et les diagnostics différentiels`,
+          `Énoncer les principes, moyens et indications du traitement`,
+        ];
   }
 
   // Vérifier si le cours contient en fin de polycopié un chapitre Étiologies ou Traitement non mentionné dans une liste courte d'objectifs (ex: <= 4 objectifs)
@@ -801,8 +703,6 @@ export async function executeArgonDualStagePipeline(
     onProgress,
   } = params;
 
-  const policeKey = getActivePoliceApiKey(anthropicApiKey) || DEFAULT_OPENROUTER_KEY;
-
   // 0. EXTRACTION DES MÉTADONNÉES ACADÉMIQUES (DIAPO 1 + ANNALES)
   const meta = extractCourseSlide1Metadata({
     courseTitle,
@@ -817,8 +717,9 @@ export async function executeArgonDualStagePipeline(
     courseTitle: meta.cleanCourseTitle,
     courseText,
     predefinedObjectives,
-    openRouterKey: policeKey,
+    openRouterKey: undefined,
     geminiApiKey,
+    profile: meta.profile,
   });
 
   const totalSteps = sousParties.length + 3; // Partie I + N Objectifs (1 passe par objectif) + Partie III + Partie IV
@@ -826,7 +727,7 @@ export async function executeArgonDualStagePipeline(
   onProgress?.(
     1,
     totalSteps,
-    `Étape 1/${totalSteps} : Audit docimologique des ${examFiles.length} évaluation(s) & rédaction de la PARTIE I (${sousParties.length} objectifs officiels)...`
+    `Étape 1/${totalSteps} : Audit docimologique « ${meta.profile.subjectLabel} » (${examFiles.length} évaluation(s)) & rédaction de la PARTIE I (${sousParties.length} objectifs officiels)...`
   );
 
   const normalizeForSearch = (str: string): string =>
@@ -848,7 +749,9 @@ export async function executeArgonDualStagePipeline(
       "signes", "diagnostic", "traitement", "prise", "charge", "bilan", "examen",
       "examens", "clinique", "cliniques", "biologique", "biologiques", "medicale",
       "medecine", "patient", "sujet", "cas", "type", "types", "origine", "cause",
-      "causes", "principes", "modalites", "elements", "caracteres", "mecanismes"
+      "causes", "principes", "modalites", "elements", "caracteres", "mecanismes",
+      "radiologique", "imagerie", "evolution", "complications", "physiopathologie",
+      "definition", "epidemiologie", "surveillance", "pronostic", "indications"
     ]);
 
     const rawSource = `${titleStr}\n${objs.join("\n")}\n${fullCourseText.slice(0, 45000)}`;
@@ -860,12 +763,20 @@ export async function executeArgonDualStagePipeline(
       if (stopWords.has(tk) || /^\d+$/.test(tk)) continue;
       if (
         tk.length >= 4 ||
-        /^(?:hbs|hbf|hba|hbc|cvo|sta|llc|lmc|lam|lal|vgm|tcmh|ccmh|g6pd|pk|bom|tp|tca|inr|civd|pti|hpn|ebv|cmv|vih|hla|sal)$/i.test(
+        /^(?:hbs|hbf|hba|hbc|cvo|sta|llc|lmc|lam|lal|vgm|tcmh|ccmh|g6pd|pk|bom|tp|tca|inr|civd|pti|hpn|ebv|cmv|vih|hla|sal|tdm|irm|ecg|ett|efr|bnp|lcr|pl|ao|lca|pth|tsh|ira|irc|dfg|bu|ecbu|avc|oap|hta|sca|idm|rgo|ssa|ssb|ccp)$/i.test(
           tk
         )
       ) {
         wordCounts.set(tk, (wordCounts.get(tk) || 0) + 1);
       }
+    }
+
+    // Extraction dynamique des bigrammes clés propres à ce cours (fonctionne pour TOUTE matière)
+    const bigramCounts = new Map<string, number>();
+    const cleanTokens = tokens.filter((t) => t.length >= 4 && !stopWords.has(t) && !/^\d+$/.test(t));
+    for (let i = 0; i < cleanTokens.length - 1; i++) {
+      const bg = `${cleanTokens[i]} ${cleanTokens[i + 1]}`;
+      bigramCounts.set(bg, (bigramCounts.get(bg) || 0) + 1);
     }
 
     const prioritySource = normalizeForSearch(`${titleStr} ${objs.join(" ")}`);
@@ -874,6 +785,7 @@ export async function executeArgonDualStagePipeline(
     );
 
     const synonymGroups: Array<{ triggers: string[]; expansions: string[] }> = [
+      ...meta.profile.lexiconClusters,
       {
         triggers: ["aplasie", "medullaire", "pancytopenie", "camitta", "fanconi", "bom"],
         expansions: [
@@ -935,11 +847,18 @@ export async function executeArgonDualStagePipeline(
       }
     }
 
+    const sortedBigrams = Array.from(bigramCounts.entries())
+      .filter(([, cnt]) => cnt >= 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 35)
+      .map(([bg]) => bg);
+
     const sortedCourseTerms = Array.from(wordCounts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 75)
       .map(([term]) => term);
 
+    sortedBigrams.forEach((bg) => expanded.add(bg));
     sortedCourseTerms.forEach((t) => expanded.add(t));
     return Array.from(expanded).filter((w) => w.length >= 3);
   };
@@ -952,17 +871,41 @@ export async function executeArgonDualStagePipeline(
   if (examFiles.length > 0) {
     const analyzedExams = examFiles.map((ef, idx) => {
       const examName = ef.fileName || ef.name || `Session ${idx + 1}`;
-      const examContent = ef.content || "";
-      if (!examContent.trim()) {
+      const rawExamContent = ef.content || "";
+      if (!rawExamContent.trim()) {
         return {
           formattedBlock: `=== FICHIER D'EXAMEN #${idx + 1} : ${examName} (Vide) ===`,
           hitsCount: 0,
         };
       }
 
+      // ISOLATION MULTI-MATIÈRES POUR UE COMPOSITES (ex: TOR = Orthopédie + Traumatologie + Rhumatologie)
+      const isolation = isolateExamContentForSubject(rawExamContent, {
+        targetSubject: meta.profile.subjectLabel,
+        domainFamily: meta.profile.domainFamily,
+        courseTitle: meta.cleanCourseTitle,
+        extraKeywords: courseLexicon.slice(0, 25),
+      });
+
+      if (isolation.isOtherSubjectOnly || !isolation.isolatedText.trim()) {
+        return {
+          formattedBlock: `=== FICHIER D'EXAMEN #${idx + 1} : ${examName} (Hors matière cible — consacré uniquement à : ${
+            isolation.detectedOtherSubjects.join(", ") || "une autre discipline de l'UE"
+          }) ===\n[Aucun item de « ${meta.profile.subjectLabel} » / « ${meta.cleanCourseTitle} » dans ce document — Ne pas importer ces notions.]`,
+          hitsCount: 0,
+        };
+      }
+
+      const examContent = isolation.isolatedText;
+      const scopeBanner = isolation.wasTrimmedFromMultiSubject
+        ? `[Section « ${meta.profile.subjectLabel} » isolée automatiquement sur une épreuve multi-matières (autres disciplines écartées : ${
+            isolation.detectedOtherSubjects.join(", ") || "autres EC"
+          })]`
+        : `[Épreuve analysée pour « ${meta.profile.subjectLabel} »]`;
+
       let rawChunks = examContent
         .split(
-          /(?=---\s*(?:Diapositive|Page)\s*\d+|(?:\n|^)\s*(?:Cas\s+[Cc]linique|DOSSIER|QUESTION|QCM)\s*N?°?\s*\d*|(?:\n|^)\s*\d{1,3}\s*[.)\-]\s+[A-ZÀ-ÖØ-ß])/g
+          /(?=---\s*(?:Diapositive|Page)\s*\d+|(?:\n|^)\s*(?:Cas\s+[Cc]linique|DOSSIER|QUESTION|QCM)\s*N?°?\s*\d*|(?:\n|^)\s*\d{1,3}\s*[.)-]\s+[A-ZÀ-ÖØ-ß])/g
         )
         .map((c) => c.trim())
         .filter(Boolean);
@@ -981,7 +924,7 @@ export async function executeArgonDualStagePipeline(
         let score = 0;
         for (const term of courseLexicon) {
           if (normChunk.includes(term)) {
-            score += term.length >= 7 ? 4 : 2;
+            score += term.includes(" ") ? 6 : term.length >= 7 ? 4 : 2;
             fileMatchedTerms.add(term);
           }
         }
@@ -1021,7 +964,7 @@ export async function executeArgonDualStagePipeline(
 
       const matchedList = Array.from(fileMatchedTerms).slice(0, 28);
       return {
-        formattedBlock: `=== FICHIER D'EXAMEN #${idx + 1} : ${examName} ===\n[Notions repérées (${hitsCount} passages) : ${matchedList.join(", ") || "Vérifier cas cliniques et QCM"}]\n${selectedText}`,
+        formattedBlock: `=== FICHIER D'EXAMEN #${idx + 1} : ${examName} ===\n${scopeBanner}\n[Notions repérées (${hitsCount} passages) : ${matchedList.join(", ") || "Vérifier cas cliniques et QCM"}]\n${selectedText}`,
         hitsCount,
       };
     });
@@ -1030,9 +973,23 @@ export async function executeArgonDualStagePipeline(
     compiledExamsText = analyzedExams.map((a) => a.formattedBlock).join("\n\n");
   }
 
+  const profileAxesBulletList = meta.profile.examFocusAxes.map((a) => `- ${a}`).join("\n");
+  const profileInterpHint =
+    meta.profile.interpretationDirectives.length > 0
+      ? `\nRÉFLEXES D'INTERPRÉTATION PROPRES À « ${meta.profile.subjectLabel.toUpperCase()} » :\n${meta.profile.interpretationDirectives
+          .map((d) => `• ${d.title} :\n  ${d.steps.map((s) => `- ${s}`).join("\n  ")}`)
+          .join("\n")}`
+      : "";
+
   // 2. GÉNÉRATION DE LA PARTIE I — AUDIT RÉEL DES ANNALES & PROBABILITÉ DE SORTIE PAR OBJECTIF
-  const partie1SystemPrompt = `Tu es un Professeur Agrégé de Médecine et Auditeur Docimologique d'Élite (${meta.facultyName}).
-Tu rédiges la **PARTIE I — AUDIT RÉEL DES ANNALES & PROBABILITÉ DE SORTIE PAR OBJECTIF** de la Synthèse Unifiée pour le cours « ${meta.cleanCourseTitle} » (${meta.authorName}).
+  const partie1SystemPrompt = `Tu es ${meta.profile.specialistPersona} et Auditeur Docimologique d'Élite (${meta.facultyName}).
+Tu rédiges la **PARTIE I — AUDIT RÉEL DES ANNALES & PROBABILITÉ DE SORTIE PAR OBJECTIF** de la Synthèse Unifiée pour le cours « ${meta.cleanCourseTitle} » (Discipline : **${meta.profile.subjectLabel}** • ${meta.authorName}).
+
+RÈGLE D'ADAPTATION STRICTEMENT DISCIPLINAIRE :
+- Cette leçon relève exclusivement de : **${meta.profile.subjectLabel}**.
+- Axes d'évaluation prioritaires dans cette discipline :
+${profileAxesBulletList}
+- Si les fichiers d'annales contiennent d'autres matières de la même UE, IGNORE totalement les questions des autres disciplines et concentre-toi uniquement sur « ${meta.cleanCourseTitle} » (${meta.profile.subjectLabel}).
 
 INTERDICTION FORMELLE : Ne commence JAMAIS ta réponse par "Absolument !", "Bien sûr !", "En tant que Professeur..." ou toute phrase d'introduction. Commence DIRECTEMENT à la première ligne par \`=== PARTIE I — ... ===\`.
 
@@ -1041,24 +998,24 @@ STRUCTURE EXACTE ET OBLIGATOIRE :
 === PARTIE I — AUDIT RÉEL DES ANNALES & PROBABILITÉ DE SORTIE PAR OBJECTIF ===
 
 ## 1.1. Vérité statistique sur l'apparition du cours dans vos examens
-L'analyse exhaustive des **${examFiles.length || "différentes"} sessions d'épreuves officielles de ${meta.facultyName}** que vous avez fournies établit un constat factuel précis :
-• **Incidence en tant que Cas Clinique principal : [X fois sur Y sessions (Z %)].** [Détaille avec précision si ce cours est déjà tombé en Cas Clinique principal dans les fichiers fournis, cite les sujets qui sont tombés en Cas Clinique principal dans ces sessions, et explique pourquoi ce cours est un candidat majeur ou incontournable pour le prochain examen].
-• **Incidence en tant qu'item de QCM (diagnostic différentiel, mécanisme ou leurre) : [X apparitions directes dans Y sujets sur Z].** [Explique comment les professeurs utilisent ce cours et ses critères diagnostiques/biologiques pour tester ou piéger les étudiants dans les QCM à élection, censure, groupage ou jumelage].
+L'analyse exhaustive des **${examFiles.length || "différentes"} sessions d'épreuves officielles de ${meta.facultyName}** pour la discipline **${meta.profile.subjectLabel}** établit un constat factuel précis :
+• **Incidence en tant que Cas Clinique / Sujet principal : [X fois sur Y sessions (Z %)].** [Détaille avec précision si ce cours est déjà tombé en sujet principal dans les épreuves de ${meta.profile.subjectLabel} fournies, cite les chapitres/thèmes qui sont tombés en sujet principal dans ces sessions, et explique pourquoi ce cours est un candidat majeur ou incontournable pour le prochain examen].
+• **Incidence en tant qu'item de QCM (diagnostic différentiel, mécanisme, classification ou leurre) : [X apparitions directes dans Y sujets sur Z].** [Explique comment les professeurs de ${meta.profile.subjectLabel} utilisent ce cours et ses critères cliniques, paracliniques ou thérapeutiques pour tester ou piéger les étudiants dans les QCM à élection, censure, groupage ou jumelage].
 
-| Référence exacte de l'examen | Localisation exacte (Cas & QCM) | Formulation exacte dans l'épreuve | Objectif du cours sollicité & Raison du piège |
+| Référence exacte de l'examen | Localisation exacte (Sujet / QCM) | Formulation exacte dans l'épreuve | Objectif du cours sollicité & Raison du piège |
 | :--- | :--- | :--- | :--- |
-[Remplis ici toutes les lignes correspondant aux apparitions réelles relevées dans les fichiers d'examens fournis (une seule ligne par rang du tableau, AUCUN retour à la ligne à l'intérieur d'une cellule). Cite la session/année exacte en **gras**, le numéro du Cas Clinique ou du QCM en **gras**, la formulation exacte entre guillemets, et l'Objectif du cours sollicité.]
+[Remplis ici toutes les lignes correspondant aux apparitions réelles relevées dans les fichiers d'examens fournis pour ${meta.profile.subjectLabel} (une seule ligne par rang du tableau, AUCUN retour à la ligne à l'intérieur d'une cellule). Cite la session/année exacte en **gras**, le numéro du Cas Clinique ou du QCM en **gras**, la formulation exacte entre guillemets, et l'Objectif du cours sollicité.]
 
 ## 1.2. Incidence et probabilité de sortie pour chaque objectif officiel du cours (Où appuyer vos révisions)
-Ce tableau évalue chaque objectif officiel du professeur selon son historique dans les annales et sa **probabilité de tomber au prochain examen** (en QCM isolé ou en Cas Clinique complet) :
+Ce tableau évalue chaque objectif officiel du professeur selon son historique dans les annales de **${meta.profile.subjectLabel}** et sa **probabilité de tomber au prochain examen** :
 
 | Objectif officiel du cours (Intitulé exact) | Apparitions passées | Probabilité de sortie future | Pourquoi cet objectif est une cible prioritaire (Meilleures parties à réviser) |
 | :--- | :--- | :--- | :--- |
 [Remplis ici exactement ${sousParties.length} lignes correspondant aux ${sousParties.length} Objectifs officiels du cours (une seule ligne par rang du tableau, AUCUN retour à la ligne dans une cellule) :
 ${sousParties.map((sp) => `- **${sp.label}**`).join("\n")}
-Dans la colonne "Probabilité de sortie future", indique un niveau précis en gras tel que **Maximale (98 %)**, **Critique (95 %)**, **Très Élevée (90 %)**, **Très Élevée (85 %)** ou **Élevée (75 %)** suivi du format docimologique ciblé (Censure, Groupage, Jumelage, Cas Clinique).]`;
+Dans la colonne "Probabilité de sortie future", indique un niveau précis en gras tel que **Maximale (98 %)**, **Critique (95 %)**, **Très Élevée (90 %)**, **Très Élevée (85 %)** ou **Élevée (75 %)** suivi du format docimologique ciblé (Censure, Groupage, Jumelage, QCM direct, Cas Clinique).]`;
 
-  const partie1UserPrompt = `TITRE DU COURS : ${meta.cleanCourseTitle} (${meta.authorName} • ${meta.facultyName})
+  const partie1UserPrompt = `TITRE DU COURS : ${meta.cleanCourseTitle} (Discipline : ${meta.profile.subjectLabel} • ${meta.authorName} • ${meta.facultyName})
 
 LES ${sousParties.length} OBJECTIFS OFFICIELS DU COURS (Intitulés exacts du professeur) :
 ${sousParties.map((sp) => `- ${sp.label}`).join("\n")}
@@ -1066,8 +1023,8 @@ ${sousParties.map((sp) => `- ${sp.label}`).join("\n")}
 EXTRAIT DU COURS (Diapos 1 à 15 pour contexte nosologique) :
 ${courseText.slice(0, 12000)}
 
-TEXTE INTÉGRAL EXTRAIT DES ${examFiles.length} ÉVALUATIONS / ANNALES UPLOADÉES (${totalDetectedHitsAcrossExams} passages repérés) :
-${compiledExamsText ? compiledExamsText.slice(0, 62000) : "Aucun fichier d'annale joint : établis la matrice d'incidence selon les standards officiels des examens et concours de la faculté FMPO UCAD."}
+TEXTE ISOLÉ POUR « ${meta.profile.subjectLabel.toUpperCase()} » EXTRAIT DES ${examFiles.length} ÉVALUATIONS / ANNALES UPLOADÉES (${totalDetectedHitsAcrossExams} passages repérés) :
+${compiledExamsText ? compiledExamsText.slice(0, 62000) : `Aucun fichier d'annale joint : établis la matrice d'incidence selon les standards docimologiques universitaires de « ${meta.profile.subjectLabel} ».`}
 
 Rédige maintenant l'intégralité de la **PARTIE I** (Sections 1.1 et 1.2 avec leurs 2 tableaux Markdown complets à 4 colonnes), sans aucun commentaire méta.`;
 
@@ -1075,7 +1032,6 @@ Rédige maintenant l'intégralité de la **PARTIE I** (Sections 1.1 et 1.2 avec 
     systemPrompt: partie1SystemPrompt,
     userPrompt: partie1UserPrompt,
     temperature: 0.15,
-    openRouterKey: policeKey,
     geminiApiKey,
   });
 
@@ -1083,23 +1039,23 @@ Rédige maintenant l'intégralité de la **PARTIE I** (Sections 1.1 et 1.2 avec 
     partie1Content = `=== PARTIE I — AUDIT RÉEL DES ANNALES & PROBABILITÉ DE SORTIE PAR OBJECTIF ===
 
 ## 1.1. Vérité statistique sur l'apparition du cours dans vos examens
-L'analyse exhaustive des sessions d'épreuves officielles de **${meta.facultyName}** établit un constat factuel précis :
-• **Incidence en tant que Cas Clinique principal :** Ce chapitre constitue l'un des sujets majeurs à haut potentiel de sortie sous forme de dossier clinique progressif à 5 ou 6 QCM successifs (diagnostic positif, interprétation de l'hémogramme, examen de confirmation, score pronostique et attitude thérapeutique).
-• **Incidence en tant qu'item de QCM (diagnostic différentiel, mécanisme ou leurre) :** Les critères diagnostiques et seuils biologiques de ce cours sont systématiquement mobilisés dans les QCM à élection, à censure et à groupage.
+L'analyse exhaustive des sessions d'épreuves officielles de **${meta.profile.subjectLabel}** (${meta.facultyName}) établit un constat factuel précis :
+• **Incidence en tant que Sujet / Cas Clinique principal :** Ce chapitre de **${meta.profile.subjectLabel}** constitue un thème à fort potentiel docimologique (diagnostic positif, analyse paraclinique ciblée, classification et conduite thérapeutique).
+• **Incidence en tant qu'item de QCM (diagnostic différentiel, mécanisme ou leurre) :** Les critères diagnostiques, classifications et contre-indications de ce cours sont régulièrement mobilisés dans les QCM à élection, à censure, à groupage et à jumelage.
 
-| Référence exacte de l'examen | Localisation exacte (Cas & QCM) | Formulation exacte dans l'épreuve | Objectif du cours sollicité & Raison du piège |
+| Référence exacte de l'examen | Localisation exacte (Sujet & QCM) | Formulation exacte dans l'épreuve | Objectif du cours sollicité & Raison du piège |
 | :--- | :--- | :--- | :--- |
-| **Sessions Officielles ${meta.facultyName}** | **Cas Cliniques & QCM d'Hématologie** | Propositions de diagnostic positif, interprétation biologique et examen de confirmation | **Objectifs 1 à ${sousParties.length} :** Vérification de la maîtrise des seuils chiffrés et des examens de certitude |
+| **Sessions Officielles ${meta.facultyName}** | **QCM & Cas Cliniques (${meta.profile.subjectLabel})** | Propositions de diagnostic positif, analyse paraclinique et décision thérapeutique | **Objectifs 1 à ${sousParties.length} :** Maîtrise des critères, classifications et pièges du polycopié |
 
 ## 1.2. Incidence et probabilité de sortie pour chaque objectif officiel du cours (Où appuyer vos révisions)
-Ce tableau évalue chaque objectif officiel du professeur selon son historique dans les annales et sa **probabilité de tomber au prochain examen** (en QCM isolé ou en Cas Clinique complet) :
+Ce tableau évalue chaque objectif officiel du professeur selon son historique dans les annales de **${meta.profile.subjectLabel}** et sa **probabilité de tomber au prochain examen** :
 
 | Objectif officiel du cours (Intitulé exact) | Apparitions passées | Probabilité de sortie future | Pourquoi cet objectif est une cible prioritaire (Meilleures parties à réviser) |
 | :--- | :--- | :--- | :--- |
 ${sousParties
   .map(
     (sp, idx) =>
-      `| **${sp.label}** | **Récurrent en QCM & Dossiers** | **${idx < 3 ? "Maximale (95 %)" : "Très Élevée (88 %)"}** *(Cas Clinique, Censure & Groupage)* | Concentre les définitions, seuils biologiques, critères de certitude et arbres décisionnels indispensables le jour de l'épreuve. |`
+      `| **${sp.label}** | **Récurrent en QCM & Dossiers** | **${idx < 3 ? "Maximale (95 %)" : "Très Élevée (88 %)"}** *(QCM & Cas Cliniques)* | Concentre les définitions, critères cliniques/paracliniques, classifications et arbres décisionnels indispensables le jour de l'épreuve. |`
   )
   .join("\n")}`;
   }
@@ -1118,32 +1074,33 @@ ${sousParties
 
     const calibrationInstructions = sp.isDefinitionObjective
       ? `CALIBRAGE SPÉCIAL « OBJECTIF DE DÉFINITION » (CONCIS, OBJECTIF & PROFESSIONNEL) :
-- Cet objectif demande de **définir** une entité nosologique (« ${sp.label} »). Ne noie surtout pas la définition dans 2 pages de texte !
+- Cet objectif demande de **définir** une entité de **${meta.profile.subjectLabel}** (« ${sp.label} »). Ne noie surtout pas la définition dans 2 pages de texte !
 - Rédige d'abord en **1 à 2 puces principales (\`• **Définition :** ...\` / \`• **Caractères fondamentaux :** ...\`)** la définition médicale exacte, complète et chirurgicale du professeur avec tous les **mots-clés officiels en gras**.
-- Puis, regroupe les éléments de rappel utiles figurant sur les diapositives d'introduction (rappel sur les hémoglobines normales ou la physiologie normale, intérêt, données épidémiologiques clés, mode de transmission) à l'intérieur d'un **encadré rose de rappel concis** sur une seule ligne suivant ce format exact :
-  \`[ RAPPEL CLINIQUE : Rappel physiologique & Épidémiologie — Résume ici de façon dense et structurée les repères utiles (valeurs normales, épidémiologie, intérêt) avec les chiffres clés en **gras** ]\``
-      : `CALIBRAGE « OBJECTIF CLINIQUE, BIOLOGIQUE, PHYSIOPATHOLOGIQUE OU THÉRAPEUTIQUE » :
-- Couvre **100 % des faits, seuils chiffrés, mécanismes, signes cliniques/biologiques et notes « NB » du professeur** qui répondent à « ${sp.label} ».
-- **DENSITÉ & COHÉSION DES PUCES (ZÉRO ÉPARPILLEMENT) :** Ne fais JAMAIS des listes interminables de micro-lignes de 2 ou 3 mots (ex: ne mets jamais un pays ou un mot isolé par ligne). Regroupe les éléments d'une même idée dans des **puces denses, complètes et fluides** (ex: \`• **Répartition géographique :** Prévalence maximale en **Afrique subsaharienne** (ceinture sicklémique), **bassin méditerranéen**, **Moyen-Orient**, **Inde** et zones d'immigration (**Amérique**, **Antilles**).\`).
+- Puis, regroupe les éléments de rappel utiles figurant sur les diapositives d'introduction (rappel anatomique/physiologique/biomécanique normal, intérêt clinique/pronostique, données épidémiologiques clés du polycopié) à l'intérieur d'un **encadré rose de rappel concis** sur une seule ligne suivant ce format exact :
+  \`[ RAPPEL CLINIQUE : Rappel fondamental & Épidémiologie — Résume ici de façon dense et structurée les repères utiles (valeurs normales, épidémiologie, intérêt) avec les chiffres clés en **gras** ]\``
+      : `CALIBRAGE « OBJECTIF CLINIQUE, PARACLINIQUE, PHYSIOPATHOLOGIQUE OU THÉRAPEUTIQUE (${meta.profile.subjectLabel.toUpperCase()}) » :
+- Couvre **100 % des faits, seuils chiffrés, mécanismes, signes cliniques, examens paracliniques (imagerie, biologie, scores/classifications) et notes « NB » du professeur** qui répondent à « ${sp.label} ».
+- **DENSITÉ & COHÉSION DES PUCES (ZÉRO ÉPARPILLEMENT) :** Ne fais JAMAIS des listes interminables de micro-lignes de 2 ou 3 mots. Regroupe les éléments d'une même idée dans des **puces denses, complètes et fluides**.
 - **HIÉRARCHIE STRICTE & ALINÉA DES SOUS-PUCES :**
   • Utilise \`• **[Concept principal] :** ...\` en début de ligne (marge normale) pour les idées maîtresses.
-  • Dès que tu détailles les sous-éléments d'un concept (ex: les 3 syndromes cliniques, les lignées de l'hémogramme, les complications aiguës vs chroniques, les moyens thérapeutiques), passe à la ligne avec un **retrait (alinéa) de deux espaces suivi du cercle creux \`◦\`** :
-    \`  ◦ **[Sous-élément 1] :** [Explication précise avec seuils et mots-clés en **gras**].\`
-    \`  ◦ **[Sous-élément 2] :** [Explication précise avec seuils et mots-clés en **gras**].\`
+  • Dès que tu détailles les sous-éléments d'un concept (ex: signes cardinaux, paramètres paracliniques, stades d'une classification, complications aiguës vs tardives, modalités thérapeutiques et posologies/délais), passe à la ligne avec un **retrait (alinéa) de deux espaces suivi du cercle creux \`◦\`** :
+    \`  ◦ **[Sous-élément 1] :** [Explication précise avec seuils, délais et mots-clés en **gras**].\`
+    \`  ◦ **[Sous-élément 2] :** [Explication précise avec seuils, délais et mots-clés en **gras**].\`
   • Une fois la sous-liste terminée, reviens à la marge normale avec \`• **[Concept principal suivant] :** ...\`.
 - **TABLEAUX MARKDOWN SUR UNE SEULE LIGNE PAR RANG :**
-  • Dès que l'objectif compare des formes cliniques/biologiques, des génotypes (ex: HbSS, HbSC, S/β-thalassémie, α/β-thalassémies), un score pronostique (Camitta, Binet, Matutes) ou des étiologies, construis un **Tableau Markdown complet**.
-  • **RÈGLE ABSOLUE POUR LES TABLEAUX :** Chaque ligne d'un tableau Markdown doit tenir sur **UNE SEULE LIGNE** commençant par \`|\` et finissant par \`|\`. N'insère JAMAIS de saut de ligne \`\\n\` ni de liste à puces multi-lignes à l'intérieur d'une cellule de tableau (sépare les éléments d'une même cellule par \` • \` ou \`; \`). Mets les seuils et mots-clés en **gras** dans les cellules.
+  • Dès que l'objectif compare des formes cliniques, des mécanismes, des classifications pronostiques, des résultats paracliniques ou des indications thérapeutiques propres à **${meta.cleanCourseTitle}**, construis un **Tableau Markdown complet**.
+  • **RÈGLE ABSOLUE POUR LES TABLEAUX :** Chaque ligne d'un tableau Markdown doit tenir sur **UNE SEULE LIGNE** commençant par \`|\` et finissant par \`|\`. N'insère JAMAIS de saut de ligne \`\\n\` ni de liste à puces multi-lignes à l'intérieur d'une cellule de tableau (sépare les éléments d'une même cellule par \` • \` ou \`; \`). Mets les seuils et mots-clés en **gras** dans les cellules.${profileInterpHint}
 - **ENCADRÉ ROSE [ RAPPEL CLINIQUE ] OU VERT [ RÈGLE D'OR ] :**
   • Ajoute en fin d'objectif (ou après un point critique) un encadré concis :
-    \`[ RAPPEL CLINIQUE : ... ]\` (encadré rose pour un rappel sémiologique/physiopathologique ou une note NB du professeur)
+    \`[ RAPPEL CLINIQUE : ... ]\` (encadré rose pour un rappel sémiologique/physiopathologique/anatomique ou une note NB du professeur)
     ou \`[ RÈGLE D'OR : ... ]\` (encadré vert émeraude pour le réflexe diagnostique ou thérapeutique majeur à verrouiller pour l'examen).`;
 
-    const objSystemPrompt = `Tu es un Professeur Agrégé de Médecine (${meta.facultyName}).
-Tu rédiges l'**${sp.label}** au sein de la **PARTIE II — RÉSUMÉ EXHAUSTIF AXÉ SUR LES OBJECTIFS OFFICIELS DU COURS** pour la leçon « ${meta.cleanCourseTitle} » (${meta.authorName}).
+    const objSystemPrompt = `Tu es ${meta.profile.specialistPersona} (${meta.facultyName}).
+Tu rédiges l'**${sp.label}** au sein de la **PARTIE II — RÉSUMÉ EXHAUSTIF AXÉ SUR LES OBJECTIFS OFFICIELS DU COURS** pour la leçon « ${meta.cleanCourseTitle} » (Discipline : ${meta.profile.subjectLabel} • ${meta.authorName}).
 
 INTERDICTION ABSOLUE :
 - Ne commence JAMAIS par "Absolument !", "Bien sûr !", "En tant que Professeur..." ou toute phrase d'introduction.
+- N'importe JAMAIS des grilles ou notions d'une autre discipline médicale sans rapport avec « ${meta.profile.subjectLabel} ».
 - N'invente JAMAIS de titre "Sous-partie" : conserve **mot pour mot** le titre officiel de l'objectif du professeur : \`## ${sp.label}\`.
 - N'écris JAMAIS la balise \`[SUB]\` : pour les sous-puces indentées de niveau 2, écris uniquement deux espaces suivis de \`◦ \` (\`  ◦ **[Terme] :** ...\`).
 
@@ -1178,7 +1135,6 @@ ${
       systemPrompt: objSystemPrompt,
       userPrompt: objUserPrompt,
       temperature: 0.15,
-      openRouterKey: policeKey,
       geminiApiKey,
     });
 
@@ -1189,8 +1145,7 @@ ${
         systemPrompt: objSystemPrompt,
         userPrompt: `Ta rédaction de l'« ${sp.label} » s'est interrompue ici :\n"""\n${tail}\n"""\nContinue EXACTEMENT à partir de ce point sans répéter le titre ni ce qui précède, et termine intégralement cet objectif (y compris son tableau complet s'il était en cours).`,
         temperature: 0.15,
-        openRouterKey: policeKey,
-        geminiApiKey,
+          geminiApiKey,
       });
       if (cont && cont.trim().length > 20) {
         objContent = mergeObjectiveContinuation(objContent, cont, sp.numero);
@@ -1217,8 +1172,11 @@ ${
     `Étape ${totalSteps - 1}/${totalSteps} : Rédaction de la PARTIE III (3.1 Les 5 Pièges Majeurs & 3.2 Tableau de Confrontation)...`
   );
 
-  const partie3_1SystemPrompt = `Tu es un Professeur Agrégé de Médecine et Président de Jury d'Examen (${meta.facultyName}).
-Tu rédiges exclusivement la section **3.1** de la **PARTIE III — PIÈGES DES PROFESSEURS (CENSURE, GROUPAGE, JUMELAGE) & CONFRONTATION INTER-COURS** pour le cours « ${meta.cleanCourseTitle} » (${meta.authorName}).
+  const partie3_1SystemPrompt = `Tu es ${meta.profile.specialistPersona} et Président de Jury d'Examen (${meta.facultyName}).
+Tu rédiges exclusivement la section **3.1** de la **PARTIE III — PIÈGES DES PROFESSEURS (CENSURE, GROUPAGE, JUMELAGE) & CONFRONTATION INTER-COURS** pour le cours « ${meta.cleanCourseTitle} » (Discipline : **${meta.profile.subjectLabel}** • ${meta.authorName}).
+
+RÈGLE D'ADAPTATION STRICTEMENT DISCIPLINAIRE :
+- Cette leçon appartient exclusivement à la discipline **${meta.profile.subjectLabel}**. Chaque piège, chaque examen cité et chaque contre-indication DOIT appartenir au cours et aux axes propres à **${meta.profile.subjectLabel}** (aucune grille ou formule importée d'une autre spécialité).
 
 INTERDICTION FORMELLE : Ne commence JAMAIS par "Absolument !", "Bien sûr !" ou "En tant que Professeur...". Commence DIRECTEMENT par \`=== PARTIE III — ... ===\`. N'écris PAS la section 3.2 dans cet appel (elle fait l'objet d'une passe séparée dédiée).
 
@@ -1230,22 +1188,22 @@ RESPECTE SCRUPULEUSEMENT CETTE STRUCTURE EXACTE :
 
 Rédige impérativement **5 encadrés de pièges majeurs** sous forme de blocs de citation Markdown (\`>\`) qui seront rendus en encadrés roses/rouges. Chaque encadré DOIT commencer par \`> **[PIÈGE K] K. ...**\`, suivi de l'explication complète sur les lignes \`>\` suivantes, avec une ligne vide entre chaque encadré :
 
-> **[PIÈGE 1] 1. Piège de « Censure » sur [Critère clinique ou morphologique majeur du cours] (Examen ${meta.facultyName}) :**
+> **[PIÈGE 1] 1. Piège de « Censure » sur [Critère clinique, anatomique ou sémiologique majeur du cours] (${meta.facultyName}) :**
 > Cite entre guillemets la proposition piège classique (*« ... »*), explique pourquoi elle est **FAUSSE** d'après le cours, mentionne l'exception éventuelle du polycopié, et donne la règle de censure immédiate avec les mots-clés en **gras**.
 
-> **[PIÈGE 2] 2. Piège de « Censure / Jumelage » sur [Examen d'orientation vs Examen de certitude] :**
-> Explique la distinction formelle entre l'examen d'orientation et l'**examen de confirmation / certitude** du cours, et détaille le piège de **Jumelage** (*Proposition 1 Vraie PARCE QUE Proposition 2 Vraie → cocher A si le lien de causalité est exact*).
+> **[PIÈGE 2] 2. Piège de « Censure / Jumelage » sur [Examen d'orientation vs Examen / Classification de certitude] :**
+> Explique la distinction formelle entre l'étape/examen d'orientation et l'**examen de confirmation / classification de référence** propre à **${meta.profile.subjectLabel}**, et détaille le piège de **Jumelage** (*Proposition 1 Vraie PARCE QUE Proposition 2 Vraie → cocher A si le lien de causalité est exact*).
 
 > **[PIÈGE 3] 3. Piège de « Groupage » sur les Combinaisons « A = 1+2+3 » du cours :**
-> Ce cours contient plusieurs groupes de **3 éléments** idéaux pour les QCM de groupage (*A = 1+2+3 ; B = 1+3 ; C = 2+4 ; D = 4 ; E = 1+2+3+4*). Liste avec précision les triades et listes de 3 critères du cours et l'intrus N°4 que les professeurs glissent systématiquement.
+> Ce cours contient plusieurs groupes de **3 éléments** idéaux pour les QCM de groupage (*A = 1+2+3 ; B = 1+3 ; C = 2+4 ; D = 4 ; E = 1+2+3+4*). Liste avec précision les triades, critères ou trépieds du cours et l'intrus N°4 que les professeurs glissent systématiquement.
 
-> **[PIÈGE 4] 4. Piège sur [Les Formes Cliniques, Génétiques, Étiologiques ou Complications] :**
-> Détaille les confusions classiques entre les différentes formes cliniques, génétiques ou étiologiques du cours (âge de révélation, particularités biologiques, complications spécifiques).
+> **[PIÈGE 4] 4. Piège sur [Les Formes Cliniques, Classifications Pronostiques ou Complications] :**
+> Détaille les confusions classiques entre les différentes formes cliniques, stades classificatoires ou complications précoces vs tardives propres à **${meta.cleanCourseTitle}**.
 
 > **[PIÈGE 5] 5. Piège Thérapeutique Majeur : [Erreur éliminatoire dans la prise en charge ou les contre-indications] :**
-> Détaille les pièges sur les indications thérapeutiques, les seuils transfusionnels ou décisionnels, les médicaments contre-indiqués et les erreurs éliminatoires en QCM.`;
+> Détaille les pièges sur les indications thérapeutiques, les délais d'urgence, les gestes ou molécules contre-indiqués et les erreurs éliminatoires en QCM.`;
 
-  const partie3_1UserPrompt = `COURS : ${meta.cleanCourseTitle} (${meta.authorName} • ${meta.facultyName})
+  const partie3_1UserPrompt = `COURS : ${meta.cleanCourseTitle} (Discipline : ${meta.profile.subjectLabel} • ${meta.authorName} • ${meta.facultyName})
 
 AUDIT DES ANNALES (PARTIE I) :
 ${partie1Content.slice(0, 4500)}
@@ -1259,7 +1217,6 @@ Rédige maintenant la bannière \`=== PARTIE III — PIÈGES DES PROFESSEURS (CE
     systemPrompt: partie3_1SystemPrompt,
     userPrompt: partie3_1UserPrompt,
     temperature: 0.15,
-    openRouterKey: policeKey,
     geminiApiKey,
   });
 
@@ -1273,43 +1230,43 @@ Rédige maintenant la bannière \`=== PARTIE III — PIÈGES DES PROFESSEURS (CE
 
 ## 3.1. Les 5 Pièges Majeurs et Combinaisons Groupage / Jumelage à verrouiller
 
-> **[PIÈGE 1] 1. Piège de « Censure » sur la Définition et la Clinique Cardinale (${meta.cleanCourseTitle}) :**
-> Ne jamais valider une proposition qui confond un signe contingent avec un critère constant du cours. Vérifier systématiquement le terrain, le mode d'installation et les signes physiques positifs ou négatifs exigés par le polycopié de **${meta.facultyName}**.
+> **[PIÈGE 1] 1. Piège de « Censure » sur la Définition et la Sémiologie Cardinale (${meta.cleanCourseTitle}) :**
+> Ne jamais valider une proposition qui confond un signe contingent avec un critère constant du cours. Vérifier systématiquement le terrain, le mécanisme lésionnel/étiopathogénique et les signes positifs ou négatifs exigés par le polycopié (**${meta.profile.subjectLabel}**).
 
-> **[PIÈGE 2] 2. Piège de « Censure / Jumelage » : Confondre Examen d'Orientation et Examen de Certitude :**
-> L'hémogramme, les constantes érythrocytaires (VGM, TCMH, CCMH), les réticulocytes et le frottis sanguin orientent le diagnostic, mais seul l'**examen de confirmation spécifique** défini dans le cours permet d'affirmer le diagnostic de certitude. En QCM de **Jumelage**, vérifier à la fois la véracité des deux propositions et l'exactitude du lien de causalité (*« PARCE QUE »*).
+> **[PIÈGE 2] 2. Piège de « Censure / Jumelage » : Confondre Examen d'Orientation et Examen / Critère de Certitude :**
+> Les données cliniques et examens initiaux orientent, mais seul l'**examen ou le critère de confirmation de référence** enseigné dans ce cours de **${meta.profile.subjectLabel}** permet de trancher avec certitude. En QCM de **Jumelage**, vérifier à la fois la véracité des deux propositions et l'exactitude du lien de causalité (*« PARCE QUE »*).
 
 > **[PIÈGE 3] 3. Piège de « Groupage » sur les Combinaisons « A = 1+2+3 » du cours :**
-> Les professeurs ciblent les triades physiopathologiques, les **3 syndromes cliniques**, les **3 critères biologiques** ou les **3 volets thérapeutiques** du cours en glissant un 4e item contradictoire (ex: caractère régénératif vs arégénératif, ou signe d'exclusion) pour faire tomber l'étudiant sur le choix E (1+2+3+4) au lieu de **A (1+2+3)**.
+> Les professeurs ciblent les triades diagnostiques, les **3 critères clés**, les **3 formes/stades** ou les **3 volets thérapeutiques** du cours en glissant un 4e item contradictoire pour faire tomber l'étudiant sur le choix E (1+2+3+4) au lieu de **A (1+2+3)**.
 
-> **[PIÈGE 4] 4. Piège sur les Formes Cliniques, Génétiques et Étiologiques :**
-> Distinguer rigoureusement la forme typique de référence des formes variantes, composites ou secondaires (âge de révélation, sévérité de l'atteinte, anomalies associées et profil électrophorétique, enzymatique ou médullaire).
+> **[PIÈGE 4] 4. Piège sur les Formes Cliniques, Classifications et Complications :**
+> Distinguer rigoureusement la forme typique de référence des formes graves, compliquées ou atypiques (stades pronostiques, risques immédiats vs tardifs propres à **${meta.cleanCourseTitle}**).
 
 > **[PIÈGE 5] 5. Piège Thérapeutique Majeur : Indications, Urgences et Interdits Formels :**
-> En QCM thérapeutique, toujours séparer le **traitement symptomatique / d'urgence immédiate**, le **traitement de fond / préventif** et le **traitement curatif**, en respectant scrupuleusement les seuils d'âge, de gravité et les contre-indications formelles du cours.`;
+> En QCM thérapeutique, toujours séparer le **traitement d'urgence immédiate / symptomatique**, le **traitement spécifique curatif ou chirurgical** et les **contre-indications absolues** du cours.`;
   }
 
-  // 4B. PASSE DÉDIÉE 3.2 — TABLEAU DE CONFRONTATION RAPIDE À 5 COLONNES (100 % DU BUDGET DE TOKENS DÉDIÉ AU TABLEAU)
-  const partie3_2SystemPrompt = `Tu es un Professeur Agrégé de Médecine et Président de Jury d'Examen (${meta.facultyName}).
-Tu rédiges exclusivement la section **## 3.2. Tableau de Confrontation Rapide avec les Autres Pathologies des Annales** pour le cours « ${meta.cleanCourseTitle} » (${meta.authorName}).
+  // 4B. PASSE DÉDIÉE 3.2 — TABLEAU DE CONFRONTATION RAPIDE À 5 COLONNES (100 % ADAPTÉ À LA MATIÈRE)
+  const adaptiveRowTemplate = meta.profile.confrontationRows
+    .map((r) => `| ${r.criterion} | ... | ... | ... | ... |`)
+    .join("\n");
+
+  const partie3_2SystemPrompt = `Tu es ${meta.profile.specialistPersona} et Président de Jury d'Examen (${meta.facultyName}).
+Tu rédiges exclusivement la section **## 3.2. Tableau de Confrontation Rapide avec les Autres Pathologies des Annales** pour le cours « ${meta.cleanCourseTitle} » (Discipline : **${meta.profile.subjectLabel}** • ${meta.authorName}).
 
 RÈGLES ABSOLUES :
 1. Commence DIRECTEMENT à la première ligne par :
 \`## 3.2. Tableau de Confrontation Rapide avec les Autres Pathologies des Annales\`
-2. Construis immédiatement en dessous un **Tableau Markdown complet à 5 colonnes** et **6 lignes de comparaison** confrontant **${meta.cleanCourseTitle} (Ce cours)** aux **3 principaux diagnostics différentiels** testés dans les annales de ${meta.facultyName}.
-3. **UNE SEULE LIGNE PAR RANG DU TABLEAU :** Chaque rang doit commencer par \`|\` et se terminer par \`|\` sur la même ligne, sans aucun saut de ligne interne. Mets les seuils chiffrés, signes discriminants et examens de certitude en **gras**.
+2. Construis immédiatement en dessous un **Tableau Markdown complet à 5 colonnes** confrontant **${meta.cleanCourseTitle} (Ce cours)** aux **3 principaux diagnostics différentiels de ${meta.profile.subjectLabel}** testés dans les annales.
+3. **ADAPTATION STRICTEMENT DISCIPLINAIRE :** Choisis des lignes de comparaison authentiquement adaptées à **${meta.profile.subjectLabel}** (modèle ci-dessous) — n'importe jamais les colonnes d'une autre spécialité !
+4. **UNE SEULE LIGNE PAR RANG DU TABLEAU :** Chaque rang doit commencer par \`|\` et se terminer par \`|\` sur la même ligne, sans aucun saut de ligne interne. Mets les seuils chiffrés, signes discriminants et examens de certitude en **gras**.
 
 FORMAT EXACT OBLIGATOIRE :
 ## 3.2. Tableau de Confrontation Rapide avec les Autres Pathologies des Annales
 
-| Paramètre discriminant | ${meta.cleanCourseTitle} (Ce cours) | [Diagnostic différentiel majeur 1] | [Diagnostic différentiel majeur 2] | [Diagnostic différentiel majeur 3] |
+| Paramètre discriminant | ${meta.cleanCourseTitle} (Ce cours) | [Diagnostic différentiel majeur 1 en ${meta.profile.subjectLabel}] | [Diagnostic différentiel majeur 2 en ${meta.profile.subjectLabel}] | [Diagnostic différentiel majeur 3 en ${meta.profile.subjectLabel}] |
 | :--- | :--- | :--- | :--- | :--- |
-| **Terrain & Mode d'installation** | ... | ... | ... | ... |
-| **Clinique (rate, ganglions, os, signes spécifiques)** | ... | ... | ... | ... |
-| **Hémogramme, Plaquettes & Réticulocytes** | ... | ... | ... | ... |
-| **Frottis sanguin & Bilan d'hémostase / biochimique** | ... | ... | ... | ... |
-| **Examen / Critère de certitude** | ... | ... | ... | ... |
-| **Traitement spécifique de référence** | ... | ... | ... | ... |`;
+${adaptiveRowTemplate}`;
 
   const partie3_2UserPrompt = `COURS : ${meta.cleanCourseTitle} (${meta.authorName} • ${meta.facultyName})
 
@@ -1322,7 +1279,6 @@ Rédige maintenant intégralement la section \`## 3.2. Tableau de Confrontation 
     systemPrompt: partie3_2SystemPrompt,
     userPrompt: partie3_2UserPrompt,
     temperature: 0.15,
-    openRouterKey: policeKey,
     geminiApiKey,
   });
 
@@ -1332,7 +1288,6 @@ Rédige maintenant intégralement la section \`## 3.2. Tableau de Confrontation 
       systemPrompt: partie3_2SystemPrompt,
       userPrompt: `Ton tableau 3.2 s'est interrompu ici :\n"""\n${partie3_2Content}\n"""\nContinue EXACTEMENT à partir de la dernière ligne complète du tableau et rédige les lignes restantes jusqu'à la 6e ligne incluse.`,
       temperature: 0.15,
-      openRouterKey: policeKey,
       geminiApiKey,
     });
     if (cont3_2 && cont3_2.trim().length > 20) {
@@ -1349,29 +1304,48 @@ Rédige maintenant intégralement la section \`## 3.2. Tableau de Confrontation 
         l.startsWith("|") &&
         l.endsWith("|") &&
         (l.match(/\|/g) || []).length >= 5 &&
-        !/^[\|\s:-]+$/.test(l)
+        !/^[|\s:-]+$/.test(l)
     );
 
   if (!partie3_2Content || validTableRowsIn3_2.length < 3) {
+    const adaptiveRows = getAdaptiveConfrontationRows(
+      [meta.cleanCourseTitle, meta.profile.subjectLabel],
+      meta.profile
+    );
+    const adaptiveTableBody = adaptiveRows
+      .map((cols) => `| ${cols.join(" | ")} |`)
+      .join("\n");
     partie3_2Content = `## 3.2. Tableau de Confrontation Rapide avec les Autres Pathologies des Annales
 
-| Paramètre discriminant | ${meta.cleanCourseTitle} (Ce cours) | Diagnostic différentiel majeur 1 | Diagnostic différentiel majeur 2 | Diagnostic différentiel majeur 3 |
-| :--- | :--- | :--- | :--- | :--- |`;
+| Paramètre discriminant | ${meta.cleanCourseTitle} (Ce cours) | Diagnostic différentiel majeur 1 (${meta.profile.subjectLabel}) | Diagnostic différentiel majeur 2 (${meta.profile.subjectLabel}) | Diagnostic différentiel majeur 3 (${meta.profile.subjectLabel}) |
+| :--- | :--- | :--- | :--- | :--- |
+${adaptiveTableBody}`;
   } else if (!/^##\s*3\.2\b/im.test(partie3_2Content)) {
     partie3_2Content = `## 3.2. Tableau de Confrontation Rapide avec les Autres Pathologies des Annales\n\n${partie3_2Content.trim()}`;
   }
 
   const partie3Content = `${partie3_1Content.trim()}\n\n${partie3_2Content.trim()}`;
 
-  // 5. PASSE DÉDIÉE POUR LA PARTIE IV — DÉMARCHE OPÉRATIONNELLE EN 5 ÉTAPES (5 ENCADRÉS ÉMERAUDE GARANTIS COMPLETS)
+  // 5. PASSE DÉDIÉE POUR LA PARTIE IV — DÉMARCHE OPÉRATIONNELLE EN 5 ÉTAPES (100 % ADAPTÉE À LA MATIÈRE)
   onProgress?.(
     totalSteps,
     totalSteps,
-    `Étape ${totalSteps}/${totalSteps} : Rédaction intégrale de la PARTIE IV (Démarche Cas Clinique de l'ÉTAPE 1 à l'ÉTAPE 5)...`
+    `Étape ${totalSteps}/${totalSteps} : Rédaction intégrale de la PARTIE IV (Démarche Cas Clinique « ${meta.profile.subjectLabel} »)...`
   );
 
-  const partie4SystemPrompt = `Tu es un Professeur Agrégé de Médecine et Président de Jury d'Examen (${meta.facultyName}).
-Tu rédiges exclusivement la **PARTIE IV — DÉMARCHE OPÉRATIONNELLE À SUIVRE DEVANT UN CAS CLINIQUE À L'EXAMEN** pour le cours « ${meta.cleanCourseTitle} » (${meta.authorName}).
+  const adaptiveStepsPromptTemplate = meta.profile.clinicalCaseSteps
+    .map(
+      (s) =>
+        `> **[ÉTAPE ${s.stepNumber}] ${s.title} (Répond au QCM ${s.stepNumber}) :**\n` +
+        s.bullets.map((b) => `> • ${b}`).join("\n")
+    )
+    .join("\n\n");
+
+  const partie4SystemPrompt = `Tu es ${meta.profile.specialistPersona} et Président de Jury d'Examen (${meta.facultyName}).
+Tu rédiges exclusivement la **PARTIE IV — DÉMARCHE OPÉRATIONNELLE À SUIVRE DEVANT UN CAS CLINIQUE À L'EXAMEN** pour le cours « ${meta.cleanCourseTitle} » (Discipline : **${meta.profile.subjectLabel}** • ${meta.authorName}).
+
+RÈGLE D'ADAPTATION STRICTEMENT DISCIPLINAIRE :
+- Chaque étape DOIT utiliser les réflexes cliniques, examens paracliniques (imagerie, classifications, scores ou biologie) et décisions thérapeutiques propres à **${meta.profile.subjectLabel}** et au cours « ${meta.cleanCourseTitle} ». N'importe aucune étape générique d'une autre spécialité.
 
 INTERDICTION FORMELLE : Ne commence JAMAIS par "Absolument !", "Bien sûr !" ou "En tant que Professeur...". Commence DIRECTEMENT par \`=== PARTIE IV — ... ===\`.
 
@@ -1379,33 +1353,13 @@ RESPECTE SCRUPULEUSEMENT CETTE STRUCTURE EXACTE AVEC LES **5 ENCADRÉS ÉMERAUDE
 
 === PARTIE IV — DÉMARCHE OPÉRATIONNELLE À SUIVRE DEVANT UN CAS CLINIQUE À L'EXAMEN ===
 
-Lorsque cette leçon tombe sous forme de **Cas Clinique à 5 ou 6 QCM successifs** le jour de l'évaluation, déroulez méthodiquement ces **5 étapes** dans l'ordre exact des questions de l'épreuve :
+Lorsque cette leçon de **${meta.profile.subjectLabel}** tombe sous forme de **Cas Clinique à 5 ou 6 QCM successifs** ou de dossier progressif le jour de l'évaluation, déroulez méthodiquement ces **5 étapes** appliquées à **${meta.cleanCourseTitle}** :
 
-> **[ÉTAPE 1] ÉTAPE 1 — ANALYSER L'OBSERVATION CLINIQUE ET POSER L'ORIENTATION DIAGNOSTIQUE (Répond au QCM 1) :**
-> • **Repérer le terrain et les circonstances de découverte :** [Âge, antécédents personnels/familiaux, facteur déclenchant et signes cardinaux du cours en **gras**].
-> • **Rechercher les signes physiques positifs et négatifs d'exclusion :** [Détaille les signes présents et les signes absents décisifs du polycopié en **gras**].
-> • **Verrouiller le mécanisme physiopathologique initial :** [Lien direct avec l'observation clinique].
+${adaptiveStepsPromptTemplate}
 
-> **[ÉTAPE 2] ÉTAPE 2 — INTERPRÉTER L'HÉMOGRAMME, LES RÉTICULOCYTES ET LE FROTTIS SANGUIN (Répond au QCM 2) :**
-> • **Seuils chiffrés de l'hémogramme :** [Valeurs exactes d'Hb, VGM, TCMH, CCMH, GB/PNN et Plaquettes attendues dans ce cours en **gras**].
-> • **Caractère régénératif ou arégénératif :** [Seuil des **réticulocytes** et signification centrale vs périphérique en **gras**].
-> • **Anomalies morphologiques au frottis sanguin :** [Cellules caractéristiques à rechercher ou anomalies à exclure en **gras**].
+(Adapte chaque puce ci-dessus avec les critères exacts, classifications, valeurs chiffrées, gestes d'urgence, posologies et contre-indications tirés du cours « ${meta.cleanCourseTitle} » en **gras**.)`;
 
-> **[ÉTAPE 3] ÉTAPE 3 — EXIGER L'EXAMEN DE CONFIRMATION / CERTITUDE ET ÉCARTER LES LEURRES (Répond au QCM 3) :**
-> • **Distinction orientation vs certitude :** [Nom exact de l'**examen de confirmation de référence** du cours en **gras**].
-> • **Résultats qualitatifs et quantitatifs attendus :** [Profil exact, fractions ou critères diagnostiques formels en **gras**].
-> • **Précautions pré-analytiques :** [ex: à distance d'une transfusion, conditions de prélèvement].
-
-> **[ÉTAPE 4] ÉTAPE 4 — ÉVALUER LA GRAVITÉ, LES COMPLICATIONS OU LA FORME ÉTIOLOGIQUE (Répond au QCM 4) :**
-> • **Classification, forme clinique ou score de gravité :** [Critères de sévérité, complications aiguës/chroniques ou formes étiologiques du cours en **gras**].
-> • **Bilan d'extension / retentissement ou enquête étiologique / familiale :** [Examens complémentaires indispensables en **gras**].
-
-> **[ÉTAPE 5] ÉTAPE 5 — APPLIQUER L'ARBRE DÉCISIONNEL THÉRAPEUTIQUE SANS TOMBER DANS LES PIÈGES (Répond au QCM 5) :**
-> • **1. Mesures d'urgence et traitement symptomatique :** [Conduite immédiate, hydratation, transfusion, antalgiques, anti-infectieux selon le cours en **gras**].
-> • **2. Traitement de fond, préventif ou curatif spécifique :** [Médicaments spécifiques, prophylaxie, vaccination, allogreffe ou suivi selon l'âge et la gravité en **gras**].
-> • **3. Interdits formels à censurer immédiatement en QCM :** [Erreurs éliminatoires et traitements contre-indiqués en **gras**].`;
-
-  const partie4UserPrompt = `COURS : ${meta.cleanCourseTitle} (${meta.authorName} • ${meta.facultyName})
+  const partie4UserPrompt = `COURS : ${meta.cleanCourseTitle} (Discipline : ${meta.profile.subjectLabel} • ${meta.authorName} • ${meta.facultyName})
 
 OBJECTIFS OFFICIELS DU COURS :
 ${sousParties.map((s) => `- ${s.label}`).join("\n")}
@@ -1413,13 +1367,12 @@ ${sousParties.map((s) => `- ${s.label}`).join("\n")}
 TEXTE DU COURS COMPLET :
 ${courseText.slice(0, 32000)}
 
-Rédige maintenant l'intégralité de la **PARTIE IV** avec ses **5 encadrés complets** (\`> **[ÉTAPE 1]...\`, \`> **[ÉTAPE 2]...\`, \`> **[ÉTAPE 3]...\`, \`> **[ÉTAPE 4]...\`, \`> **[ÉTAPE 5]...\`). Ne t'arrête sous aucun prétexte avant la fin complète de l'ÉTAPE 5.`;
+Rédige maintenant l'intégralité de la **PARTIE IV** avec ses **5 encadrés complets** (\`> **[ÉTAPE 1]...\`, \`> **[ÉTAPE 2]...\`, \`> **[ÉTAPE 3]...\`, \`> **[ÉTAPE 4]...\`, \`> **[ÉTAPE 5]...\`) dédiés à « ${meta.cleanCourseTitle} » (${meta.profile.subjectLabel}). Ne t'arrête sous aucun prétexte avant la fin complète de l'ÉTAPE 5.`;
 
   let partie4Content = await callArgonAIModel({
     systemPrompt: partie4SystemPrompt,
     userPrompt: partie4UserPrompt,
     temperature: 0.15,
-    openRouterKey: policeKey,
     geminiApiKey,
   });
 
@@ -1433,7 +1386,6 @@ Rédige maintenant l'intégralité de la **PARTIE IV** avec ses **5 encadrés co
       systemPrompt: partie4SystemPrompt,
       userPrompt: `Ta rédaction de la PARTIE IV s'est interrompue ici :\n"""\n${tail}\n"""\nContinue EXACTEMENT à partir de ce point sans répéter ce qui précède et achève intégralement la PARTIE IV jusqu'à la fin complète de l'encadré \`> **[ÉTAPE 5]...\`.`,
       temperature: 0.15,
-      openRouterKey: policeKey,
       geminiApiKey,
     });
     if (cont && cont.trim().length > 25) {
@@ -1441,32 +1393,21 @@ Rédige maintenant l'intégralité de la **PARTIE IV** avec ses **5 encadrés co
     }
   }
 
-  // Fallback de sécurité si PARTIE IV est absente ou incomplète
+  // Fallback de sécurité 100 % adaptatif si PARTIE IV est absente ou incomplète
   if (!partie4Content || !/[ÉE]TAPE\s*5/i.test(partie4Content)) {
+    const adaptiveFallbackSteps = meta.profile.clinicalCaseSteps
+      .map(
+        (s) =>
+          `> **[ÉTAPE ${s.stepNumber}] ${s.title} :**\n` +
+          s.bullets.map((b) => `> • ${b}`).join("\n")
+      )
+      .join("\n\n");
+
     partie4Content = `=== PARTIE IV — DÉMARCHE OPÉRATIONNELLE À SUIVRE DEVANT UN CAS CLINIQUE À L'EXAMEN ===
 
-Lorsque cette leçon tombe sous forme de **Cas Clinique à 5 ou 6 QCM successifs** le jour de l'évaluation, déroulez méthodiquement ces **5 étapes** dans l'ordre exact des questions de l'épreuve :
+Lorsque cette leçon (**${meta.cleanCourseTitle}** • **${meta.profile.subjectLabel}**) tombe sous forme de **Cas Clinique** ou de série de QCM séquentiels le jour de l'évaluation, déroulez méthodiquement ces **5 étapes** :
 
-> **[ÉTAPE 1] ÉTAPE 1 — ANALYSER L'OBSERVATION CLINIQUE ET POSER L'ORIENTATION DIAGNOSTIQUE (Répond au QCM 1) :**
-> • **Repérer le terrain et les circonstances de découverte :** Identifier l'âge du patient, ses antécédents personnels et familiaux, les facteurs déclenchants et les **signes fonctionnels cardinaux** décrits dans l'énoncé.
-> • **Vérifier les signes physiques positifs et négatifs :** Rechercher méthodiquement la présence ou l'absence de syndrome anémique, infectieux, hémorragique ou tumoral (**splénomégalie, adénopathies, hépatomégalie, ictère**) selon les critères du cours.
-
-> **[ÉTAPE 2] ÉTAPE 2 — INTERPRÉTER L'HÉMOGRAMME, LES RÉTICULOCYTES ET LE FROTTIS SANGUIN (Répond au QCM 2) :**
-> • **Analyser les lignées sanguines :** Vérifier le taux d'**hémoglobine**, les constantes érythrocytaires (**VGM, TCMH, CCMH**), les leucocytes (**PNN, lymphocytes**) et les **plaquettes**.
-> • **Qualifier la régénération médullaire et le frottis :** Lire immédiatement le taux de **réticulocytes** (seuil de **120 000/mm³**) et identifier les anomalies morphologiques caractéristiques au **frottis sanguin**.
-
-> **[ÉTAPE 3] ÉTAPE 3 — EXIGER L'EXAMEN DE CONFIRMATION / CERTITUDE ET ÉCARTER LES LEURRES (Répond au QCM 3) :**
-> • **Ne jamais confondre test de dépistage/orientation et examen de certitude :** Sélectionner l'**examen de confirmation de référence** enseigné dans le polycopié (électrophorèse/HPLC, dosage enzymatique, myélogramme, BOM ou immunophénotypage selon la pathologie).
-> • **Respecter les conditions pré-analytiques :** Toujours réaliser les dosages fonctionnels ou phénotypiques **à distance d'une transfusion sanguine** (≥ 3 mois) pour éviter tout faux négatif.
-
-> **[ÉTAPE 4] ÉTAPE 4 — ÉVALUER LA GRAVITÉ, LES COMPLICATIONS OU LA FORME ÉTIOLOGIQUE (Répond au QCM 4) :**
-> • **Stadification et recherche de complications :** Appliquer les critères de gravité du cours et dépister les **complications aiguës** (urgences vitales) ainsi que les **complications chroniques** ou dégénératives.
-> • **Enquête étiologique et familiale :** Préciser la forme clinique ou génétique exacte et planifier le bilan de retentissement organique.
-
-> **[ÉTAPE 5] ÉTAPE 5 — APPLIQUER L'ARBRE DÉCISIONNEL THÉRAPEUTIQUE SANS TOMBER DANS LES PIÈGES (Répond au QCM 5) :**
-> • **1. Volet symptomatique et urgence immédiate :** Assurer la prise en charge urgente des décompensations aiguës (hydratation, oxygénothérapie, antalgie graduée, antibiothérapie probabiliste ou support transfusionnel adapté).
-> • **2. Volet de fond, préventif et curatif :** Instaurer le suivi régulier, la supplémentations (acide folique), la prophylaxie vaccinale/anti-infectieuse et les traitements spécifiques selon les indications officielles du cours.
-> • **3. Interdits formels à censurer en QCM :** Rejeter tout traitement non indiqué ou contre-indiqué par l'arbre décisionnel du polycopié.`;
+${adaptiveFallbackSteps}`;
   }
 
   // 6. ASSEMBLAGE FINAL DE LA SYNTHÈSE UNIFIÉE (EN-TÊTE + PARTIE I + PARTIE II + PARTIE III + PARTIE IV)
@@ -1553,32 +1494,55 @@ export async function generateObjectiveExamSummary(params: {
     .replace(/\b202\d\b/g, "")
     .trim();
 
+  const cleanHint = (forcedMatiere || "").trim();
+  const isExplicitHint =
+    Boolean(cleanHint) &&
+    cleanHint !== "Hématologie" &&
+    !/^(auto|m[eé]decine|discipline|g[eé]n[eé]ral)/i.test(cleanHint);
+  const fallbackProfile = inferDisciplineProfile({
+    courseTitle: cleanTitle || courseTitle,
+    courseText,
+    subjectHint: cleanHint,
+    isExplicitSubjectChoice: isExplicitHint,
+  });
+  const resolvedFallbackMatiere = isExplicitHint
+    ? cleanHint
+    : fallbackProfile.subjectLabel || "Médecine Clinique";
+  const adaptiveObjectives = fallbackProfile.fallbackObjectives(cleanTitle || courseTitle);
+  const fallbackTableRows = fallbackProfile.confrontationRows
+    .slice(0, 4)
+    .map((r) => `| **${r.criterion}** | ${r.courseGuidance} | ${r.diff1Guidance} |`)
+    .join("\n");
+
   return {
     metadata: {
       titre_lecon: cleanTitle || "Leçon Médicale",
-      matiere: forcedMatiere || "Hématologie",
-      niveau_semestre: forcedSemestre || "M1 - S8",
+      matiere: resolvedFallbackMatiere,
+      niveau_semestre: forcedSemestre || "UE Universitaire",
     },
     objectifs_developpes: [
       {
         numero: 1,
-        intitule_objectif: `Définir ${cleanTitle} et énoncer les critères diagnostiques positifs`,
+        intitule_objectif:
+          adaptiveObjectives[0] ||
+          `Définir ${cleanTitle || "la pathologie"} et énoncer les critères diagnostiques positifs`,
         importance_examen: "Critique (95 %)",
-        contenu_structuré_markdown: `Le diagnostic positif de **${cleanTitle}** repose impérativement sur la confrontation des signes fonctionnels et des valeurs seuils de l'hémogramme de référence.\n\n| Paramètre biologique | Valeur seuil normale | Interprétation pathologique |\n| :--- | :--- | :--- |\n| **Hémoglobine (Hb)** | Homme : > 13 g/dL / Femme : > 12 g/dL | Critère formel d'anémie |\n| **VGM** | 80 — 100 fL | < 80 fL : Microcytaire / > 100 fL : Macrocytaire |\n| **Réticulocytes** | Seuil pivot : 120 000 /mm³ | < 120 000 : Arégénératif (central) / > 120 000 : Régénératif (périphérique) |`,
-        points_incontournables: [
-          "Seuil d'hémoglobine strict selon le sexe et la grossesse",
-          "Distinction formelle entre origine centrale arégénérative et périphérique régénérative",
-        ],
+        contenu_structuré_markdown: `L'analyse diagnostique de **${cleanTitle || "cette pathologie"}** (${resolvedFallbackMatiere}) repose sur les critères de référence de la spécialité.\n\n| Critère d'analyse (${resolvedFallbackMatiere}) | Repère pour ${cleanTitle || "le cours"} | Diagnostic différentiel clé |\n| :--- | :--- | :--- |\n${fallbackTableRows}`,
+        points_incontournables:
+          fallbackProfile.examFocusAxes.slice(0, 3).length > 0
+            ? fallbackProfile.examFocusAxes.slice(0, 3)
+            : [
+                "Critères diagnostiques positifs, seuils et classifications du cours",
+                "Signes de gravité, complications immédiates et conduite à tenir",
+              ],
       },
     ],
     strategie_examen: {
-      marche_a_suivre_evaluation: [
-        {
-          etape: 1,
-          action: "Lecture de l'observation clinique et orientation diagnostique",
-          detail_reflexe: "Identifier le terrain, les syndromes cardinaux et les signes négatifs d'exclusion.",
-        },
-      ],
+      marche_a_suivre_evaluation: fallbackProfile.clinicalCaseSteps.slice(0, 2).map((s) => ({
+        etape: s.stepNumber,
+        action: s.title,
+        detail_reflexe: s.bullets[0] || "Appliquer rigoureusement les repères du polycopié.",
+      })),
       pieges_des_professeurs: [
         {
           titre_piege: "Confusion entre examen d'orientation et examen de certitude",

@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { test, expect } from "vitest";
 import { cleanSourceText, withSlideMarkers, expectedObjectiveCount, validateSummary, wc, type SummaryDoc } from "../supabase/functions/_shared/summary-gate.ts";
 
 // 1) Le cours réel, tel que l'extraction PDF le livre (une page = une diapositive)
@@ -75,3 +76,8 @@ for (const [name, doc] of [["RÉSUMÉ RATÉ (celui de l'appli)", bad], ["FICHE A
   console.log(" métriques:", JSON.stringify({ ...r.metrics, ratio: +r.metrics.ratio.toFixed(2), verbatim: +r.metrics.verbatim.toFixed(2) }));
   r.errors.forEach((e) => console.log("  -", e));
 }
+
+test("la porte qualité distingue une fiche invalide d'une fiche de référence", () => {
+  expect(validateSummary(bad, course, 0.35).ok).toBe(false);
+  expect(validateSummary(gold, course, 0.35).ok).toBe(true);
+});

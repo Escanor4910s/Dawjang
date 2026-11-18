@@ -1,6 +1,7 @@
 // src/pages/Settings.tsx
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -76,129 +77,17 @@ import {
   WHATSAPP_CHANNEL_URL,
 } from "@/components/TelegramWidget";
 import { useToast } from "@/hooks/use-toast";
+import { clearPrivateOfflineData } from "@/lib/offlineStorage";
 import { cn } from "@/lib/utils";
-
-export interface StudentProfileSN {
-  fullName: string;
-  email: string;
-  phone: string;
-  studyLevel: string;
-  university: string;
-  faculty?: string;
-  credits?: number;
-  specialty?: string;
-  avatarUrl?: string;
-  targetRetention: number;
-  dailyCap: number;
-  defaultFlashcardMode?: "objectives" | "relevance" | "qcm_error";
-  defaultDuelTimer?: number;
-  readerFontSize?: "normal" | "confort" | "grand";
-  focusMode?: boolean;
-  soundEffects?: boolean;
-  levelUpAlerts?: boolean;
-  dailyReminderTime?: string;
-}
-
-export const STUDENT_PROFILE_STORAGE_KEY = "hippocampus_user_profile_sn_v1";
-
-export const SENEGAL_STUDY_LEVELS = [
-  "Licence 1",
-  "Licence 2",
-  "Licence 3",
-  "Master 1",
-  "Master 2",
-  "Doctorat 1",
-  "Doctorat 2",
-  "Doctorat 3",
-  "Interne des Hôpitaux",
-];
-
-export const SENEGAL_UNIVERSITIES = [
-  "UCAD — Université Cheikh Anta Diop (Dakar)",
-  "UGB — Université Gaston Berger (Saint-Louis)",
-  "UIDT — Université Iba Der Thiam (Thiès)",
-  "UASZ — Université Assane Seck (Ziguinchor)",
-  "UADB — Université Alioune Diop (Bambey)",
-  "Autre établissement de santé",
-];
-
-export function formatFullStudyLevel(rawLevel?: string | null): string {
-  if (!rawLevel) return "Licence 3";
-  const s = String(rawLevel).trim();
-  const lower = s.toLowerCase();
-  if (/^l\s*1\b/i.test(s) || lower === "l1") return "Licence 1";
-  if (/^l\s*2\b/i.test(s) || lower === "l2") return "Licence 2";
-  if (/^l\s*3\b/i.test(s) || lower === "l3" || /dfasm/i.test(s)) return "Licence 3";
-  if (/^m\s*1\b/i.test(s) || lower === "m1") return "Master 1";
-  if (/^m\s*2\b/i.test(s) || lower === "m2") return "Master 2";
-  if (/^d\s*1\b/i.test(s) || lower === "d1") return "Doctorat 1";
-  if (/^d\s*2\b/i.test(s) || lower === "d2") return "Doctorat 2";
-  if (/^d\s*3\b/i.test(s) || lower === "d3") return "Doctorat 3";
-  if (/interne/i.test(s)) return "Interne des Hôpitaux";
-  return s;
-}
-
-export function getSavedStudentProfile(): StudentProfileSN {
-  const fallbackAvatar =
-    typeof window !== "undefined"
-      ? localStorage.getItem("hippocampus_user_avatar_url") || undefined
-      : undefined;
-  try {
-    const raw = localStorage.getItem(STUDENT_PROFILE_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed.studyLevel) {
-        parsed.studyLevel = formatFullStudyLevel(parsed.studyLevel);
-      }
-      return {
-        defaultFlashcardMode: "objectives",
-        defaultDuelTimer: 30,
-        readerFontSize: "confort",
-        focusMode: false,
-        soundEffects: true,
-        levelUpAlerts: true,
-        dailyReminderTime: "19:30",
-        specialty: "Médecine Générale",
-        avatarUrl: fallbackAvatar,
-        ...parsed,
-      };
-    }
-  } catch (e) {
-    console.error(e);
-  }
-  return {
-    fullName: "talla thiam",
-    email: "talla.thiam@ucad.edu.sn",
-    phone: "+221 77 000 00 00",
-    studyLevel: "Licence 3",
-    university: "UCAD — Université Cheikh Anta Diop (Dakar)",
-    specialty: "Médecine Générale",
-    avatarUrl: fallbackAvatar,
-    targetRetention: 90,
-    dailyCap: 50,
-    defaultFlashcardMode: "objectives",
-    defaultDuelTimer: 30,
-    readerFontSize: "confort",
-    focusMode: false,
-    soundEffects: true,
-    levelUpAlerts: true,
-    dailyReminderTime: "19:30",
-  };
-}
-
-export function saveStudentProfile(profile: StudentProfileSN) {
-  const normalized: StudentProfileSN = {
-    ...profile,
-    studyLevel: formatFullStudyLevel(profile.studyLevel),
-  };
-  localStorage.setItem(STUDENT_PROFILE_STORAGE_KEY, JSON.stringify(normalized));
-  if (normalized.avatarUrl) {
-    localStorage.setItem("hippocampus_user_avatar_url", normalized.avatarUrl);
-  } else {
-    localStorage.removeItem("hippocampus_user_avatar_url");
-  }
-  window.dispatchEvent(new Event("hippocampus-profile-updated"));
-}
+import {
+  formatFullStudyLevel,
+  getSavedStudentProfile,
+  saveStudentProfile,
+  SENEGAL_STUDY_LEVELS,
+  SENEGAL_UNIVERSITIES,
+  STUDENT_AVATAR_STORAGE_KEY,
+  type StudentProfileSN,
+} from "@/lib/studentProfile";
 
 type SettingsSectionId =
   | "profile"
@@ -247,6 +136,7 @@ const SETTINGS_NAV: Array<{
 
 export default function Settings() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
 
@@ -257,11 +147,13 @@ export default function Settings() {
   const [stats, setStats] = useState<UserStatsState>(getStoredUserStats);
   const [badges, setBadges] = useState<QuestBadgeItem[]>(getStoredQuestBadges);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(
-    localStorage.getItem("hippocampus_user_avatar_url")
+    localStorage.getItem(STUDENT_AVATAR_STORAGE_KEY)
   );
 
   const [rewardsModalOpen, setRewardsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [localDataDialogOpen, setLocalDataDialogOpen] = useState(false);
+  const [isClearingLocalData, setIsClearingLocalData] = useState(false);
 
   // États Sécurité / Mot de passe
   const [newPassword, setNewPassword] = useState("");
@@ -322,7 +214,7 @@ export default function Settings() {
       const p = getSavedStudentProfile();
       setProfile(p);
       setStats(getStoredUserStats());
-      const photo = p.avatarUrl || localStorage.getItem("hippocampus_user_avatar_url");
+      const photo = p.avatarUrl || localStorage.getItem(STUDENT_AVATAR_STORAGE_KEY);
       if (photo) setAvatarUrl(photo);
     };
 
@@ -357,7 +249,7 @@ export default function Settings() {
       if (!dataUrl) return;
 
       setAvatarUrl(dataUrl);
-      localStorage.setItem("hippocampus_user_avatar_url", dataUrl);
+      localStorage.setItem(STUDENT_AVATAR_STORAGE_KEY, dataUrl);
       window.dispatchEvent(new Event("hippocampus-profile-updated"));
       window.dispatchEvent(new Event("hippocampus-stats-updated"));
 
@@ -380,7 +272,7 @@ export default function Settings() {
 
   const handleRemoveAvatar = () => {
     setAvatarUrl(null);
-    localStorage.removeItem("hippocampus_user_avatar_url");
+    localStorage.removeItem(STUDENT_AVATAR_STORAGE_KEY);
     window.dispatchEvent(new Event("hippocampus-profile-updated"));
     toast({
       title: "Photo retirée",
@@ -637,6 +529,38 @@ export default function Settings() {
     }
   };
 
+  const handleClearLocalData = async () => {
+    setIsClearingLocalData(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      await clearPrivateOfflineData(user?.id);
+      queryClient.clear();
+
+      const restoredProfile = getSavedStudentProfile();
+      setProfile(restoredProfile);
+      setAvatarUrl(restoredProfile.avatarUrl || null);
+      setStats(getStoredUserStats());
+      setBadges(getStoredQuestBadges());
+      computeStorageMetrics();
+      setLocalDataDialogOpen(false);
+
+      toast({
+        title: "Données locales effacées",
+        description:
+          "Les contenus et caches privés de ce navigateur ont été supprimés.",
+      });
+    } catch {
+      toast({
+        title: "Effacement impossible",
+        description:
+          "Les données locales n'ont pas pu être supprimées complètement. Réessayez après une reconnexion.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsClearingLocalData(false);
+    }
+  };
+
   const initials =
     profile.fullName
       .split(" ")
@@ -729,7 +653,7 @@ export default function Settings() {
                   {profile.fullName}
                 </p>
                 <p className="text-[11.5px] text-muted-foreground truncate">
-                  {formatFullStudyLevel(profile.studyLevel)} • {stats.credits} crédits
+                  {formatFullStudyLevel(profile.studyLevel)} • {(Number(stats.credits ?? 0) || 0).toLocaleString("fr-FR")} crédits
                 </p>
               </div>
             </div>
@@ -1393,6 +1317,27 @@ export default function Settings() {
                       <span>Nettoyer & Optimiser</span>
                     </Button>
                   </div>
+
+                  <div className="pt-4 border-t border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-[13.5px] font-semibold text-foreground">
+                        Confidentialité locale
+                      </h4>
+                      <p className="text-[12px] text-muted-foreground">
+                        Supprime les cours, QCM, résumés, flashcards, historiques et caches privés de ce navigateur. Les données déjà synchronisées sur votre compte ne sont pas supprimées.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setLocalDataDialogOpen(true)}
+                      className="shrink-0"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Effacer mes données locales</span>
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -1495,6 +1440,38 @@ export default function Settings() {
       {/* =====================================================================
           MODALE "VOIR MES RÉCOMPENSES" — CARTE DE PRESTIGE DAWJANG + MÉDAILLES MILITAIRES
          ===================================================================== */}
+      <Dialog open={localDataDialogOpen} onOpenChange={setLocalDataDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-xl font-normal">
+              Effacer les données locales ?
+            </DialogTitle>
+            <DialogDescription>
+              Cette action supprime définitivement les contenus privés et les caches enregistrés dans ce navigateur. Elle ne supprime pas votre compte ni les données déjà présentes sur le serveur.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setLocalDataDialogOpen(false)}
+              disabled={isClearingLocalData}
+            >
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleClearLocalData}
+              disabled={isClearingLocalData}
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>{isClearingLocalData ? "Effacement…" : "Effacer définitivement"}</span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={rewardsModalOpen} onOpenChange={setRewardsModalOpen}>
         <DialogContent className="sm:max-w-[680px] max-h-[88vh] overflow-y-auto">
           <DialogHeader>
@@ -1570,8 +1547,8 @@ export default function Settings() {
                     Décorations arborées ({pinnedMedals.length} / {badges.length})
                   </span>
                   <span>
-                    {stats.xp.toLocaleString("fr-FR")} /{" "}
-                    {stats.nextLevelXp.toLocaleString("fr-FR")} XP
+                    {(Number(stats.xp ?? 0) || 0).toLocaleString("fr-FR")} /{" "}
+                    {(Number(stats.nextLevelXp ?? 1) || 1).toLocaleString("fr-FR")} XP
                   </span>
                 </div>
 

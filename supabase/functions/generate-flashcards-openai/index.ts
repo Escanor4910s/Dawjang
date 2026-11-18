@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { getUserPlanInfo } from "../_shared/plan-utils.ts";
+import { checkUserPlan } from "../_shared/plan-utils.ts";
 import { extractCompletionText } from "../_shared/ai-utils.ts";
 import { callAI, hasAiKey } from "../_shared/llm.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.1";
@@ -89,24 +89,26 @@ export default async function handler(req: Request) {
     if (!hasAiKey()) return json({ error: "Service indisponible" }, 503);
 
     // Contenu : envoyé directement par l'application (v7) ou lu en base (compatibilité)
-    let courseContent: string = typeof directContent === "string" ? directContent : "";
-    let userInfo: any = null;
+    let courseContent: string = typeof directContent === "string" ? directContent.slice(0, 50000) : "";
+    const planCheck = await checkUserPlan(req, {
+      requiredPlan: "premium",
+      featureName: "Flashcards IA",
+    });
+    if (planCheck.errorResponse) return planCheck.errorResponse;
+    const userInfo = { userId: planCheck.userId };
 
-    if ((!courseContent && courseId) || persist) {
-      try {
-        userInfo = await getUserPlanInfo(req);
-      } catch (e) {
-        console.warn("getUserPlanInfo failed:", e);
-      }
-    }
-
-    if (!courseContent && courseId) {
-      if (!userInfo) return json({ error: "Authentification requise" }, 401);
+    if (courseId) {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const supabase = createClient(supabaseUrl, supabaseKey);
-      const { data: courseData } = await supabase.from("courses").select("content").eq("id", courseId).single();
-      courseContent = courseData?.content || "";
+      const { data: courseData } = await supabase
+        .from("courses")
+        .select("content")
+        .eq("id", courseId)
+        .eq("user_id", userInfo.userId)
+        .maybeSingle();
+      if (!courseData) return json({ error: "Cours introuvable ou accès refusé" }, 404);
+      courseContent = courseContent || courseData.content || "";
     }
     if (!courseContent || courseContent.length < 100) {
       return json({ error: "Contenu du cours insuffisant (100 caractères minimum)." }, 400);

@@ -148,7 +148,7 @@ const Quiz = () => {
             id: `tq-${idx}`,
             question: safeText(tq.question, `Question ciblée #${idx + 1}`),
             choices: rawChoices.map((c: string) =>
-              safeText(String(c).replace(/^[A-E][\.\)\-\s]+/i, "").trim(), "")
+              safeText(String(c).replace(/^[A-E][.)\-\s]+/i, "").trim(), "")
             ),
             correct: correctIndices.length > 0 ? correctIndices : [0],
             explanation: safeText(
@@ -194,7 +194,8 @@ const Quiz = () => {
             lockOrder: q.lockOrder,
             lockChoices: q.lockChoices,
           }));
-          const isExamCloning = sessionData.question_type === "clonage_examen" || sessionData.metadata?.mode === "exam_clone";
+          const metadata = sessionData.metadata as { mode?: string } | null;
+          const isExamCloning = sessionData.question_type === "clonage_examen" || metadata?.mode === "exam_clone";
           const shuffled = shuffleQuiz(rawQuestions, isExamCloning);
           setQuestions(shuffled);
         } else { toast({ title: "Aucune question disponible", variant: "destructive" }); navigate("/quiz-library"); }
@@ -279,7 +280,7 @@ const Quiz = () => {
         });
 
         if (!resultsError) {
-          try { await recordQuizCompletion(correct, total); } catch {}
+          try { await recordQuizCompletion(correct, total); } catch { /* Le résultat du quiz est déjà enregistré. */ }
           const incorrectAnswers = questions.filter((q, i) => {
             const sel = selectedAnswers[i] || [];
             return !(sel.length === q.correct.length && sel.every(a => q.correct.includes(a)));

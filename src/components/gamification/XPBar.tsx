@@ -48,7 +48,7 @@ export function XPBar({
       </div>
       <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
         <div
-          className="h-full rounded-full bg-primary transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          className="h-full rounded-full bg-primary transition-all duration-500 ease-editorial"
           style={{ width: `${percentage}%` }}
         />
       </div>

@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { getUserPlanInfo } from "../_shared/plan-utils.ts";
+import { checkUserPlan } from "../_shared/plan-utils.ts";
 import { extractCompletionText } from "../_shared/ai-utils.ts";
 import { callAI, hasAiKey } from "../_shared/llm.ts";
 
@@ -25,6 +25,12 @@ const ALLOWED_ROLES = new Set(["system", "user", "assistant"]);
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  const planCheck = await checkUserPlan(req, {
+    requiredPlan: "premium",
+    featureName: "Assistant MOR",
+  });
+  if (planCheck.errorResponse) return planCheck.errorResponse;
+
   if (!hasAiKey()) return json({ error: "Service IA non configuré" }, 503);
 
   try {
@@ -32,16 +38,24 @@ serve(async (req: Request) => {
     const raw: unknown[] = Array.isArray(body?.messages) ? body.messages : [];
 
     // Validation stricte : rôles autorisés, contenu texte borné
+    let remainingCharacters = 60000;
     const messages = raw
       .filter((m: any) => m && ALLOWED_ROLES.has(m.role) && typeof m.content === "string")
       .slice(-12)
-      .map((m: any) => ({ role: m.role, content: m.content.slice(0, 48000) }));
+      .reverse()
+      .map((m: any) => {
+        const content = m.content.slice(0, Math.min(16000, remainingCharacters));
+        remainingCharacters -= content.length;
+        return { role: m.role, content };
+      })
+      .filter((m) => m.content.length > 0)
+      .reverse();
 
     if (!messages.some((m) => m.role === "user")) {
       return json({ error: "Message utilisateur manquant" }, 400);
     }
 
-    const max_tokens = typeof body?.max_tokens === "number" ? body.max_tokens : 8192;
+    const max_tokens = Math.max(256, Math.min(8192, Number(body?.max_tokens) || 4096));
     const response = await callAI({ messages, temperature: 0.45, max_tokens });
 
     if (!response.ok) {

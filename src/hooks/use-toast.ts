@@ -3,14 +3,15 @@ import * as React from "react";
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 import { pushAppNotification } from "@/hooks/useNotifications";
 
-const TOAST_LIMIT = 3;
-const TOAST_REMOVE_DELAY = 4200;
+const TOAST_LIMIT = 4;
+const TOAST_REMOVE_DELAY = 4800;
 
 type ToasterToast = ToastProps & {
   id: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
   action?: ToastActionElement;
+  createdAt?: string;
 };
 
 const actionTypes = {
@@ -53,7 +54,7 @@ interface State {
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
-const addToRemoveQueue = (toastId: string) => {
+const addToRemoveQueue = (toastId: string, customDelay = TOAST_REMOVE_DELAY) => {
   if (toastTimeouts.has(toastId)) {
     return;
   }
@@ -64,9 +65,21 @@ const addToRemoveQueue = (toastId: string) => {
       type: "REMOVE_TOAST",
       toastId: toastId,
     });
-  }, TOAST_REMOVE_DELAY);
+  }, customDelay);
 
   toastTimeouts.set(toastId, timeout);
+};
+
+export const pauseToastTimeout = (toastId: string) => {
+  const existing = toastTimeouts.get(toastId);
+  if (existing) {
+    clearTimeout(existing);
+    toastTimeouts.delete(toastId);
+  }
+};
+
+export const resumeToastTimeout = (toastId: string, delayMs = 3000) => {
+  addToRemoveQueue(toastId, delayMs);
 };
 
 export const reducer = (state: State, action: Action): State => {
@@ -89,10 +102,12 @@ export const reducer = (state: State, action: Action): State => {
       const { toastId } = action;
 
       if (toastId) {
-        addToRemoveQueue(toastId);
+        pauseToastTimeout(toastId);
+        addToRemoveQueue(toastId, 300);
       } else {
         state.toasts.forEach((toast) => {
-          addToRemoveQueue(toast.id);
+          pauseToastTimeout(toast.id);
+          addToRemoveQueue(toast.id, 300);
         });
       }
 
@@ -137,6 +152,11 @@ type Toast = Omit<ToasterToast, "id">;
 
 function toast({ ...props }: Toast) {
   const id = genId();
+  const nowStr = new Date().toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 
   const update = (props: ToasterToast) =>
     dispatch({
@@ -175,6 +195,7 @@ function toast({ ...props }: Toast) {
     toast: {
       ...props,
       id,
+      createdAt: nowStr,
       open: true,
       onOpenChange: (open) => {
         if (!open) dismiss();
@@ -182,8 +203,11 @@ function toast({ ...props }: Toast) {
     },
   });
 
-  // Planifie la fermeture automatique après 4.2 secondes
-  addToRemoveQueue(id);
+  // Planifie la fermeture automatique (un peu plus longue pour les alertes destructives ou longues)
+  const descLen = typeof props.description === "string" ? props.description.length : 0;
+  const initialDelay =
+    props.variant === "destructive" || descLen > 110 ? 6500 : TOAST_REMOVE_DELAY;
+  addToRemoveQueue(id, initialDelay);
 
   return {
     id: id,

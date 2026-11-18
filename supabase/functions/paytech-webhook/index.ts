@@ -40,7 +40,10 @@ async function getExpectedHashes() {
   return { expectedKeyHash, expectedSecretHash };
 }
 
-const VALID_PLAN_IDS = ["premium", "pro"];
+const PRICING: Record<string, { monthly: number; yearly: number }> = {
+  premium: { monthly: 2500, yearly: 24000 },
+  pro: { monthly: 4000, yearly: 38400 },
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -87,7 +90,7 @@ serve(async (req) => {
       const { userId, planId, isYearly } = customField;
 
       // Validate extracted data
-      if (!userId || typeof userId !== 'string' || !planId || !VALID_PLAN_IDS.includes(planId)) {
+      if (!userId || typeof userId !== 'string' || !planId || !(planId in PRICING) || typeof isYearly !== "boolean") {
         console.error("Invalid custom_field data:", customField);
         return new Response("Invalid custom_field values", { status: 400, headers: corsHeaders });
       }
@@ -98,40 +101,32 @@ serve(async (req) => {
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
       );
 
-      const now = new Date();
-      const expiresAt = new Date(now);
-      expiresAt.setDate(expiresAt.getDate() + (isYearly ? 365 : 30));
+      const billingCycle = isYearly ? "yearly" : "monthly";
+      const amount = Number(payload.item_price);
+      const currency = payload.currency || "XOF";
+      if (amount !== PRICING[planId][billingCycle] || currency !== "XOF" || !payload.ref_command) {
+        console.error("PayTech amount, currency or reference mismatch");
+        return new Response("Invalid payment data", { status: 400, headers: corsHeaders });
+      }
 
-      // Record payment in history table
-      await supabaseAdmin.from("payments").insert({
-        user_id: userId,
-        plan_id: planId,
-        amount: parseInt(payload.item_price || "0", 10),
-        currency: payload.currency || "XOF",
-        billing_cycle: isYearly ? "yearly" : "monthly",
-        status: "completed",
-        paytech_ref: payload.ref_command || null,
-        paytech_token: payload.token || null,
-        payment_method: payload.payment_method || null,
-        completed_at: now.toISOString(),
+      const { data, error } = await supabaseAdmin.rpc("record_completed_payment", {
+        p_user_id: userId,
+        p_plan_id: planId,
+        p_amount: amount,
+        p_currency: currency,
+        p_billing_cycle: billingCycle,
+        p_reference: payload.ref_command,
+        p_provider_token: payload.token || null,
+        p_payment_method: payload.payment_method || "paytech",
+        p_metadata: { provider: "paytech" },
       });
 
-      // Update user profile with plan + expiration
-      const { error } = await supabaseAdmin
-        .from("profiles")
-        .update({
-          plan: planId,
-          plan_updated_at: now.toISOString(),
-          plan_expires_at: expiresAt.toISOString(),
-        })
-        .eq("id", userId);
-
       if (error) {
-        console.error(`DB error upgrading user ${userId}:`, error);
+        console.error("PayTech payment recording failed:", error.message);
         return new Response("Database update failed", { status: 500, headers: corsHeaders });
       }
 
-      console.log(`✅ User ${userId} upgraded to ${planId} (expires ${expiresAt.toISOString()})`);
+      console.log(`PayTech payment processed for plan ${planId}`, { alreadyProcessed: data?.alreadyProcessed === true });
     }
 
     return new Response("OK", { status: 200, headers: corsHeaders });

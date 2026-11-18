@@ -1,73 +1,115 @@
-# Welcome to your Lovable project
+# Hippocampus
 
-## Project info
+Hippocampus est une PWA de révision médicale destinée aux étudiants en santé. Elle permet d’importer des cours, de générer des QCM, des synthèses et des flashcards, de suivre sa progression et de travailler hors ligne.
 
-**URL**: https://lovable.dev/projects/0ca399d4-351e-4e66-8122-b79641581fec
+L’application est construite avec React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, React Query et Supabase. Les appels IA et les opérations de paiement sensibles sont exécutés par des Edge Functions côté serveur.
 
-## How can I edit this code?
+## Prérequis
 
-There are several ways of editing your application.
+- Node.js 20 ou supérieur, idéalement 22
+- npm
+- Un projet Supabase
+- Supabase CLI et Deno pour les migrations et Edge Functions
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/0ca399d4-351e-4e66-8122-b79641581fec) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Installation locale
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+npm install
+cp .env.example .env
 ```
 
-**Edit a file directly in GitHub**
+Renseignez uniquement les variables publiques Vite dans `.env` :
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```env
+VITE_SUPABASE_URL="https://votre-projet.supabase.co"
+VITE_SUPABASE_PUBLISHABLE_KEY="votre-cle-anon-publique"
+VITE_SUPABASE_PROJECT_ID="votre-project-id"
+```
 
-**Use GitHub Codespaces**
+Ne placez jamais dans `.env` ou dans une variable `VITE_*` :
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- `SUPABASE_SERVICE_ROLE_KEY`
+- une clé OpenRouter, Lovable, OpenAI, Anthropic ou Gemini
+- un secret PayPal ou PayTech
 
-## What technologies are used for this project?
+Ces valeurs doivent rester dans les variables d’environnement des Edge Functions Supabase. Toute clé ayant été exposée côté client doit être révoquée puis régénérée.
 
-This project is built with:
+## Scripts
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```sh
+npm run dev            # serveur de développement
+npm run build          # build de production
+npm run preview        # prévisualisation du build
+npm run lint           # ESLint
+npm run lint -- --quiet  # uniquement les erreurs ESLint
+npm run typecheck      # vérification TypeScript
+npm test               # tests Vitest
+npm run test:coverage  # tests et couverture
+```
 
-## How can I deploy this project?
+## Base de données et Edge Functions
 
-Simply open [Lovable](https://lovable.dev/projects/0ca399d4-351e-4e66-8122-b79641581fec) and click on Share -> Publish.
+Les migrations se trouvent dans `supabase/migrations/`. Appliquez-les dans l’ordre :
 
-## Can I connect a custom domain to my Lovable project?
+```sh
+supabase db push
+```
 
-Yes, you can!
+Pour un environnement local :
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+```sh
+supabase start
+supabase db reset
+```
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Déployez les fonctions :
+
+```sh
+supabase functions deploy
+```
+
+Les principales variables serveur sont :
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_ANON_KEY`, lorsque la fonction en a explicitement besoin
+- `OPENROUTER_API_KEY` ou `LOVABLE_API_KEY` pour le moteur IA partagé
+- `SUMMARY_MODEL` et `APP_PUBLIC_URL`, optionnels
+- `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_BASE_URL`
+- `PAYTECH_API_KEY`, `PAYTECH_API_SECRET`, `PAYTECH_ENV`
+- `SITE_URL`
+
+Les fonctions IA exigent un JWT utilisateur. `paytech-webhook` reste publiquement accessible uniquement parce qu’il vérifie sa propre signature. Les contrôles de plan, d’expiration, de propriété des cours, de taille d’entrée, de tokens et de quotas doivent rester côté serveur ; un garde React n’est pas une protection de sécurité.
+
+## Confidentialité hors ligne
+
+Les données IndexedDB sont isolées par identifiant utilisateur. La déconnexion et le changement de compte suppriment :
+
+- les bases hors ligne de l’ancien compte
+- les caches runtime, sauf le précache applicatif public
+- les entrées privées `dawjang_*` et `hippocampus_*` de `localStorage`
+
+Une action « Effacer mes données locales » est également disponible dans Paramètres → Données. Les préférences publiques non privées et le statut d’authentification local sont préservés.
+
+## CI
+
+Le workflow `.github/workflows/ci.yml` exécute :
+
+1. `npm ci`
+2. ESLint en mode erreurs uniquement
+3. `npm run typecheck`
+4. `npm test`
+5. `npm run build`
+
+Le build CI utilise des valeurs publiques Supabase factices ; il ne doit pas recevoir de secret réel.
+
+## Limites actuelles
+
+- Les Edge Functions, migrations SQL, webhooks et parcours PayPal/PayTech nécessitent encore des tests d’intégration sur un projet Supabase réel.
+- Les parcours navigateur authentifiés et les scénarios de paiement ne sont pas encore automatisés.
+- Quelques dépendances nécessitent des migrations majeures planifiées ou un remplacement.
+- Les modules PDF, OCR et certaines pages restent volumineux ; le lazy loading a été amélioré mais un budget de bundle reste à formaliser.
+
+## Avertissement
+
+Hippocampus est un outil d’aide à la révision. Il ne remplace ni un enseignement médical officiel, ni un avis clinique, ni une source académique validée. Vérifiez toute information médicale avant un usage professionnel ou pédagogique.

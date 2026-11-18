@@ -228,8 +228,6 @@ export const QuizLibrary = () => {
           correct: q.correct || [],
           explanation: q.explanation,
         })),
-        score: session.score,
-        totalQuestions: session.total_questions || session.question_count,
       });
       toast({
         title: "PDF téléchargé",
@@ -758,6 +756,7 @@ export const QuizLibrary = () => {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 rounded-lg hover:bg-foreground/10"
+                            aria-label="Options du QCM"
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>

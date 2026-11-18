@@ -2,6 +2,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.1";
 
 export type UserPlan = "gratuit" | "premium" | "pro" | "admin";
 
+function getActivePlan(plan: unknown, expiresAt: unknown): UserPlan {
+  if (typeof expiresAt === "string" && new Date(expiresAt).getTime() <= Date.now()) {
+    return "gratuit";
+  }
+  return plan === "premium" || plan === "pro" ? plan : "gratuit";
+}
+
 export interface PlanCheckResult {
   userId: string;
   plan: UserPlan;
@@ -77,11 +84,11 @@ export async function checkUserPlan(
   // Get user's plan from profile
   const { data: profile } = await supabase
     .from("profiles")
-    .select("plan")
+    .select("plan, plan_expires_at")
     .eq("id", user.id)
     .single();
 
-  const plan = (profile?.plan as UserPlan) || "gratuit";
+  const plan = getActivePlan(profile?.plan, profile?.plan_expires_at);
 
   // Admin always has access
   if (isAdmin) {
@@ -162,14 +169,85 @@ export async function getUserPlanInfo(
   // Get user's plan from profile
   const { data: profile } = await supabase
     .from("profiles")
-    .select("plan")
+    .select("plan, plan_expires_at")
     .eq("id", user.id)
     .single();
 
   return {
     userId: user.id,
-    plan: (profile?.plan as UserPlan) || "gratuit",
+    plan: getActivePlan(profile?.plan, profile?.plan_expires_at),
     isAdmin: false,
+  };
+}
+
+export async function checkExamAiActionAccess(
+  user: { userId: string; plan: UserPlan },
+  body: Record<string, unknown>,
+): Promise<Response | null> {
+  const jsonError = (error: string, status: number) => new Response(
+    JSON.stringify({ error }),
+    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+
+  if (body.action === "vision_ocr_extract" || body.action === "audit_exam_annale") {
+    if (user.plan === "gratuit") {
+      return jsonError("Cette fonction IA nécessite un abonnement Premium actif.", 403);
+    }
+    if (body.action === "vision_ocr_extract") {
+      const images = body.images;
+      if (
+        !Array.isArray(images) || images.length < 1 || images.length > 4 ||
+        images.some((image) => !image || typeof image.data !== "string" || image.data.length > 8_000_000)
+      ) {
+        return jsonError("Veuillez fournir entre 1 et 4 images de taille limitée.", 400);
+      }
+    } else if (typeof body.examText !== "string" || body.examText.length > 120_000) {
+      return jsonError("Le texte de l'épreuve est invalide ou trop volumineux.", 400);
+    }
+  }
+
+  if (body.action === "generate_examen_blanc_block") {
+    const spec = body.blueprintSpec;
+    const formats = spec && typeof spec === "object" && "formats" in spec ? spec.formats : null;
+    const content = body.lessonContent || body.courseContent;
+    if (
+      !Array.isArray(formats) || formats.length < 1 || formats.length > 45 ||
+      typeof content !== "string" || content.trim().length < 30 || content.length > 120_000
+    ) {
+      return jsonError("Le cours ou le nombre de questions est invalide.", 400);
+    }
+    const quota = await consumeDailyQuota(user.userId, "qcm", formats.length, user.plan);
+    if (!quota.allowed) return jsonError("Limite quotidienne de QCM atteinte.", 429);
+  }
+
+  return null;
+}
+
+export async function consumeDailyQuota(
+  userId: string,
+  feature: "qcm" | "summary",
+  amount: number,
+  plan: UserPlan,
+): Promise<{ allowed: boolean; remaining: number; limit: number }> {
+  const limit = feature === "qcm" ? 5 : 1;
+  if (plan !== "gratuit") return { allowed: true, remaining: Infinity, limit: Infinity };
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  const { data, error } = await supabase.rpc("consume_daily_quota", {
+    p_user_id: userId,
+    p_feature: feature,
+    p_amount: Math.max(1, Math.floor(amount)),
+    p_limit: limit,
+  });
+  if (error) throw new Error("Impossible de vérifier le quota quotidien.");
+  const result = data as { allowed?: boolean; remaining?: number } | null;
+  return {
+    allowed: result?.allowed === true,
+    remaining: Math.max(0, result?.remaining ?? 0),
+    limit,
   };
 }
 

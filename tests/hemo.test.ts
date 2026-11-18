@@ -1,3 +1,4 @@
+import { test, expect } from "vitest";
 import { withSlideMarkers, sourceStats, validateSummary, wc, type SummaryDoc } from "../supabase/functions/_shared/summary-gate.ts";
 // Reconstitution du cours « Hémoglobinopathies M1 » tel que le moteur local le voit :
 // la diapo Objectifs + quelques titres seulement (le reste = images sans texte).
@@ -17,3 +18,7 @@ const bad: SummaryDoc = { schema_version: 2, mode: "objectives", title: "6_Hemog
 const r = validateSummary(bad, course, 0.35);
 console.log("FICHE DE L'APPLICATION →", r.ok ? "acceptée ✗" : "REJETÉE ✓");
 r.errors.forEach((e) => console.log("  -", e));
+test("les sources pauvres et les fiches dupliquées sont rejetées", () => {
+  expect(st.poor).toBe(true);
+  expect(r.ok).toBe(false);
+});

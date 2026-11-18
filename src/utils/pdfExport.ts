@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import React from "react";
 import type { QuizData } from "./QuizPDF";
 import type { PdfFontMode, PdfThemeKey } from "./MedicalDocumentPDF";
-import { getSavedStudentProfile } from "@/pages/Settings";
+import { getSavedStudentProfile } from "@/lib/studentProfile";
 
 export interface ExportQuizPdfOptions {
   theme?: PdfThemeKey;

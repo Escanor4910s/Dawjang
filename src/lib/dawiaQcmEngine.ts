@@ -9,7 +9,6 @@
  */
 
 import { callGeminiAcademicEngine } from "@/lib/syncEngine";
-import { getActivePoliceApiKey } from "@/lib/aiPolicePipeline";
 
 export type DawiaEngine = "dawia1" | "dawia2";
 
@@ -146,91 +145,7 @@ async function callClaudeSonnet46Engine(
   userPrompt: string,
   temperature: number
 ): Promise<string | null> {
-  const apiKey = getActivePoliceApiKey();
-
-  // A. Clé OpenRouter
-  if (apiKey.startsWith("sk-or-")) {
-    const modelsToTry = [
-      "anthropic/claude-sonnet-4.6",
-      "anthropic/claude-3.7-sonnet",
-      "anthropic/claude-sonnet-5.5",
-      "anthropic/claude-3.5-sonnet",
-    ];
-
-    for (const modelName of modelsToTry) {
-      try {
-        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-            "HTTP-Referer": "https://dawjang.app",
-            "X-Title": "DawJang Academic Studio — DAWIA 2",
-          },
-          body: JSON.stringify({
-            model: modelName,
-            temperature,
-            max_tokens: 8192,
-            messages: [
-              { role: "system", content: systemInstruction },
-              { role: "user", content: userPrompt },
-            ],
-          }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const content = data?.choices?.[0]?.message?.content;
-          if (typeof content === "string" && content.trim().length > 0) {
-            return content.trim();
-          }
-        }
-      } catch {
-        // Essai du modèle suivant
-      }
-    }
-  }
-
-  // B. Clé Anthropic API Directe
-  if (apiKey.startsWith("sk-ant-")) {
-    const modelsToTry = [
-      "claude-3-7-sonnet-20250219",
-      "claude-3-5-sonnet-20241022",
-      "claude-sonnet-4-6",
-    ];
-
-    for (const modelName of modelsToTry) {
-      try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify({
-            model: modelName,
-            max_tokens: 8192,
-            temperature,
-            system: systemInstruction,
-            messages: [{ role: "user", content: userPrompt }],
-          }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const text = data?.content?.[0]?.text;
-          if (typeof text === "string" && text.trim().length > 0) {
-            return text.trim();
-          }
-        }
-      } catch {
-        // Essai du modèle suivant
-      }
-    }
-  }
-
-  return null;
+  return callGeminiAcademicEngine(systemInstruction, userPrompt, temperature);
 }
 
 

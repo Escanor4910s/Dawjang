@@ -35,7 +35,7 @@ import {
   SENEGAL_UNIVERSITIES,
   saveStudentProfile,
   getSavedStudentProfile,
-} from "@/pages/Settings";
+} from "@/lib/studentProfile";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 

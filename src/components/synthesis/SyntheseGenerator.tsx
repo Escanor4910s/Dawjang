@@ -13,7 +13,7 @@ import { DOCTRINE_CONFIG, DOCTRINES_LIST } from "@/config/doctrineConfig";
 import { Sparkles, Download, Loader2, BookOpen, Printer } from "lucide-react";
 
 export interface SyntheseGeneratorProps {
-  invokeWithRetry?: Function;
+  invokeWithRetry?: typeof defaultInvoke;
   exportPdf?: (title: string, content: string) => void | Promise<void>;
   initialDoctrine?: Doctrine;
   initialTitle?: string;

@@ -36,7 +36,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { getSavedStudentProfile, saveStudentProfile } from "./Settings";
+import { getSavedStudentProfile, saveStudentProfile } from "@/lib/studentProfile";
 import {
   getStoredUserStats,
   USER_GAMIFICATION_KEY,
@@ -186,7 +186,10 @@ export default function Subscription() {
   const [invoices, setInvoices] = useState<InvoiceHistoryItem[]>(() => {
     try {
       const raw = localStorage.getItem(SUBSCRIPTION_HISTORY_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {
       // ignore
     }
@@ -234,9 +237,12 @@ export default function Subscription() {
 
   // Calcul précis de la durée, des jours d'intérêts gagnés et de la date d'échéance
   const telemetry = useMemo(() => {
-    const totalDays = Math.max(0, stats.daysRemaining);
+    const totalDays = Math.max(0, Number(stats.daysRemaining ?? 0) || 0);
     const baseCycle = currentPlanMeta.cycleDurationDays;
-    const streak = typeof stats.streak === "number" ? stats.streak : 0;
+    const streak =
+      typeof stats.streak === "number"
+        ? stats.streak
+        : Number(stats.currentStreak ?? 0) || 0;
     // Les jours d'intérêts correspondent au bonus de fidélité + régularité (streak)
     const interestDaysEarned =
       activeTier === "STD"
@@ -304,7 +310,7 @@ export default function Subscription() {
         ...stats,
         isPremium: false,
         daysRemaining: 30 + plan.interestBonusDays,
-        credits: Math.max(100, stats.credits),
+        credits: Math.max(100, Number(stats.credits ?? 0) || 0),
       };
       setStats(updated);
       setActiveTier("STD");
@@ -344,7 +350,7 @@ export default function Subscription() {
     const updatedStats = {
       ...stats,
       isPremium: true,
-      credits: stats.credits + selectedPlan.creditsIncluded,
+      credits: (Number(stats.credits ?? 0) || 0) + selectedPlan.creditsIncluded,
       daysRemaining: durationToAdd + bonusDays,
     };
 
@@ -586,7 +592,7 @@ export default function Subscription() {
                 +{telemetry.interestDaysEarned} jours
               </span>
               <span className="text-[11.5px] text-muted-foreground block">
-                Bonus fidélité & cadence ({stats.streak}j)
+                Bonus fidélité & cadence ({typeof stats.streak === "number" ? stats.streak : stats.currentStreak ?? 0}j)
               </span>
             </div>
 
@@ -632,7 +638,7 @@ export default function Subscription() {
                   SOLDE D'ANALYSE IA DISPONIBLE
                 </span>
                 <span className="font-serif text-3xl text-foreground">
-                  {stats.credits.toLocaleString("fr-FR")} crédits
+                  {(Number(stats.credits ?? 0) || 0).toLocaleString("fr-FR")} crédits
                 </span>
               </div>
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/12 text-primary">
@@ -654,7 +660,7 @@ export default function Subscription() {
                   Palier d'expérience actuel
                 </span>
                 <span className="font-mono font-bold text-primary">
-                  LV. {stats.level} ({stats.rankTitle})
+                  LV. {stats.level ?? 1} ({stats.rankTitle || "Apprenant"})
                 </span>
               </div>
               <div className="flex items-center justify-between">

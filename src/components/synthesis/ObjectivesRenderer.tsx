@@ -178,8 +178,8 @@ export function normalizeArgonAndObjectivesMarkdown(raw: string): string {
         }
       } else {
         const cleanBoxHeader = boxInner
-          .replace(/^(?:PI[ÈE]GE|AVERTISSEMENT)\s*(\d+)\s*[:—\-]\s*/i, "$1. Piège — ")
-          .replace(/^(?:PI[ÈE]GE|AVERTISSEMENT)\s*[:—\-]\s*/i, "Piège à éviter — ");
+          .replace(/^(?:PI[ÈE]GE|AVERTISSEMENT)\s*(\d+)\s*[:—-]\s*/i, "$1. Piège — ")
+          .replace(/^(?:PI[ÈE]GE|AVERTISSEMENT)\s*[:—-]\s*/i, "Piège à éviter — ");
         normalizedLines.push(
           `> **[${isStepOrRule ? "ÉTAPE" : "PIÈGE"}] ${cleanBoxHeader}**`
         );

@@ -334,6 +334,7 @@ const AskMor = ({ embedded = false, initialMessage }: AskMorProps) => {
               onClick={handleAskMor}
               disabled={isLoading || !question.trim() || !selectedCourseId}
               size="icon"
+              aria-label={isLoading ? "Réponse de MOR en cours" : "Envoyer la question à MOR"}
               className="h-[52px] w-[52px] shrink-0 rounded-xl bg-gradient-to-br from-primary to-indigo-600 text-white hover:opacity-90 shadow-lg shadow-primary/25 transition-all mb-1 mr-1"
             >
               {isLoading ? (

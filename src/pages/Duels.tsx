@@ -49,9 +49,9 @@ import {
 import { getSavedQuizDecks, QuizDeck } from "./Quiz";
 import {
   getSavedStudentProfile,
-  StudentProfileSN,
+  type StudentProfileSN,
   formatFullStudyLevel,
-} from "./Settings";
+} from "@/lib/studentProfile";
 import {
   getStoredUserStats,
   USER_GAMIFICATION_KEY,

@@ -806,7 +806,7 @@ export const getStoredQuestBadges = (): QuestBadgeItem[] => {
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch {}
+  } catch { /* Utilise les badges par défaut si le stockage est corrompu. */ }
   return DEFAULT_QUEST_BADGES;
 };
 

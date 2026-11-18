@@ -9,7 +9,7 @@ import { generateArvaSummary } from "@/utils/doctrineGenerators";
 import { ArvaRenderer } from "./ArvaRenderer";
 
 export interface ArvaSyntheseProps {
-  invokeWithRetry?: Function;
+  invokeWithRetry?: typeof defaultInvoke;
   exportPdf?: (title: string, content: string) => void | Promise<void>;
   initialObjectives?: string;
   initialTitle?: string;

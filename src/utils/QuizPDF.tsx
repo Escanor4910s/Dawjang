@@ -27,9 +27,13 @@ export interface QuizData {
   questions: Array<{
     question: string;
     qcmType?: string;
+    type?: string;
+    clinicalCase?: string;
+    clinicalCaseHeader?: string;
     choices?: string[];
     options?: string[] | Array<{ id?: string; label?: string; text: string; isCorrect?: boolean }>;
     correct?: string[];
+    correctAnswers?: string[];
     explanation?: string;
   }>;
 }
@@ -37,37 +41,47 @@ export interface QuizData {
 const QCM_TYPE_LABELS: Record<string, string> = {
   election: "QCM D'ÉLECTION • 1 SEUL CHOIX EXACT",
   classique: "QCM À CHOIX MULTIPLES • TOUT OU RIEN",
+  complement_multiple: "QCM À COMPLÉMENT MULTIPLE",
   censure: "QCM DE CENSURE • IDENTIFIER L'ERREUR",
   groupage: "QCM PAR GROUPAGE • ASSERTIONS 1 À 5",
   jumelage: "QCM DE JUMELAGE • CAUSE À EFFET",
   association: "QCM D'ASSOCIATION • APPARIEMENT CLINIQUE",
+  cas_clinique: "CAS CLINIQUE • DOSSIER PROGRESSIF",
+  qns: "QUESTION RÉDACTIONNELLE (QNS)",
 };
 
 function normalizeQuestionOptions(q: QuizData["questions"][number]): QuizPdfOptionItem[] {
   const rawOpts = q.options || q.choices || [];
-  const correctList = Array.isArray(q.correct) ? q.correct : [];
+  const rawCorrect = Array.isArray(q.correct)
+    ? q.correct
+    : Array.isArray(q.correctAnswers)
+    ? q.correctAnswers
+    : [];
+  const correctUpper = rawCorrect.map((c) => String(c || "").trim().toUpperCase());
 
   return rawOpts.map((opt, idx) => {
     const fallbackLabel = String.fromCharCode(65 + idx);
     if (typeof opt === "string") {
+      const letterMatch = opt.match(/^([A-E])[.)]\s*/i);
+      const label = letterMatch ? letterMatch[1].toUpperCase() : fallbackLabel;
       const cleaned = sanitizePdfText(opt.replace(/^[A-E][.)]\s*/i, ""));
       const isCorrect =
-        correctList.includes(opt) ||
-        correctList.includes(fallbackLabel) ||
-        correctList.some((c) => sanitizePdfText(c) === cleaned);
+        rawCorrect.includes(opt) ||
+        correctUpper.includes(label) ||
+        rawCorrect.some((c) => sanitizePdfText(c) === cleaned);
       return {
-        label: fallbackLabel,
+        label,
         text: cleaned,
         isCorrect,
       };
     }
 
-    const label = sanitizePdfText(opt.label || fallbackLabel);
+    const label = sanitizePdfText(opt.label || fallbackLabel).toUpperCase();
     const cleaned = sanitizePdfText((opt.text || "").replace(/^[A-E][.)]\s*/i, ""));
     const isCorrect =
       Boolean(opt.isCorrect) ||
-      correctList.includes(opt.text) ||
-      correctList.includes(label);
+      rawCorrect.includes(opt.text) ||
+      correctUpper.includes(label);
 
     return {
       label,
@@ -349,6 +363,56 @@ export const QuizPDF = ({
       color: palette.primary,
     },
 
+    // BLOC CAS CLINIQUE
+    clinicalCaseBox: {
+      borderWidth: 0.9,
+      borderColor: palette.primary,
+      borderLeftWidth: 3,
+      borderLeftColor: palette.accent,
+      backgroundColor: palette.surface,
+      borderRadius: 3,
+      paddingVertical: 6.5,
+      paddingHorizontal: 9,
+      marginTop: 4,
+      marginBottom: 5,
+    },
+    clinicalCaseLabel: {
+      fontFamily: "Helvetica-Bold",
+      fontSize: 7,
+      color: palette.accent,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      marginBottom: 2.5,
+    },
+    clinicalCaseText: {
+      fontFamily: bodyFont,
+      fontSize: 9.1,
+      color: palette.textMain,
+      lineHeight: 1.34,
+    },
+    facultyLine: {
+      fontFamily: "Helvetica-Bold",
+      fontSize: 7,
+      color: palette.textMuted,
+      marginBottom: 3,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
+    qnsWriteBox: {
+      borderWidth: 0.6,
+      borderStyle: "dashed",
+      borderColor: palette.border,
+      borderRadius: 2,
+      paddingVertical: 14,
+      paddingHorizontal: 8,
+      marginTop: 2,
+    },
+    qnsWriteHint: {
+      fontFamily: "Helvetica",
+      fontSize: 7.5,
+      color: palette.textMuted,
+    },
+
     // BLOC QUESTION INDIVIDUELLE — FLUX CONTINU JUSQU'AU PIED DE PAGE (ZÉRO VIDE)
     questionCard: {
       borderWidth: 0.75,
@@ -617,6 +681,11 @@ export const QuizPDF = ({
                   </View>
 
                   <Text style={styles.examTitle}>{cleanTitle}</Text>
+                  {quiz.facultyName && (
+                    <Text style={styles.facultyLine}>
+                      {sanitizePdfText(quiz.facultyName)}
+                    </Text>
+                  )}
 
                   <View style={styles.candidateRow}>
                     <View style={styles.candidateCell}>
@@ -683,55 +752,76 @@ export const QuizPDF = ({
                 );
                 const typeBadge =
                   (q.qcmType && QCM_TYPE_LABELS[q.qcmType]) ||
+                  (q.type && sanitizePdfText(q.type)) ||
                   "PROPOSITIONS A À E";
 
                 return (
-                  <View key={qIndex} style={styles.questionCard} wrap>
-                    <View
-                      style={styles.questionHeaderBar}
-                      wrap={false}
-                      minPresenceAhead={42}
-                    >
-                      <View style={styles.questionNumBadge}>
-                        <Text style={styles.questionNumText}>
-                          QUESTION {String(qIndex + 1).padStart(2, "0")}
+                  <Fragment key={qIndex}>
+                    {q.clinicalCase && (
+                      <View style={styles.clinicalCaseBox} wrap={false}>
+                        <Text style={styles.clinicalCaseLabel}>
+                          {sanitizePdfText(q.clinicalCaseHeader || "CAS CLINIQUE")}
+                        </Text>
+                        <Text style={styles.clinicalCaseText}>
+                          {sanitizePdfText(q.clinicalCase)}
                         </Text>
                       </View>
-                      <Text style={styles.questionTypeText}>{typeBadge}</Text>
-                    </View>
-
-                    <View style={styles.questionBody}>
-                      <Text style={styles.questionStemText} minPresenceAhead={28}>
-                        {mainStem}
-                      </Text>
-
-                      {assertions.length > 0 && (
-                        <View style={styles.assertionsBox}>
-                          {assertions.map((assertion, aIdx) =>
-                            /^PARCE\s+QUE$/i.test(assertion.trim()) ? (
-                              <Text key={aIdx} style={styles.assertionConnector}>
-                                — PARCE QUE (LIEN DE CAUSALITÉ) —
-                              </Text>
-                            ) : (
-                              <Text key={aIdx} style={styles.assertionLine}>
-                                {assertion}
-                              </Text>
-                            )
-                          )}
+                    )}
+                    <View style={styles.questionCard} wrap>
+                      <View
+                        style={styles.questionHeaderBar}
+                        wrap={false}
+                        minPresenceAhead={42}
+                      >
+                        <View style={styles.questionNumBadge}>
+                          <Text style={styles.questionNumText}>
+                            QUESTION {String(qIndex + 1).padStart(2, "0")}
+                          </Text>
                         </View>
-                      )}
+                        <Text style={styles.questionTypeText}>{typeBadge}</Text>
+                      </View>
 
-                      <View style={styles.optionsContainer}>
-                        {normOpts.map((opt, optIndex) => (
-                          <View key={optIndex} style={styles.optionRow} wrap={false}>
-                            <View style={styles.optionCheckSquare} />
-                            <Text style={styles.optionLetter}>{opt.label}.</Text>
-                            <Text style={styles.optionText}>{opt.text}</Text>
+                      <View style={styles.questionBody}>
+                        <Text style={styles.questionStemText} minPresenceAhead={28}>
+                          {mainStem}
+                        </Text>
+
+                        {assertions.length > 0 && (
+                          <View style={styles.assertionsBox}>
+                            {assertions.map((assertion, aIdx) =>
+                              /^PARCE\s+QUE$/i.test(assertion.trim()) ? (
+                                <Text key={aIdx} style={styles.assertionConnector}>
+                                  — PARCE QUE (LIEN DE CAUSALITÉ) —
+                                </Text>
+                              ) : (
+                                <Text key={aIdx} style={styles.assertionLine}>
+                                  {assertion}
+                                </Text>
+                              )
+                            )}
                           </View>
-                        ))}
+                        )}
+
+                        {normOpts.length > 0 ? (
+                          <View style={styles.optionsContainer}>
+                            {normOpts.map((opt, optIndex) => (
+                              <View key={optIndex} style={styles.optionRow} wrap={false}>
+                                <View style={styles.optionCheckSquare} />
+                                <Text style={styles.optionLetter}>{opt.label}.</Text>
+                                <Text style={styles.optionText}>{opt.text}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <View style={styles.qnsWriteBox}>
+                            <Text style={styles.qnsWriteHint}>
+                              Réponse rédactionnelle attendue :
+                            </Text>
+                          </View>
+                        )}
                       </View>
                     </View>
-                  </View>
+                  </Fragment>
                 );
               })}
 
@@ -796,7 +886,7 @@ export const QuizPDF = ({
                           Q{String(qIdx + 1).padStart(2, "0")} :
                         </Text>
                         <Text style={styles.summaryKeyAns}>
-                          {letters || "—"}
+                          {letters || (q.qcmType === "qns" ? "RÉD." : "—")}
                         </Text>
                       </View>
                     );
@@ -827,16 +917,18 @@ export const QuizPDF = ({
                         </Text>
                         <View style={styles.exactAnswerBadge}>
                           <Text style={styles.exactAnswerBadgeText}>
-                            RÉPONSE : {correctLetters || "A"}
+                            RÉPONSE : {correctLetters || (q.qcmType === "qns" ? "RÉDACTIONNEL" : "—")}
                           </Text>
                         </View>
                       </View>
 
-                      <Text style={styles.correctOptionFullText}>
-                        {correctOpts
-                          .map((o) => `${o.label}. ${o.text}`)
-                          .join("  |  ")}
-                      </Text>
+                      {correctOpts.length > 0 && (
+                        <Text style={styles.correctOptionFullText}>
+                          {correctOpts
+                            .map((o) => `${o.label}. ${o.text}`)
+                            .join("  |  ")}
+                        </Text>
+                      )}
 
                       {q.explanation && (
                         <View style={styles.explanationBox}>

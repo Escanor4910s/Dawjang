@@ -16,7 +16,7 @@ import { toast as sonnerToast } from "sonner";
 import { safeText, safeTextArray } from "@/lib/textUtils";
 import { useGamificationContext } from "@/components/gamification/GamificationProvider";
 import { shuffleQuiz } from "@/lib/quizShuffle";
-import { getSavedStudentProfile } from "@/pages/Settings";
+import { getSavedStudentProfile } from "@/lib/studentProfile";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Question {
@@ -78,7 +78,8 @@ const ExamMode = () => {
       }));
 
       // Fisher-Yates shuffle questions AND choices
-      const isExamCloning = data.question_type === "clonage_examen" || data.metadata?.mode === "exam_clone";
+      const metadata = data.metadata as { mode?: string } | null;
+      const isExamCloning = data.question_type === "clonage_examen" || metadata?.mode === "exam_clone";
       const qs = shuffleQuiz(raw, isExamCloning);
       setQuestions(qs);
       setSessionTitle(data.title);

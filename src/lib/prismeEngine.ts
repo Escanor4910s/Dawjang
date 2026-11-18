@@ -182,12 +182,12 @@ export function sanitizeAndRepairQuestion(rawQ: any, indexFallback = 1): PrismeQ
       .replace(/\(Cible imposée\)/gi, "")
       .replace(/\(Proposition exacte\)/gi, "")
       .replace(/\(Proposition fausse\)/gi, "")
-      .replace(/^[A-E]\s*[:=\-]\s*(?=[A-E]\s*=)/i, "")
+      .replace(/^[A-E]\s*[:=-]\s*(?=[A-E]\s*=)/i, "")
       .trim();
   };
 
   const qType: FacultyQCMType = rawQ.type || "ELECTION";
-  let stem = cleanLabelText(rawQ.stem || rawQ.question || `Question #${rawQ.number || indexFallback}`);
+  const stem = cleanLabelText(rawQ.stem || rawQ.question || `Question #${rawQ.number || indexFallback}`);
 
   // Réparation automatique de la matrice d'ASSOCIATION pour qu'elle ne soit JAMAIS invisible
   let associationMatrix: AssociationMatrix | undefined = rawQ.associationMatrix;

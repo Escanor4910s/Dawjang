@@ -5,8 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { lazy, Suspense, useState, useEffect } from "react";
 import Layout from "./components/Layout";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { UserPreferencesProvider } from "./hooks/useUserPreferences";
@@ -15,18 +13,33 @@ import { registerSW } from 'virtual:pwa-register';
 import { toast } from "sonner";
 import { SplashScreen } from "./components/SplashScreen";
 import "./lib/i18n";
+import { supabase } from "@/integrations/supabase/client";
+import { clearPrivateOfflineData } from "@/lib/offlineStorage";
 
-// Register PWA with notification
-registerSW({
-  onOfflineReady() {
-    toast.info("DawJang est prêt pour une utilisation hors-ligne ! 🚀", {
-      description: "Vous pouvez continuer à réviser même sans connexion internet.",
-      duration: 5000,
-    });
-  },
-});
+// Register PWA only in production; in dev, unregister any stale Service Worker so localhost never serves cached JS
+if (import.meta.env.PROD) {
+  registerSW({
+    onOfflineReady() {
+      toast.info("Hippocampus est prêt pour une utilisation hors-ligne !", {
+        description: "Vous pouvez continuer à réviser même sans connexion internet.",
+        duration: 5000,
+      });
+    },
+  });
+} else if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+  navigator.serviceWorker
+    .getRegistrations()
+    .then((regs) => {
+      regs.forEach((reg) => {
+        reg.unregister().catch(() => {});
+      });
+    })
+    .catch(() => {});
+}
 
 // Lazy loaded pages
+const Index = lazy(() => import("./pages/Index"));
+const Auth = lazy(() => import("./pages/Auth"));
 const AddCourse = lazy(() => import("./pages/AddCourse"));
 const Admin = lazy(() => import("./pages/Admin"));
 const QuizLibrary = lazy(() => import("./pages/QuizLibrary"));
@@ -71,7 +84,12 @@ const Predictions = lazy(() => import("./pages/Predictions"));
 const ExamenBlanc = lazy(() => import("./pages/ExamenBlanc"));
 
 const PageLoader = () => (
-  <div className="min-h-screen bg-transparent flex items-center justify-center flex-1 w-full">
+  <div
+    role="status"
+    aria-live="polite"
+    aria-busy="true"
+    className="min-h-screen bg-transparent flex items-center justify-center flex-1 w-full"
+  >
     <div className="animate-pulse text-primary text-lg font-bold">Chargement...</div>
   </div>
 );
@@ -107,6 +125,23 @@ const App = () => {
     if (hasSeenSplash) {
       setShowSplash(false);
     }
+  }, []);
+
+  useEffect(() => {
+    let activeUserId: string | undefined;
+    supabase.auth.getSession().then(({ data }) => { activeUserId = data.session?.user.id; });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        const previousUserId = activeUserId;
+        activeUserId = undefined;
+        void clearPrivateOfflineData(previousUserId);
+        queryClient.clear();
+      } else if (session?.user.id) {
+        if (activeUserId && activeUserId !== session.user.id) void clearPrivateOfflineData(activeUserId);
+        activeUserId = session.user.id;
+      }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleSplashFinish = () => {

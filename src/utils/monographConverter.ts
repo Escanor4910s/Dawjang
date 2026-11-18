@@ -241,6 +241,22 @@ export function convertMarkdownToMonograph(
     year: "numeric",
   });
 
+  const fallbackObjectives: Objective[] =
+    objectives.length > 0
+      ? objectives
+      : [
+          {
+            n: 1,
+            title: cleanTitle,
+            blocks: sanitized
+              .split(/\n{2,}/)
+              .map((p) => cleanLine(p))
+              .filter((p) => p.length > 10)
+              .slice(0, 12)
+              .map((text) => ({ k: "p" as const, text })),
+          },
+        ];
+
   return {
     title: cleanTitle,
     discipline: options.subject || "Médecine générale",
@@ -254,6 +270,6 @@ export function convertMarkdownToMonograph(
       { name: "2e lecture", goal: "ancrage des seuils et des définitions" },
       { name: "3e lecture", goal: "validation avant l’examen, avec QCM" },
     ],
-    objectives: objectives.length > 0 ? objectives : sampleAnemies.objectives,
+    objectives: fallbackObjectives,
   };
 }

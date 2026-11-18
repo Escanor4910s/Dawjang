@@ -217,7 +217,7 @@ function Flow({ content, title }: CourseMindMapProps) {
       <Panel position="top-right" className="bg-white/90 dark:bg-slate-900/90 p-3 rounded-xl shadow-lg border border-border/50 backdrop-blur-md m-4 flex flex-col gap-3 min-w-[250px]">
         <div className="font-semibold text-sm flex items-center justify-between">
           <span>Outils d'édition</span>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowInstructions(true)}><Info className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Afficher les instructions d'édition" onClick={() => setShowInstructions(true)}><Info className="h-4 w-4" /></Button>
         </div>
         
         {selectedNode ? (

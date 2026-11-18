@@ -105,7 +105,8 @@ export default {
 				'glow': 'var(--shadow-glow)'
 			},
 			transitionTimingFunction: {
-				'smooth': 'var(--transition-smooth)'
+				'smooth': 'var(--transition-smooth)',
+				'editorial': 'cubic-bezier(0.22, 1, 0.36, 1)'
 			},
 			borderRadius: {
 				lg: 'var(--radius)',

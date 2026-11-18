@@ -1,8 +1,8 @@
 // tests/synthesisEngineV3.test.ts
+import { test, expect } from 'vitest';
 import {
   computeSectionQuotas,
   buildEliteSynthesisPrompt,
-  synthesisMarkdownToHtml,
   DEFAULT_SYNTHESIS_CONFIG,
   type SynthesisConfig,
 } from '../src/lib/synthesisEngineV3';
@@ -25,17 +25,18 @@ const testObjectives = [
   "5. Énoncer les principes de traitement",
 ];
 
-const quotas = computeSectionQuotas(testObjectives, 2000);
+const quotas = computeSectionQuotas({
+  ...DEFAULT_SYNTHESIS_CONFIG,
+  objectives: testObjectives,
+  densityMode: 'balanced',
+  targetWordCount: 2000,
+});
 console.log('Quotas calculés pour 2000 mots :', quotas);
 
-assert(quotas.length === 5, 'Il doit y avoir exactement 5 sections pondérées');
-const totalPercent = quotas.reduce((acc, q) => acc + q.percentage, 0);
-assert(totalPercent >= 98 && totalPercent <= 102, `La somme des pourcentages doit être ~100% (trouvé: ${totalPercent}%)`);
-
-const defSection = quotas.find(q => q.index === 1);
-const demSection = quotas.find(q => q.index === 4);
-assert(defSection !== undefined && demSection !== undefined, 'Sections 1 et 4 trouvées');
-assert(demSection!.targetWords > defSection!.targetWords * 2, 'La démarche diagnostique doit avoir un budget > 2x la définition');
+assert(quotas.sectionCount === 5, 'Il doit y avoir exactement 5 sections pondérées');
+assert(!quotas.isUnlimited, 'Le plafond de 2000 mots doit être actif');
+assert(quotas.wordsPerSection === 400, 'Chaque objectif doit recevoir 400 mots');
+assert(quotas.minTotalWords === 1800 && quotas.maxTotalWords === 2300, 'Les bornes de longueur doivent encadrer la cible');
 
 console.log('=== TEST 2 : GÉNÉRATION DU PROMPT MAÎTRE POUR LES 3 DOCTRINES ===');
 const sampleCourse = "Diapositive 1 : Pr Dupont. Diapositive 2 : Définition Hb < 13 g/dl homme. Diapositive 3 : Traitement fer ferreux 200 mg/j.";
@@ -46,9 +47,9 @@ const p1 = buildEliteSynthesisPrompt(sampleCourse, testObjectives, {
   doctrine: 'objectives_verbatim',
   targetWordCount: 1500,
 });
-assert(p1.systemInstruction.includes("LOI D'EXHAUSTIVITÉ INVIOLABLE"), 'Le prompt doit contenir la loi anti-troncature');
-assert(p1.systemInstruction.includes("OVERRIDE SYSTÈME ABSOLU"), 'Le prompt doit purger les anciennes consignes');
-assert(p1.systemInstruction.includes("SYNTHÈSE STRICTE À PARTIR DES OBJECTIFS"), 'Doit contenir les instructions de la doctrine 1');
+assert(p1.systemInstruction.includes("PAR OBJECTIFS DU COURS"), 'Doit contenir les instructions de la doctrine 1');
+assert(p1.systemInstruction.includes("sans en fusionner ni en omettre aucun"), 'Le prompt doit contenir la loi anti-troncature');
+assert(p1.systemInstruction.includes("PROTECTION DES TABLEAUX FLÉCHÉS"), 'Le prompt doit préserver les données de fin de cours');
 assert(p1.apiGenerationConfig.maxOutputTokens === 8192, 'maxOutputTokens doit être 8192');
 
 // Doctrine 2
@@ -57,7 +58,7 @@ const p2 = buildEliteSynthesisPrompt(sampleCourse, testObjectives, {
   doctrine: 'harvard_method',
   targetWordCount: 2500,
 });
-assert(p2.systemInstruction.includes("LA MÉTHODE HARVARD"), 'Doit contenir les instructions Harvard');
+assert(p2.systemInstruction.includes("MÉTHODE DE HARVARD"), 'Doit contenir les instructions Harvard');
 
 // Doctrine 3
 const p3 = buildEliteSynthesisPrompt(sampleCourse, testObjectives, {
@@ -67,23 +68,9 @@ const p3 = buildEliteSynthesisPrompt(sampleCourse, testObjectives, {
 });
 assert(p3.systemInstruction.includes("STANDARD MONDIAL N°1"), 'Doit contenir les instructions AMBOSS/First Aid');
 
-console.log('=== TEST 3 : CONVERSION MARKDOWN EN HTML BUREAUTIQUE ===');
-const markdownSample = `
-## 1. Définir l'anémie *(Quota : 10 % — ~200 mots)*
----
-<u>Définition biologique</u> : diminution de la masse d'hémoglobine circulante.
-- <span class="hl-blue">Hb < 13 g/dl</span> chez l'homme.
-- <span class="hl-red">Fausse anémie par hémodilution</span> : grossesse, splénomégalie.
-⚡ **HIGH-YIELD FACTS** : Toujours vérifier le volume plasmatique.
-| Paramètre | Norme Homme | Norme Femme |
-| Hb | > 13 g/dl | > 12 g/dl |
-| VGM | 80 - 100 fl | 80 - 100 fl |
-`;
-
-const renderedHtml = synthesisMarkdownToHtml(markdownSample);
-assert(renderedHtml.includes('synthesis-h2'), 'Le HTML doit contenir la classe synthesis-h2');
-assert(renderedHtml.includes('hl-blue'), 'Le HTML doit préserver hl-blue');
-assert(renderedHtml.includes('hl-red'), 'Le HTML doit préserver hl-red');
-assert(renderedHtml.includes('<table'), 'Le HTML doit convertir le tableau');
-
+test('les quotas et les prompts V3 restent cohérents', () => {
+  expect(quotas.sectionCount).toBe(5);
+  expect(p1.userPrompt).toContain(sampleCourse);
+  expect(p2.quotas.sectionCount).toBe(5);
+});
 console.log('🎉 TOUS LES TESTS DU MOTEUR V3 SONT VALIDÉS AVEC SUCCÈS !');

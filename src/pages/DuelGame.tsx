@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useDuel, DuelQuestion } from "@/hooks/useDuel";
 import { useGamificationContext } from "@/components/gamification/GamificationProvider";
 import confetti from "canvas-confetti";
-import { getSavedStudentProfile } from "@/pages/Settings";
+import { getSavedStudentProfile } from "@/lib/studentProfile";
 
 // Simple sound effects using Web Audio API
 const playSound = (type: "correct" | "wrong" | "tick" | "victory" | "clash") => {

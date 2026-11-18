@@ -1,5 +1,5 @@
 // src/components/MedicalSummaryCard.tsx
-import React, { useState, useMemo } from "react";
+import React, { lazy, Suspense, useState, useMemo } from "react";
 import {
   ArrowLeft,
   BookOpen,
@@ -32,7 +32,9 @@ export type { ObjectiveExamSummaryData } from "@/lib/objectiveExamEngine";
 import { useToast } from "@/hooks/use-toast";
 import { sanitizeAndFormatForDawJang } from "@/lib/coPilotSummaryEngine";
 import { cleanAndStructureMarkdown } from "@/utils/formatters";
-import { PdfExportStudioModal } from "@/components/pdf/PdfExportStudioModal";
+const PdfExportStudioModal = lazy(() => import("@/components/pdf/PdfExportStudioModal").then((module) => ({
+  default: module.PdfExportStudioModal,
+})));
 
 export interface MedicalSummaryCardProps {
   summaryId?: string;
@@ -114,7 +116,7 @@ function parseAndPurifySections(rawContent: string): ParsedObjectiveSection[] {
     seenKeys.add(dedupKey);
 
     // Extraction du contenu sans le titre H2
-    let bodyContent = trimmed
+    const bodyContent = trimmed
       .replace(/^##\s+[^\n]+\n+/, "")
       // Élimination des citations ou puces de sommaire résiduelles en tête de section
       .replace(/^\s*(?:>\s*[^\n]*\n+)+/gi, "")
@@ -268,7 +270,7 @@ function RichSectionRenderer({ content }: { content: string }) {
     if (!inTable || tableBuffer.length === 0) return;
 
     const rows = tableBuffer
-      .filter((l) => !/^[\|\s:-]+$/.test(l))
+      .filter((l) => !/^[|\s:-]+$/.test(l))
       .map((line) =>
         line
           .replace(/^\|/, "")
@@ -453,6 +455,7 @@ export const MedicalSummaryCard: React.FC<MedicalSummaryCardProps> = ({
   );
   const [copied, setCopied] = useState(false);
   const [isPdfStudioOpen, setIsPdfStudioOpen] = useState(false);
+  const [hasOpenedPdfStudio, setHasOpenedPdfStudio] = useState(false);
 
   // Sections nettoyées chirurgicalement
   const cleanSections = useMemo(
@@ -635,6 +638,7 @@ export const MedicalSummaryCard: React.FC<MedicalSummaryCardProps> = ({
               if (onExportPdfStudio) {
                 onExportPdfStudio();
               } else {
+                setHasOpenedPdfStudio(true);
                 setIsPdfStudioOpen(true);
               }
             }}
@@ -806,14 +810,18 @@ export const MedicalSummaryCard: React.FC<MedicalSummaryCardProps> = ({
       </div>
 
       {/* Modal PDF Export Studio */}
-      <PdfExportStudioModal
-        open={isPdfStudioOpen}
-        onOpenChange={setIsPdfStudioOpen}
-        mode="summary"
-        title={title}
-        subject={subject}
-        htmlOrMarkdownContent={compiledCleanMarkdown}
-      />
+      {hasOpenedPdfStudio && (
+        <Suspense fallback={<p role="status">Chargement du studio PDF...</p>}>
+          <PdfExportStudioModal
+            open={isPdfStudioOpen}
+            onOpenChange={setIsPdfStudioOpen}
+            mode="summary"
+            title={title}
+            subject={subject}
+            htmlOrMarkdownContent={compiledCleanMarkdown}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };
