@@ -15,6 +15,11 @@ import { uiAudio } from "@/utils/audio";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  getNotificationPermissionStatus,
+  requestNotificationPermission,
+} from "@/lib/notifications";
+import { notify } from "@/lib/notificationHub";
 
 interface UserExam {
   id: string;
@@ -139,20 +144,24 @@ const ReviewPlanner = () => {
   }, [isReviewing]);
 
   useEffect(() => {
-    if ("Notification" in window) {
-      setNotificationsEnabled(Notification.permission === "granted" || localStorage.getItem("hippo_notifications_enabled") === "true");
-    }
+    setNotificationsEnabled(getNotificationPermissionStatus() === "granted");
   }, []);
 
   const enableNotifications = async () => {
-    if (!("Notification" in window)) return toast.error("Navigateur incompatible.");
-    const permission = await Notification.requestPermission();
-    if (permission === "granted") {
+    const granted = await requestNotificationPermission();
+    if (granted) {
       setNotificationsEnabled(true);
-      localStorage.setItem("hippo_notifications_enabled", "true");
-      toast.success("Rappels cognitifs activés.");
-      new Notification("Hippocampus", { body: "L'algorithme SM-2 optimisera votre rétention.", icon: "/pwa-192x192.png" });
-    } else toast.error("Permission refusée.");
+      notify.success(
+        "Rappels cognitifs DawJang activés",
+        "L'algorithme FSRS / SM-2 vous avertira dès que vos fiches arrivent à échéance.",
+        { action: { label: "Voir les Flashcards", to: "/flashcards" } }
+      );
+    } else {
+      notify.warning(
+        "Autorisation système non accordée",
+        "Les rappels restent pleinement actifs dans votre centre de notifications DawJang."
+      );
+    }
   };
 
   const formatTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;

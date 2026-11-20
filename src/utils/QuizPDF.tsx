@@ -28,6 +28,7 @@ export interface QuizData {
     question: string;
     qcmType?: string;
     type?: string;
+    groupageCodeHint?: string;
     clinicalCase?: string;
     clinicalCaseHeader?: string;
     choices?: string[];
@@ -100,15 +101,19 @@ function normalizeQuestionOptions(q: QuizData["questions"][number]): QuizPdfOpti
 function splitQuestionStemAndAssertions(rawQuestion: string): {
   mainStem: string;
   assertions: string[];
+  codeHint?: string;
 } {
   if (!rawQuestion) return { mainStem: "", assertions: [] };
 
   // Garantir un retour à la ligne avant chaque marqueur docimologique même si l'énoncé a été aplati
   const preSplit = rawQuestion
-    .replace(/\s+(?=(?:Premi[èe]re\s+assertion|Seconde\s+assertion|Proposition\s+(?:I|II|1|2))\s*:)/gi, "\n")
+    .replace(
+      /\s+(?=(?:Premi[èe]re\s+(?:assertion|proposition)|Seconde\s+(?:assertion|proposition)|Proposition\s+(?:I|II|1|2))\s*:)/gi,
+      "\n"
+    )
     .replace(/\s+(?=PARCE\s+QUE\b)/g, "\n")
     .replace(/\s+(?=(?:Num[ée]ros\s+[àa]\s+associer|Propositions\s+lettr[ée]es))/gi, "\n")
-    .replace(/\s+(?=[1-5]\)\s+[A-ZÀ-Ÿ])/g, "\n");
+    .replace(/\s+(?=[1-6]\)\s+[A-ZÀ-Ÿ])/g, "\n");
 
   const lines = preSplit
     .split(/\r?\n/)
@@ -121,10 +126,18 @@ function splitQuestionStemAndAssertions(rawQuestion: string): {
 
   const mainLines: string[] = [];
   const assertionLines: string[] = [];
+  let codeHint: string | undefined;
 
   for (const line of lines) {
     if (
-      /^(?:[1-5][.)]|Premi[èe]re\s+assertion\s*:|Seconde\s+assertion\s*:|Proposition\s+(?:I|II|1|2)\s*:|PARCE\s+QUE\b|Num[ée]ros\s+[àa]\s+associer|Propositions\s+lettr[ée]es|[A-E][.)]\s+)/i.test(
+      !codeHint &&
+      /^A\s*[:=]\s*1[^a-zA-Z]*[;•]\s*B\s*[:=]/i.test(line)
+    ) {
+      codeHint = line;
+      continue;
+    }
+    if (
+      /^(?:[1-6][.)]|Premi[èe]re\s+(?:assertion|proposition)\s*:|Seconde\s+(?:assertion|proposition)\s*:|Proposition\s+(?:I|II|1|2)\s*:|PARCE\s+QUE\b|Num[ée]ros\s+[àa]\s+associer|Propositions\s+lettr[ée]es|[A-E][.)]\s+)/i.test(
         line
       )
     ) {
@@ -139,6 +152,7 @@ function splitQuestionStemAndAssertions(rawQuestion: string): {
   return {
     mainStem: mainLines.join(" ") || lines[0],
     assertions: assertionLines,
+    codeHint,
   };
 }
 
@@ -460,6 +474,21 @@ export const QuizPDF = ({
       lineHeight: 1.32,
       marginBottom: 4,
     },
+    groupageCodeBar: {
+      backgroundColor: palette.surface,
+      borderWidth: 0.65,
+      borderColor: palette.border,
+      borderRadius: 2,
+      paddingVertical: 2.5,
+      paddingHorizontal: 6,
+      marginBottom: 4,
+    },
+    groupageCodeText: {
+      fontFamily: "Courier-Bold",
+      fontSize: 7.5,
+      color: palette.accent,
+      letterSpacing: 0.3,
+    },
     assertionsBox: {
       backgroundColor: palette.accentSoft,
       borderLeftWidth: 2.5,
@@ -747,13 +776,21 @@ export const QuizPDF = ({
               {/* LISTE DES QUESTIONS — REMPLISSAGE INTÉGRAL JUSQU'AU PIED DE PAGE */}
               {quiz.questions.map((q, qIndex) => {
                 const normOpts = normalizeQuestionOptions(q);
-                const { mainStem, assertions } = splitQuestionStemAndAssertions(
+                const { mainStem, assertions, codeHint } = splitQuestionStemAndAssertions(
                   q.question
                 );
+                const effectiveCodeHint = sanitizePdfText(q.groupageCodeHint || codeHint || "");
+                const numberedAssertionCount = assertions.filter((a) =>
+                  /^[1-9]\s*[.)]/.test(a.trim())
+                ).length;
                 const typeBadge =
-                  (q.qcmType && QCM_TYPE_LABELS[q.qcmType]) ||
-                  (q.type && sanitizePdfText(q.type)) ||
-                  "PROPOSITIONS A À E";
+                  q.qcmType === "groupage"
+                    ? numberedAssertionCount > 0
+                      ? `QCM PAR GROUPAGE • ASSERTIONS 1 À ${numberedAssertionCount}`
+                      : "QCM PAR GROUPAGE"
+                    : (q.qcmType && QCM_TYPE_LABELS[q.qcmType]) ||
+                      (q.type && sanitizePdfText(q.type)) ||
+                      "PROPOSITIONS A À E";
 
                 return (
                   <Fragment key={qIndex}>
@@ -767,7 +804,7 @@ export const QuizPDF = ({
                         </Text>
                       </View>
                     )}
-                    <View style={styles.questionCard} wrap>
+                    <View style={styles.questionCard} wrap={false}>
                       <View
                         style={styles.questionHeaderBar}
                         wrap={false}
@@ -785,6 +822,14 @@ export const QuizPDF = ({
                         <Text style={styles.questionStemText} minPresenceAhead={28}>
                           {mainStem}
                         </Text>
+
+                        {effectiveCodeHint ? (
+                          <View style={styles.groupageCodeBar}>
+                            <Text style={styles.groupageCodeText}>
+                              CODE : {effectiveCodeHint}
+                            </Text>
+                          </View>
+                        ) : null}
 
                         {assertions.length > 0 && (
                           <View style={styles.assertionsBox}>
@@ -903,7 +948,7 @@ export const QuizPDF = ({
                   const { mainStem } = splitQuestionStemAndAssertions(q.question);
 
                   return (
-                    <View key={qIndex} style={styles.correctionCard} wrap>
+                    <View key={qIndex} style={styles.correctionCard} wrap={false}>
                       <View
                         style={styles.correctionTopRow}
                         wrap={false}

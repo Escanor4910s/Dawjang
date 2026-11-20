@@ -20,6 +20,7 @@ import { callDawiaEngine } from "@/lib/dawiaQcmEngine";
 import { repairAndParseQuizJson } from "@/lib/jsonRepair";
 import { getSavedCourses } from "@/pages/Library";
 import { filterOutTombstoned } from "@/lib/syncEngine";
+import { notify } from "@/lib/notificationHub";
 import {
   Search,
   LayoutGrid,
@@ -512,16 +513,12 @@ export const ConstructeurQCM: React.FC = () => {
   const [activeSeriesId, setActiveSeriesId] = useState<string>(() => seriesList[0]?.id || "serie_1_initiale");
   const [examMode, setExamMode] = useState<boolean>(false);
   const [widgetExpanded, setWidgetExpanded] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const widgetRootRef = useRef<HTMLDivElement | null>(null);
 
   const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((prev) => (prev === msg ? null : prev));
-    }, 2600);
+    notify.info("Constructeur QCM", msg);
   };
 
   // Synchronisation localStorage
@@ -2342,12 +2339,6 @@ export const ConstructeurQCM: React.FC = () => {
               </div>
             </aside>
           )}
-        </div>
-      )}
-
-      {toastMessage && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-foreground text-background text-xs font-medium shadow-xl border border-border/20">
-          {toastMessage}
         </div>
       )}
     </div>

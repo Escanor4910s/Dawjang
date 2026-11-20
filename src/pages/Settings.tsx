@@ -22,6 +22,7 @@ import {
   Moon,
   Monitor,
   Bell,
+  BellRing,
   Shield,
   Database,
   Download,
@@ -77,6 +78,12 @@ import {
   WHATSAPP_CHANNEL_URL,
 } from "@/components/TelegramWidget";
 import { useToast } from "@/hooks/use-toast";
+import { useUserPreferences } from "@/hooks/useUserPreferences";
+import {
+  getNotificationPermissionStatus,
+  requestNotificationPermission,
+} from "@/lib/notifications";
+import { notify } from "@/lib/notificationHub";
 import { clearPrivateOfflineData } from "@/lib/offlineStorage";
 import { cn } from "@/lib/utils";
 import {
@@ -139,6 +146,43 @@ export default function Settings() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
+  const { preferences, updatePreferences } = useUserPreferences();
+  const [systemNotifPerm, setSystemNotifPerm] = useState(getNotificationPermissionStatus);
+
+  const handleToggleDbNotif = async (
+    key:
+      | "notify_revision_reminders"
+      | "notify_new_qcm"
+      | "notify_flashcard_alerts"
+      | "notify_weekly_results"
+      | "notify_subscription_alerts",
+    value: boolean
+  ) => {
+    try {
+      await updatePreferences({ [key]: value });
+    } catch {
+      notify.error(
+        "Synchronisation impossible",
+        "Impossible d'enregistrer cette préférence pour le moment."
+      );
+    }
+  };
+
+  const handleEnableBackgroundNotifs = async () => {
+    const granted = await requestNotificationPermission();
+    setSystemNotifPerm(getNotificationPermissionStatus());
+    if (granted) {
+      notify.success(
+        "Alertes d'arrière-plan DawJang activées",
+        "Vous serez averti même si vous changez d'onglet pendant une génération IA."
+      );
+    } else {
+      notify.warning(
+        "Autorisation bloquée par le navigateur",
+        "Les notifications internes DawJang restent actives à 100 % dans l'application."
+      );
+    }
+  };
 
   const [activeSection, setActiveSection] =
     useState<SettingsSectionId>("profile");
@@ -253,10 +297,16 @@ export default function Settings() {
       window.dispatchEvent(new Event("hippocampus-profile-updated"));
       window.dispatchEvent(new Event("hippocampus-stats-updated"));
 
+      // Ne jamais enregistrer une image base64 (data:image/...) dans user_metadata :
+      // Supabase recopie user_metadata dans chaque JWT, ce qui déclenche HTTP 431 / ERR_HTTP2_PROTOCOL_ERROR.
       try {
-        await supabase.auth.updateUser({
-          data: { avatar_url: dataUrl },
-        });
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase
+            .from("profiles")
+            .update({ avatar_url: dataUrl })
+            .eq("id", user.id);
+        }
       } catch {
         // Conservé localement
       }
@@ -270,10 +320,19 @@ export default function Settings() {
     reader.readAsDataURL(file);
   };
 
-  const handleRemoveAvatar = () => {
+  const handleRemoveAvatar = async () => {
     setAvatarUrl(null);
     localStorage.removeItem(STUDENT_AVATAR_STORAGE_KEY);
     window.dispatchEvent(new Event("hippocampus-profile-updated"));
+    try {
+      await supabase.auth.updateUser({ data: { avatar_url: null } });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("profiles").update({ avatar_url: null }).eq("id", user.id);
+      }
+    } catch {
+      // ignore
+    }
     toast({
       title: "Photo retirée",
       description: "Vos initiales sont utilisées par défaut.",
@@ -313,7 +372,11 @@ export default function Settings() {
     saveStudentProfile(profile);
 
     try {
-      // 1. Mise à jour Supabase Auth metadata
+      // 1. Mise à jour Supabase Auth metadata (jamais d'image base64 dans le JWT ; URL publique < 200 car. uniquement)
+      const safeJwtAvatarUrl =
+        avatarUrl && /^https?:\/\//i.test(avatarUrl) && avatarUrl.length < 200
+          ? avatarUrl
+          : null;
       await supabase.auth.updateUser({
         data: {
           full_name: profile.fullName,
@@ -322,7 +385,7 @@ export default function Settings() {
           study_level: profile.studyLevel,
           university: profile.university,
           specialty: profile.specialty,
-          avatar_url: avatarUrl,
+          avatar_url: safeJwtAvatarUrl,
         },
       });
 
@@ -1222,6 +1285,116 @@ export default function Settings() {
                         }
                       />
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-[16px] flex items-center gap-2">
+                        <Bell className="h-4 w-4 text-primary" />
+                        Centre de Notifications DawJang
+                      </CardTitle>
+                      <CardDescription>
+                        Toutes vos alertes s’affichent nativement dans DawJang (avec bouton Copier et accès direct), sans dépendre du navigateur.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        notify.aiReady(
+                          "Synthèse & QCM prêts",
+                          "Votre session de test DawJang a été générée avec succès et archivée dans la cloche.",
+                          { label: "Ouvrir l'Examen Blanc", to: "/examen-blanc" },
+                          { bypassPrefs: true }
+                        )
+                      }
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-primary" />
+                      <span>Tester une notification</span>
+                    </Button>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-3">
+                  {[
+                    {
+                      key: "notify_new_qcm" as const,
+                      title: "Fin de génération IA (Examens blancs, QCM & Synthèses)",
+                      desc: "Affiche une carte DawJang avec bouton d'ouverture directe dès qu'une génération est prête.",
+                      checked: preferences.notify_new_qcm,
+                    },
+                    {
+                      key: "notify_flashcard_alerts" as const,
+                      title: "Rappels de Flashcards & file FSRS",
+                      desc: "Signale les cartes à consolider aujourd'hui pour maintenir votre courbe de rétention.",
+                      checked: preferences.notify_flashcard_alerts,
+                    },
+                    {
+                      key: "notify_revision_reminders" as const,
+                      title: "Rappels de planification & échéances",
+                      desc: "Rappels de sessions planifiées et compte à rebours avant vos examens.",
+                      checked: preferences.notify_revision_reminders,
+                    },
+                    {
+                      key: "notify_weekly_results" as const,
+                      title: "Bilans & progression hebdomadaire",
+                      desc: "Synthèse de vos scores QCM et matières à renforcer.",
+                      checked: preferences.notify_weekly_results,
+                    },
+                    {
+                      key: "notify_subscription_alerts" as const,
+                      title: "Crédits & statut de souscription",
+                      desc: "Alertes discrètes en cas de crédits faibles ou de renouvellement.",
+                      checked: preferences.notify_subscription_alerts,
+                    },
+                  ].map((item) => (
+                    <div
+                      key={item.key}
+                      className="flex items-center justify-between rounded-xl border border-border/80 bg-background/50 p-3.5"
+                    >
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-[13.5px] font-semibold text-foreground block">
+                          {item.title}
+                        </span>
+                        <p className="text-[12px] text-muted-foreground">{item.desc}</p>
+                      </div>
+                      <Switch
+                        checked={item.checked}
+                        onCheckedChange={(checked) => handleToggleDbNotif(item.key, checked)}
+                      />
+                    </div>
+                  ))}
+
+                  {/* Relais optionnel quand l'onglet est en arrière-plan */}
+                  <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/[0.04] p-3.5">
+                    <div className="space-y-0.5">
+                      <span className="text-[13.5px] font-semibold text-foreground flex items-center gap-2">
+                        <BellRing className="h-4 w-4 text-primary" />
+                        Relais d'arrière-plan (quand vous changez d'onglet)
+                      </span>
+                      <p className="text-[12px] text-muted-foreground">
+                        {systemNotifPerm === "granted"
+                          ? "Actif : DawJang vous prévient en arrière-plan si une génération IA se termine pendant que vous êtes sur un autre onglet."
+                          : systemNotifPerm === "denied"
+                          ? "Bloqué dans les paramètres du navigateur (les notifications internes DawJang restent actives)."
+                          : "Optionnel : autorise DawJang à vous prévenir si une génération se termine en arrière-plan."}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant={systemNotifPerm === "granted" ? "secondary" : "default"}
+                      size="sm"
+                      disabled={systemNotifPerm === "granted" || systemNotifPerm === "unsupported"}
+                      onClick={handleEnableBackgroundNotifs}
+                      className="shrink-0"
+                    >
+                      {systemNotifPerm === "granted" ? "Actif" : "Activer"}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

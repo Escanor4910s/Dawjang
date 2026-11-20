@@ -417,7 +417,10 @@ export default function Auth() {
             phone: phone.trim(),
             study_level: studyLevel,
             university,
-            avatar_url: avatarPreview || undefined,
+            avatar_url:
+              avatarPreview && /^https?:\/\//i.test(avatarPreview) && avatarPreview.length < 200
+                ? avatarPreview
+                : undefined,
           },
         },
       });

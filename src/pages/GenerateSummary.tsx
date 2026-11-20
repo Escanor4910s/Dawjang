@@ -50,7 +50,7 @@ import {
 } from "@/lib/summaryEngine";
 import { getSavedCourses, type StoredCourse } from "@/pages/Library";
 import { grantDawJangXP, DAWJANG_XP_REWARDS } from "@/hooks/useGamification";
-import { pushAppNotification } from "@/hooks/useNotifications";
+import { notify } from "@/lib/notificationHub";
 import {
   repairMedicalFormulasInText,
 } from "@/lib/remnoteStructuredEngine";
@@ -1247,16 +1247,6 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
         `Synthèse « ${title} » générée`
       );
 
-      pushAppNotification({
-        type: "course",
-        title: "Synthèse académique générée",
-        message: `"${title}" (${wc.toLocaleString("fr-FR")} mots · ${
-          selectedMode === "objectives_verbatim"
-            ? `${objectivesList.length}/${objectivesList.length} objectifs traités`
-            : "Synthèse Unifiée (Protocole Argon)"
-        }) est prête.`,
-      });
-
       if (selectedMode === "objectives_verbatim" && lastFailedObjectives.length > 0) {
         toast({
           title: "Certains objectifs n'ont pas pu être rédigés par l'IA",
@@ -1267,13 +1257,15 @@ Réponds UNIQUEMENT par un tableau JSON de chaînes de caractères :
         });
       }
 
-      toast({
-        title: "Synthèse intégrale générée avec succès",
-        description:
+      notify.aiReady(
+        "Synthèse générée avec succès",
+        `Votre fiche « ${title} » (${wc.toLocaleString("fr-FR")} mots · ${
           selectedMode === "objectives_verbatim"
-            ? `Les ${objectivesList.length} objectifs ont été rédigés du 1er au ${objectivesList.length}e (${wc.toLocaleString("fr-FR")} mots).`
-            : `Synthèse Unifiée axée sur les objectifs et croisée avec les annales prête.`,
-      });
+            ? `${objectivesList.length}/${objectivesList.length} objectifs traités`
+            : "Synthèse Unifiée (Protocole Argon)"
+        }) est enregistrée et prête à être révisée.`,
+        { label: "Ouvrir la synthèse", to: `/summary/${createdItem.id}` }
+      );
 
       // Redirection directe vers la page dédiée de lecture/édition du résumé
       navigate(`/summary/${createdItem.id}`);

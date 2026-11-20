@@ -33,6 +33,7 @@ import {
   Award,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notificationHub";
 import { useFileReader } from "@/hooks/useFileReader";
 import { exportQuizToPDF } from "@/utils/pdfExport";
 import type { QuizData } from "@/utils/QuizPDF";
@@ -64,8 +65,6 @@ import {
   saveSessionsAsync,
   sessionToPdfQuestions,
   sizeLabelOf,
-  looksLikeUcadExamFileName,
-  lookupPreExtractedExamCorpus,
   rescueFileReadLocally,
   type AnalysisProgress,
   type CorpusAnalysis,
@@ -387,6 +386,10 @@ export const ExamenBlanc: React.FC = () => {
     [ueInput, subjectInput, lessons, annales]
   );
   const analysisStale = !!analysis && analysisSignature !== currentSignature;
+  const workspacePendingSwitch =
+    Boolean(activeWorkspaceKeyRef.current) &&
+    Boolean(subjectInput.trim()) &&
+    activeWorkspaceKeyRef.current !== buildSubjectWorkspaceKey(ueInput, subjectInput);
   const activeLessons = useMemo(() => flagDuplicateLessons(lessons), [lessons]);
 
   const quota = useMemo(() => {
@@ -489,6 +492,14 @@ export const ExamenBlanc: React.FC = () => {
   // ------------------------------------------------------------------ imports
   const ingestFiles = async (files: FileList | null, target: "courses" | "annales") => {
     if (!files || files.length === 0) return;
+    if (target === "courses" && workspacePendingSwitch) {
+      toast({
+        title: "Bascule de matière requise avant l'import",
+        description: `Cliquez d'abord sur « Valider l'UE & la matière » pour isoler l'espace « ${subjectInput.trim()} » et ne pas mélanger vos cours.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setIsReading(true);
     let ok = 0;
     const failed: Array<{ name: string; reason: string }> = [];
@@ -906,16 +917,20 @@ export const ExamenBlanc: React.FC = () => {
       };
       setSessions((prev) => [session, ...prev]);
       openSession(session);
-      if (warnings.length)
-        toast({
-          title: "Épreuve générée avec notes ✨",
-          description: warnings.slice(0, 2).join(" · "),
-        });
-      else
-        toast({
-          title: "Examen blanc vérifié prêt",
-          description: `${finalBlocks.reduce((s, b) => s + b.items.length, 0)} questions inédites, relues et vérifiées sur le cours.`,
-        });
+      const totalGeneratedQcm = finalBlocks.reduce((s, b) => s + b.items.length, 0);
+      if (warnings.length) {
+        notify.aiReady(
+          `Examen blanc prêt — ${subjectInput.trim()}`,
+          `${totalGeneratedQcm} QCM générés (${warnings.slice(0, 2).join(" · ")}).`,
+          { label: "Démarrer l'épreuve", to: "/examen-blanc" }
+        );
+      } else {
+        notify.aiReady(
+          `Examen blanc prêt — ${subjectInput.trim()}`,
+          `${totalGeneratedQcm} QCM vérifiés par Sonnet 4.6 & Gemini 2.5 Flash sont prêts à être lancés.`,
+          { label: "Démarrer l'épreuve", to: "/examen-blanc" }
+        );
+      }
     } catch (err: any) {
       console.error(err);
       toast({
@@ -1026,6 +1041,17 @@ export const ExamenBlanc: React.FC = () => {
   };
 
   const resetStudio = () => {
+    const oldKey = activeWorkspaceKeyRef.current;
+    if (oldKey) {
+      setSubjectWorkspaces((prev) => {
+        const copy = { ...prev };
+        delete copy[oldKey];
+        return copy;
+      });
+    }
+    activeWorkspaceKeyRef.current = "";
+    activeUeKeyRef.current = "";
+    activeOwnerSubjectRef.current = { ue: "", subject: "" };
     setLessons([]);
     setAnnales([]);
     setAnalysis(null);

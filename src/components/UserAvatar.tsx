@@ -7,12 +7,6 @@ import {
   LogIn,
   CreditCard,
   Sparkles,
-  Bell,
-  Check,
-  Copy,
-  ChevronDown,
-  ChevronUp,
-  Trash2,
   Trophy,
   Award,
   Home,
@@ -21,7 +15,6 @@ import {
   Compass,
   User,
 } from "lucide-react";
-import { resolveToastSemantics } from "@/components/ui/toaster";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,13 +22,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { getSavedStudentProfile, type StudentProfileSN } from "@/lib/studentProfile";
-import { useNotifications } from "@/hooks/useNotifications";
+import { NotificationsDropdown } from "@/components/NotificationsDropdown";
 import {
   getStoredUserStats,
   USER_GAMIFICATION_KEY,
@@ -342,16 +330,6 @@ export function UserAvatar({
     return localStorage.getItem(AUTH_STATUS_STORAGE_KEY) === "false";
   });
 
-  const {
-    notifications,
-    unreadCount,
-    markAsRead,
-    markAllAsRead,
-    clearNotifications,
-  } = useNotifications();
-  const [expandedNotifIds, setExpandedNotifIds] = useState<Record<string, boolean>>({});
-  const [copiedNotifId, setCopiedNotifId] = useState<string | null>(null);
-
   const isPublicLandingPage = PUBLIC_LANDING_PATHS.includes(location.pathname);
 
   // Dès que l'utilisateur entre dans une page du Dashboard, il est considéré comme connecté
@@ -632,227 +610,7 @@ export function UserAvatar({
       </DropdownMenu>
 
       <div className="flex items-center gap-1 shrink-0 ml-auto">
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              aria-label="Centre de notifications"
-              title="Notifications"
-              className={cn(
-                "group/bell relative flex items-center justify-center rounded-xl text-stone-600 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white transition-all duration-200 shrink-0",
-                collapsed && !inHeader
-                  ? "h-8 w-8 border border-border/70 bg-card/70 hover:bg-card"
-                  : inHeader
-                  ? "h-9 w-9 rounded-xl border border-border/80 bg-card/90 hover:border-foreground/30"
-                  : "h-7 w-7 rounded-lg hover:bg-[#D5C9B3] dark:hover:bg-stone-800"
-              )}
-            >
-              <Bell className="h-3.5 w-3.5 transition-transform duration-200 group-hover/bell:scale-110" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 font-mono text-[9px] font-bold text-primary-foreground shadow-2xs ring-2 ring-background">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-          </PopoverTrigger>
-
-          <PopoverContent
-            side={collapsed && !inHeader ? "right" : "bottom"}
-            align={inHeader ? "end" : "start"}
-            sideOffset={10}
-            className="w-[min(94vw,390px)] rounded-2xl border border-border/90 bg-card/95 backdrop-blur-2xl p-0 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.28)] overflow-hidden z-[80]"
-          >
-            <div className="flex items-center justify-between border-b border-border/80 bg-secondary/35 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="text-[13.5px] font-semibold text-foreground">
-                  Centre d'activité
-                </span>
-                {unreadCount > 0 && (
-                  <span className="rounded-md border border-primary/25 bg-primary/12 px-1.5 py-[1px] font-mono text-[10px] font-bold text-primary">
-                    {unreadCount} non lue{unreadCount > 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1">
-                {unreadCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={markAllAsRead}
-                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-card hover:text-primary transition-colors cursor-pointer"
-                  >
-                    <Check className="h-3 w-3" />
-                    <span>Tout lire</span>
-                  </button>
-                )}
-                {notifications.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearNotifications}
-                    title="Purger l'historique"
-                    className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-card rounded-lg transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="max-h-[380px] overflow-y-auto divide-y divide-border/60 scrollbar-none">
-              {notifications.length === 0 ? (
-                <div className="py-10 px-6 text-center space-y-1.5">
-                  <p className="text-[13px] font-medium text-foreground">
-                    Aucune notification en attente
-                  </p>
-                  <p className="text-[11.5px] text-muted-foreground">
-                    Vos alertes système, imports de cours et passages de paliers LV.
-                    s'afficheront ici.
-                  </p>
-                </div>
-              ) : (
-                notifications.map((n) => {
-                  const meta = resolveToastSemantics(n.title || "", n.message || "");
-                  const isExpanded = Boolean(expandedNotifIds[n.id]);
-                  const isCopied = copiedNotifId === n.id;
-                  const msgStr = (n.message || "").trim();
-                  const isLong =
-                    msgStr.length > 85 ||
-                    msgStr.includes("\n") ||
-                    (msgStr.match(/,/g) || []).length >= 2;
-
-                  const copyPayload = `[${meta.badgeLabel}] ${n.title}${
-                    msgStr ? `\n${msgStr}` : ""
-                  }`;
-
-                  return (
-                    <div
-                      key={n.id}
-                      onClick={() => markAsRead(n.id)}
-                      className={cn(
-                        "flex items-start gap-3 p-3.5 cursor-pointer transition-colors hover:bg-secondary/45",
-                        !n.read && "bg-primary/[0.04]"
-                      )}
-                    >
-                      <div
-                        className={cn(
-                          "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border",
-                          meta.iconBoxClass
-                        )}
-                      >
-                        {meta.icon}
-                      </div>
-
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
-                            {!n.read && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-                            )}
-                            <span className="text-[12.5px] font-semibold text-foreground truncate max-w-[165px]">
-                              {n.title}
-                            </span>
-                            <span
-                              className={cn(
-                                "inline-flex items-center rounded-md border px-1.5 py-[0.5px] font-mono text-[8.5px] font-bold uppercase tracking-wider shrink-0",
-                                meta.pillClass
-                              )}
-                            >
-                              {meta.badgeLabel}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                markAsRead(n.id);
-                                try {
-                                  await navigator.clipboard.writeText(copyPayload);
-                                } catch {
-                                  const ta = document.createElement("textarea");
-                                  ta.value = copyPayload;
-                                  document.body.appendChild(ta);
-                                  ta.select();
-                                  document.execCommand("copy");
-                                  document.body.removeChild(ta);
-                                }
-                                setCopiedNotifId(n.id);
-                                setTimeout(() => {
-                                  setCopiedNotifId((curr) => (curr === n.id ? null : curr));
-                                }, 2000);
-                              }}
-                              title="Copier cette notification dans le presse-papiers"
-                              className={cn(
-                                "inline-flex h-5 items-center gap-1 rounded-md border px-1.5 font-mono text-[9.5px] font-semibold transition-colors cursor-pointer",
-                                isCopied
-                                  ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                                  : "border-border/70 bg-background/80 text-muted-foreground hover:text-foreground"
-                              )}
-                            >
-                              {isCopied ? (
-                                <>
-                                  <Check className="h-2.5 w-2.5" />
-                                  <span>Copié</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-2.5 w-2.5" />
-                                  <span>Copier</span>
-                                </>
-                              )}
-                            </button>
-
-                            {isLong && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markAsRead(n.id);
-                                  setExpandedNotifIds((prev) => ({
-                                    ...prev,
-                                    [n.id]: !prev[n.id],
-                                  }));
-                                }}
-                                title={isExpanded ? "Réduire" : "Déplier"}
-                                className="inline-flex h-5 items-center gap-0.5 rounded-md border border-border/70 bg-background/80 px-1.5 font-mono text-[9.5px] font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                              >
-                                <span>{isExpanded ? "Réduire" : "Détails"}</span>
-                                {isExpanded ? (
-                                  <ChevronUp className="h-2.5 w-2.5" />
-                                ) : (
-                                  <ChevronDown className="h-2.5 w-2.5" />
-                                )}
-                              </button>
-                            )}
-
-                            <span className="font-mono text-[9.5px] text-muted-foreground pl-0.5">
-                              {n.createdAt}
-                            </span>
-                          </div>
-                        </div>
-
-                        {msgStr && (
-                          <div className="space-y-1">
-                            {!isExpanded ? (
-                              <p className="text-[11.5px] text-muted-foreground leading-snug line-clamp-2 break-words">
-                                {msgStr}
-                              </p>
-                            ) : (
-                              <div className="rounded-lg border border-border/80 bg-secondary/50 p-2 max-h-40 overflow-y-auto text-[11px] font-mono leading-relaxed text-foreground whitespace-pre-wrap break-words select-all">
-                                {msgStr}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
+        <NotificationsDropdown collapsed={collapsed} inHeader={inHeader} />
         {extraActions}
       </div>
     </div>

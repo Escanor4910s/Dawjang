@@ -1,132 +1,194 @@
 // src/hooks/useNotifications.ts
-import { untypedTable } from "@/lib/untypedDb";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { untypedTable } from "@/lib/untypedDb";
 import {
-  sendLocalNotification,
-  getNotificationPermissionStatus,
-} from "@/lib/notifications";
+  type DawJangNotification,
+  type NotificationCategory,
+  type NotificationTone,
+  HUB_STORE_SYNC_EVENT,
+  emitAppNotification,
+  inferCategoryAndTone,
+  notify,
+  readCachedNotificationPrefs,
+  readStoredNotifications,
+  writeStoredNotifications,
+} from "@/lib/notificationHub";
 
 export interface AppNotification {
   id: string;
   type: "level_up" | "badge" | "course" | "quiz" | "system";
+  category: NotificationCategory;
+  tone: NotificationTone;
   title: string;
   message: string;
   createdAt: string;
+  timestamp: number;
   read: boolean;
   link?: string;
+  actionLabel?: string;
+  copyText?: string;
 }
 
-const NOTIFICATIONS_STORAGE_KEY = "hippocampus_notifications_center_v2";
+function toLegacyCompatible(n: DawJangNotification): AppNotification {
+  const type: AppNotification["type"] =
+    n.category === "gamification"
+      ? "level_up"
+      : n.category === "ai"
+      ? "quiz"
+      : n.category === "study"
+      ? "course"
+      : "system";
+  return {
+    id: n.id,
+    type,
+    category: n.category,
+    tone: n.tone,
+    title: n.title,
+    message: n.message,
+    createdAt: n.createdAt,
+    timestamp: n.timestamp,
+    read: n.read,
+    link: n.link,
+    actionLabel: n.actionLabel,
+    copyText: n.copyText,
+  };
+}
 
 export function pushAppNotification(
-  notif: Omit<AppNotification, "id" | "createdAt" | "read">,
+  notif: {
+    type?: "level_up" | "badge" | "course" | "quiz" | "system";
+    title: string;
+    message: string;
+    link?: string;
+    actionLabel?: string;
+  },
   silent = false
 ) {
-  try {
-    const raw = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
-    const list: AppNotification[] = raw ? JSON.parse(raw) : [];
+  const mappedCategory: NotificationCategory | undefined =
+    notif.type === "level_up" || notif.type === "badge"
+      ? "gamification"
+      : notif.type === "course"
+      ? "study"
+      : notif.type === "quiz"
+      ? "ai"
+      : undefined;
 
-    // Évite d'empiler deux fois exactement la même notification à la même seconde
-    if (
-      list.length > 0 &&
-      list[0].title === notif.title &&
-      list[0].message === notif.message
-    ) {
-      return;
-    }
-
-    const created: AppNotification = {
-      ...notif,
-      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      createdAt: new Date().toLocaleTimeString("fr-FR", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      read: false,
-    };
-    const updated = [created, ...list].slice(0, 40);
-    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
-    window.dispatchEvent(
-      new CustomEvent("hippocampus-notification-pushed", {
-        detail: { created, silent },
-      })
-    );
-  } catch (e) {
-    console.error(e);
-  }
+  emitAppNotification({
+    title: notif.title,
+    description: notif.message,
+    category: mappedCategory,
+    link: notif.link,
+    action:
+      notif.link && notif.actionLabel
+        ? { label: notif.actionLabel, to: notif.link }
+        : undefined,
+    silentToast: silent,
+  });
 }
 
 export function useNotifications() {
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>(() =>
+    readStoredNotifications().map(toLegacyCompatible)
+  );
 
-  const loadNotifications = useCallback(() => {
-    try {
-      const raw = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
-      if (raw) {
-        setNotifications(JSON.parse(raw));
-      } else {
-        const initial: AppNotification[] = [
-          {
-            id: "welcome-notif",
-            type: "system",
-            title: "Centre de notifications DawJang actif",
-            message:
-              "Vos passages de paliers LV., vos imports de cours et vos sessions d'examen sont archivés ici en temps réel.",
-            createdAt: "Aujourd'hui",
-            read: false,
-          },
-        ];
-        localStorage.setItem(
-          NOTIFICATIONS_STORAGE_KEY,
-          JSON.stringify(initial)
-        );
-        setNotifications(initial);
-      }
-    } catch (e) {
-      console.error(e);
-    }
+  const reload = useCallback(() => {
+    setNotifications(readStoredNotifications().map(toLegacyCompatible));
   }, []);
 
   useEffect(() => {
-    loadNotifications();
+    reload();
+    window.addEventListener(HUB_STORE_SYNC_EVENT, reload);
+    window.addEventListener("storage", reload);
+    return () => {
+      window.removeEventListener(HUB_STORE_SYNC_EVENT, reload);
+      window.removeEventListener("storage", reload);
+    };
+  }, [reload]);
 
-    const handleNewNotif = () => {
-      loadNotifications();
+  // Synchronisation Supabase Realtime sur public.notifications (notifications serveur / multi-appareils)
+  useEffect(() => {
+    let active = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const connectRealtime = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !active) return;
+
+      channel = supabase
+        .channel(`dawjang-notifications-${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload: any) => {
+            const row = payload?.new;
+            if (!row?.title) return;
+            const existing = readStoredNotifications();
+            if (existing.some((n) => n.id === row.id)) return;
+            const inferred = inferCategoryAndTone(row.title, row.message || "");
+            emitAppNotification({
+              id: row.id,
+              title: row.title,
+              description: row.message || "",
+              category: (row.category as NotificationCategory) || inferred.category,
+              tone: (row.type as NotificationTone) || inferred.tone,
+              link: row.link || undefined,
+              action: row.link
+                ? { label: row.action_label || "Ouvrir", to: row.link }
+                : undefined,
+              playSound: true,
+            });
+          }
+        )
+        .subscribe();
     };
 
-    window.addEventListener("hippocampus-notification-pushed", handleNewNotif);
-    return () =>
-      window.removeEventListener(
-        "hippocampus-notification-pushed",
-        handleNewNotif
-      );
-  }, [loadNotifications]);
+    void connectRealtime();
+    return () => {
+      active = false;
+      if (channel) void supabase.removeChannel(channel);
+    };
+  }, []);
 
-  const markAsRead = (id: string) => {
-    const updated = notifications.map((n) =>
+  const markAsRead = useCallback((id: string) => {
+    const next = readStoredNotifications().map((n) =>
       n.id === id ? { ...n, read: true } : n
     );
-    setNotifications(updated);
-    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
-  };
+    writeStoredNotifications(next);
+    setNotifications(next.map(toLegacyCompatible));
+    // Synchronise aussi en BDD si UUID Supabase
+    if (/^[0-9a-f-]{36}$/i.test(id)) {
+      void untypedTable("notifications").update({ read: true }).eq("id", id);
+    }
+  }, []);
 
-  const deleteNotification = (id: string) => {
-    const updated = notifications.filter((n) => n.id !== id);
-    setNotifications(updated);
-    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
-  };
+  const deleteNotification = useCallback((id: string) => {
+    const next = readStoredNotifications().filter((n) => n.id !== id);
+    writeStoredNotifications(next);
+    setNotifications(next.map(toLegacyCompatible));
+    if (/^[0-9a-f-]{36}$/i.test(id)) {
+      void untypedTable("notifications").delete().eq("id", id);
+    }
+  }, []);
 
-  const markAllAsRead = () => {
-    const updated = notifications.map((n) => ({ ...n, read: true }));
-    setNotifications(updated);
-    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
-  };
+  const markAllAsRead = useCallback(() => {
+    const next = readStoredNotifications().map((n) => ({ ...n, read: true }));
+    writeStoredNotifications(next);
+    setNotifications(next.map(toLegacyCompatible));
+  }, []);
 
-  const clearNotifications = () => {
+  const clearNotifications = useCallback(() => {
+    writeStoredNotifications([]);
     setNotifications([]);
-    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify([]));
-  };
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -142,10 +204,12 @@ export function useNotifications() {
 }
 
 /**
- * Service d'arrière-plan vérifiant quotidiennement les révisions de flashcards
+ * Service de rappel de révision quotidien :
+ * - Affiche d'abord une notification native DawJang dans l'application (avec action directe)
+ * - N'utilise la notification système OS que si l'onglet est en arrière-plan (document.hidden)
  */
-export function useRevisionReminder(enabled: boolean = true) {
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+export function useRevisionReminder(enabled = true) {
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -157,16 +221,11 @@ export function useRevisionReminder(enabled: boolean = true) {
         } = await supabase.auth.getUser();
         if (!user) return;
 
-        const userCacheKey = `hippo_dismissed_revision_reminder_${user.id}`;
+        const userCacheKey = `dawjang_revision_reminder_${user.id}`;
         const today = new Date().toISOString().split("T")[0];
-        const lastDismissed = localStorage.getItem(userCacheKey);
-
-        if (lastDismissed === today) {
-          return;
-        }
+        if (localStorage.getItem(userCacheKey) === today) return;
 
         const endOfDay = `${today}T23:59:59.999Z`;
-
         const { count, error } = await supabase
           .from("flashcards")
           .select("id", { count: "exact", head: true })
@@ -175,45 +234,28 @@ export function useRevisionReminder(enabled: boolean = true) {
 
         if (error || !count || count === 0) return;
 
-        try {
-          const { data: existingNotifs } = await untypedTable("notifications")
-            .select("id")
-            .eq("user_id", user.id)
-            .eq("type", "revision_reminder")
-            .gte("created_at", today + "T00:00:00Z");
-
-          if (existingNotifs && (existingNotifs as unknown[]).length > 0) {
-            localStorage.setItem(userCacheKey, today);
-            return;
-          }
-
-          await untypedTable("notifications").insert({
-            user_id: user.id,
-            title: "🎯 Révision du jour",
-            message: `Vous avez ${count} flashcard${count > 1 ? "s" : ""} à réviser aujourd'hui !`,
-            type: "revision_reminder",
-            link: "/flashcards",
-          });
-        } catch {
-          // Fallback silencieux
+        const prefs = readCachedNotificationPrefs();
+        if (!prefs.notify_flashcard_alerts && !prefs.notify_revision_reminders) {
+          return;
         }
 
-        if (getNotificationPermissionStatus() === "granted") {
-          sendLocalNotification(
-            "🎯 Révision du jour",
-            `Vous avez ${count} flashcard${count > 1 ? "s" : ""} à réviser aujourd'hui !`,
-            undefined,
-            "/flashcards"
-          );
-        }
+        const title = "Révision du jour prête";
+        const message = `Vous avez ${count} flashcard${count > 1 ? "s" : ""} à consolider aujourd'hui pour maintenir votre courbe de rétention.`;
+
+        notify.reminder(
+          title,
+          message,
+          { label: "Réviser maintenant", to: "/flashcards" },
+          { persistToDb: true }
+        );
 
         localStorage.setItem(userCacheKey, today);
       } catch (err) {
-        console.error("[useRevisionReminder] Erreur:", err);
+        console.warn("[useRevisionReminder]", err);
       }
     };
 
-    checkFlashcards();
+    void checkFlashcards();
     intervalRef.current = setInterval(checkFlashcards, 2 * 60 * 60 * 1000);
 
     return () => {

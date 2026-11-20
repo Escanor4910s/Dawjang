@@ -9,6 +9,32 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      "/supabase-proxy": {
+        target: "https://vhzdbhdyytvaipkbcsvs.supabase.co",
+        changeOrigin: true,
+        secure: true,
+        ws: true,
+        timeout: 120000,
+        proxyTimeout: 120000,
+        rewrite: (p) => p.replace(/^\/supabase-proxy/, ""),
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyReq) => {
+            proxyReq.removeHeader("cookie");
+          });
+          proxy.on("error", (err, _req, res) => {
+            if ("writeHead" in res && !res.headersSent) {
+              res.writeHead(503, { "Content-Type": "application/json" });
+              res.end(
+                JSON.stringify({
+                  error: `Connexion internet ou liaison vers Supabase interrompue (${err.message}).`,
+                })
+              );
+            }
+          });
+        },
+      },
+    },
   },
   plugins: [
     react(),
@@ -17,50 +43,57 @@ export default defineConfig(({ mode }) => ({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt'],
       manifest: {
-        name: 'Hippocampus - Révision Médicale',
-        short_name: 'Hippocampus',
-        description: 'Plateforme IA de révision pour étudiants en médecine. QCM, résumés et flashcards générés automatiquement.',
-        theme_color: '#6366f1',
-        background_color: '#0f0f23',
-        display: 'standalone',
-        orientation: 'portrait-primary',
-        scope: '/',
-        start_url: '/',
-        categories: ['education', 'medical', 'productivity'],
+        name: "DawJang — Studio de Révision Médicale",
+        short_name: "DawJang",
+        description:
+          "Studio IA de préparation aux examens de médecine : Examens blancs, QCM docimologiques, synthèses et flashcards FSRS.",
+        theme_color: "#C96442",
+        background_color: "#141312",
+        display: "standalone",
+        orientation: "portrait-primary",
+        scope: "/",
+        start_url: "/dashboard",
+        categories: ["education", "medical", "productivity"],
         icons: [
           {
-            src: '/pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any'
+            src: "/pwa-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
           },
           {
-            src: '/pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any'
+            src: "/pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
           },
           {
-            src: '/pwa-maskable-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable'
-          }
+            src: "/pwa-maskable-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
         ],
         shortcuts: [
           {
-            name: 'Dashboard',
-            short_name: 'Dashboard',
-            url: '/dashboard',
-            icons: [{ src: '/pwa-192x192.png', sizes: '192x192' }]
+            name: "Examen Blanc",
+            short_name: "Examen Blanc",
+            url: "/examen-blanc",
+            icons: [{ src: "/pwa-192x192.png", sizes: "192x192" }],
           },
           {
-            name: 'Nouveau QCM',
-            short_name: 'QCM',
-            url: '/quiz',
-            icons: [{ src: '/pwa-192x192.png', sizes: '192x192' }]
-          }
-        ]
+            name: "Smart Flashcards",
+            short_name: "Flashcards",
+            url: "/flashcards",
+            icons: [{ src: "/pwa-192x192.png", sizes: "192x192" }],
+          },
+          {
+            name: "Nouveau QCM",
+            short_name: "QCM",
+            url: "/qcm",
+            icons: [{ src: "/pwa-192x192.png", sizes: "192x192" }],
+          },
+        ],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
@@ -107,6 +140,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "sonner": path.resolve(__dirname, "./src/lib/sonnerAdapter.ts"),
     },
   },
   build: {
@@ -116,7 +150,7 @@ export default defineConfig(({ mode }) => ({
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['framer-motion', 'lucide-react', 'sonner'],
+          'ui-vendor': ['framer-motion', 'lucide-react'],
           'pdf-vendor': ['@react-pdf/renderer'],
         }
       }

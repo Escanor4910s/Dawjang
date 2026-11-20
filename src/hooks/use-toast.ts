@@ -1,74 +1,50 @@
 // src/hooks/use-toast.ts
 import * as React from "react";
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
-import { pushAppNotification } from "@/hooks/useNotifications";
+import {
+  type DawJangNotification,
+  HUB_DISMISS_EVENT,
+  HUB_PUSH_EVENT,
+  HUB_UPDATE_EVENT,
+  dismissAppNotification,
+  emitAppNotification,
+  updateAppNotification,
+} from "@/lib/notificationHub";
 
 const TOAST_LIMIT = 4;
-const TOAST_REMOVE_DELAY = 4800;
 
-type ToasterToast = ToastProps & {
+export interface ToasterToast {
   id: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
   action?: ToastActionElement;
-  createdAt?: string;
-};
-
-const actionTypes = {
-  ADD_TOAST: "ADD_TOAST",
-  UPDATE_TOAST: "UPDATE_TOAST",
-  DISMISS_TOAST: "DISMISS_TOAST",
-  REMOVE_TOAST: "REMOVE_TOAST",
-} as const;
-
-let count = 0;
-
-function genId() {
-  count = (count + 1) % Number.MAX_SAFE_INTEGER;
-  return count.toString();
+  variant?: ToastProps["variant"];
+  notification: DawJangNotification;
+  open: boolean;
 }
 
-type ActionType = typeof actionTypes;
+const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
-type Action =
-  | {
-      type: ActionType["ADD_TOAST"];
-      toast: ToasterToast;
-    }
-  | {
-      type: ActionType["UPDATE_TOAST"];
-      toast: Partial<ToasterToast>;
-    }
-  | {
-      type: ActionType["DISMISS_TOAST"];
-      toastId?: ToasterToast["id"];
-    }
-  | {
-      type: ActionType["REMOVE_TOAST"];
-      toastId?: ToasterToast["id"];
-    };
+function extractPlainText(node: React.ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractPlainText).join(" ");
+  if (React.isValidElement(node) && node.props?.children) {
+    return extractPlainText(node.props.children);
+  }
+  return "";
+}
 
 interface State {
   toasts: ToasterToast[];
 }
 
-const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+let memoryState: State = { toasts: [] };
+const listeners = new Set<(state: State) => void>();
 
-const addToRemoveQueue = (toastId: string, customDelay = TOAST_REMOVE_DELAY) => {
-  if (toastTimeouts.has(toastId)) {
-    return;
-  }
-
-  const timeout = setTimeout(() => {
-    toastTimeouts.delete(toastId);
-    dispatch({
-      type: "REMOVE_TOAST",
-      toastId: toastId,
-    });
-  }, customDelay);
-
-  toastTimeouts.set(toastId, timeout);
-};
+function broadcast(next: State) {
+  memoryState = next;
+  listeners.forEach((l) => l(memoryState));
+}
 
 export const pauseToastTimeout = (toastId: string) => {
   const existing = toastTimeouts.get(toastId);
@@ -78,161 +54,144 @@ export const pauseToastTimeout = (toastId: string) => {
   }
 };
 
-export const resumeToastTimeout = (toastId: string, delayMs = 3000) => {
-  addToRemoveQueue(toastId, delayMs);
+export const resumeToastTimeout = (toastId: string, delayMs = 3200) => {
+  pauseToastTimeout(toastId);
+  const timer = setTimeout(() => {
+    toastTimeouts.delete(toastId);
+    dismissToastInternal(toastId);
+  }, delayMs);
+  toastTimeouts.set(toastId, timer);
 };
 
-export const reducer = (state: State, action: Action): State => {
-  switch (action.type) {
-    case "ADD_TOAST":
-      return {
-        ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
-      };
-
-    case "UPDATE_TOAST":
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === action.toast.id ? { ...t, ...action.toast } : t
-        ),
-      };
-
-    case "DISMISS_TOAST": {
-      const { toastId } = action;
-
-      if (toastId) {
-        pauseToastTimeout(toastId);
-        addToRemoveQueue(toastId, 300);
-      } else {
-        state.toasts.forEach((toast) => {
-          pauseToastTimeout(toast.id);
-          addToRemoveQueue(toast.id, 300);
-        });
-      }
-
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === toastId || toastId === undefined
-            ? {
-                ...t,
-                open: false,
-              }
-            : t
-        ),
-      };
-    }
-    case "REMOVE_TOAST":
-      if (action.toastId === undefined) {
-        return {
-          ...state,
-          toasts: [],
-        };
-      }
-      return {
-        ...state,
-        toasts: state.toasts.filter((t) => t.id !== action.toastId),
-      };
+function dismissToastInternal(toastId?: string) {
+  if (toastId) {
+    pauseToastTimeout(toastId);
+    broadcast({
+      toasts: memoryState.toasts.filter((t) => t.id !== toastId),
+    });
+  } else {
+    toastTimeouts.forEach((t) => clearTimeout(t));
+    toastTimeouts.clear();
+    broadcast({ toasts: [] });
   }
-};
+}
 
-const listeners: Array<(state: State) => void> = [];
+let hubListenersInstalled = false;
+function ensureHubBridge() {
+  if (hubListenersInstalled || typeof window === "undefined") return;
+  hubListenersInstalled = true;
 
-let memoryState: State = { toasts: [] };
+  window.addEventListener(HUB_PUSH_EVENT, (e: Event) => {
+    const notif = (e as CustomEvent<DawJangNotification>).detail;
+    if (!notif) return;
 
-function dispatch(action: Action) {
-  memoryState = reducer(memoryState, action);
-  listeners.forEach((listener) => {
-    listener(memoryState);
+    const entry: ToasterToast = {
+      id: notif.id,
+      title: notif.title,
+      description: notif.message || undefined,
+      variant: notif.tone === "error" ? "destructive" : "default",
+      notification: notif,
+      open: true,
+    };
+
+    const existingIdx = memoryState.toasts.findIndex((t) => t.id === notif.id);
+    const nextList =
+      existingIdx >= 0
+        ? memoryState.toasts.map((t) => (t.id === notif.id ? entry : t))
+        : [entry, ...memoryState.toasts].slice(0, TOAST_LIMIT);
+
+    broadcast({ toasts: nextList });
+
+    if (notif.durationMs && notif.durationMs > 0) {
+      resumeToastTimeout(notif.id, notif.durationMs);
+    }
+  });
+
+  window.addEventListener(HUB_UPDATE_EVENT, (e: Event) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { id, patch } = (e as CustomEvent<{ id: string; patch: any }>).detail || {};
+    if (!id || !patch) return;
+    broadcast({
+      toasts: memoryState.toasts.map((t) => {
+        if (t.id !== id) return t;
+        const nextNotif: DawJangNotification = {
+          ...t.notification,
+          title: patch.title ?? t.notification.title,
+          message: patch.description ?? t.notification.message,
+          tone: patch.tone ?? t.notification.tone,
+          action: patch.action ?? t.notification.action,
+        };
+        return {
+          ...t,
+          title: nextNotif.title,
+          description: nextNotif.message,
+          variant: nextNotif.tone === "error" ? "destructive" : "default",
+          notification: nextNotif,
+        };
+      }),
+    });
+  });
+
+  window.addEventListener(HUB_DISMISS_EVENT, (e: Event) => {
+    const { id } = (e as CustomEvent<{ id?: string }>).detail || {};
+    dismissToastInternal(id);
   });
 }
 
-type Toast = Omit<ToasterToast, "id">;
+type LegacyToastInput = Omit<ToastProps, "id"> & {
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  action?: ToastActionElement;
+  duration?: number;
+};
 
-function toast({ ...props }: Toast) {
-  const id = genId();
-  const nowStr = new Date().toLocaleTimeString("fr-FR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
+function toast({ title, description, variant, duration, action }: LegacyToastInput) {
+  ensureHubBridge();
+  const titleStr = extractPlainText(title).trim() || "Notification";
+  const descStr = extractPlainText(description).trim();
+
+  const id = emitAppNotification({
+    title: titleStr,
+    description: descStr,
+    tone: variant === "destructive" ? "error" : undefined,
+    durationMs: duration,
   });
 
-  const update = (props: ToasterToast) =>
-    dispatch({
-      type: "UPDATE_TOAST",
-      toast: { ...props, id },
+  // Si un ReactElement `action` personnalisé a été fourni, on l'attache à la carte
+  if (action) {
+    broadcast({
+      toasts: memoryState.toasts.map((t) => (t.id === id ? { ...t, action } : t)),
     });
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id });
-
-  // Synchronise automatiquement la notification dans la cloche du Centre de Notifications DawJang
-  if (typeof props.title === "string" && props.title.trim()) {
-    const tLower = props.title.toLowerCase();
-    const inferredType =
-      tLower.includes("lv.") || tLower.includes("palier")
-        ? "level_up"
-        : tLower.includes("badge") || tLower.includes("médaille")
-        ? "badge"
-        : tLower.includes("cours") || tLower.includes("fichier")
-        ? "course"
-        : tLower.includes("qcm") || tLower.includes("examen")
-        ? "quiz"
-        : "system";
-
-    pushAppNotification(
-      {
-        type: inferredType,
-        title: props.title,
-        message:
-          typeof props.description === "string" ? props.description : "",
-      },
-      true // silent = true pour éviter une boucle infinie
-    );
   }
 
-  dispatch({
-    type: "ADD_TOAST",
-    toast: {
-      ...props,
-      id,
-      createdAt: nowStr,
-      open: true,
-      onOpenChange: (open) => {
-        if (!open) dismiss();
-      },
-    },
-  });
-
-  // Planifie la fermeture automatique (un peu plus longue pour les alertes destructives ou longues)
-  const descLen = typeof props.description === "string" ? props.description.length : 0;
-  const initialDelay =
-    props.variant === "destructive" || descLen > 110 ? 6500 : TOAST_REMOVE_DELAY;
-  addToRemoveQueue(id, initialDelay);
-
   return {
-    id: id,
-    dismiss,
-    update,
+    id,
+    dismiss: () => dismissAppNotification(id),
+    update: (next: Partial<LegacyToastInput>) =>
+      updateAppNotification(id, {
+        title: next.title ? extractPlainText(next.title) : undefined,
+        description: next.description ? extractPlainText(next.description) : undefined,
+        tone: next.variant === "destructive" ? "error" : undefined,
+      }),
   };
 }
 
 function useToast() {
+  ensureHubBridge();
   const [state, setState] = React.useState<State>(memoryState);
 
   React.useEffect(() => {
-    listeners.push(setState);
+    listeners.add(setState);
+    setState(memoryState);
     return () => {
-      const index = listeners.indexOf(setState);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
+      listeners.delete(setState);
     };
-  }, [state]);
+  }, []);
 
   return {
     ...state,
     toast,
-    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
+    dismiss: (toastId?: string) => dismissAppNotification(toastId),
   };
 }
 

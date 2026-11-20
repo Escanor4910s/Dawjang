@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { invokeWithRetry as defaultInvoke } from "@/lib/edgeRetry";
 import { exportViaPuppeteerBackend } from "@/utils/backendPdfExport";
 import { generateArvaSummary } from "@/utils/doctrineGenerators";
+import { notify } from "@/lib/notificationHub";
 import { ArvaRenderer } from "./ArvaRenderer";
 
 export interface ArvaSyntheseProps {
@@ -37,7 +38,7 @@ export default function ArvaSynthese({
       const s = await generateArvaSummary(objectives, targetWordCount, invokeWithRetry);
       setSummary(s);
     } catch (e: any) {
-      alert("Erreur: " + e.message);
+      notify.warning("Synthèse", e?.message || "Erreur lors de la génération de la synthèse.");
     } finally {
       setLoading(false);
     }

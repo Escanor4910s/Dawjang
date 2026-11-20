@@ -16,12 +16,28 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+const EFFECTIVE_SUPABASE_URL =
+  import.meta.env.DEV &&
+  typeof window !== "undefined" &&
+  window.location?.origin?.startsWith("http")
+    ? `${window.location.origin}/supabase-proxy`
+    : SUPABASE_URL;
+
+export const supabase = createClient<Database>(EFFECTIVE_SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
+    storageKey: "sb-vhzdbhdyytvaipkbcsvs-auth-token",
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
+  ...(import.meta.env.DEV
+    ? {
+        global: {
+          fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+            fetch(input, { ...init, credentials: "omit" }),
+        },
+      }
+    : {}),
 });
 
 // Sécurité et Résilience Globale des Edge Functions

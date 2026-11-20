@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { notify } from "@/lib/notificationHub";
+import { getSavedStudentProfile } from "@/lib/studentProfile";
 
 export type BadgeRarity = "bronze" | "argent" | "or" | "platine" | "obsidienne";
 
@@ -634,18 +636,51 @@ export const grantDawJangXP = (
   source = "general"
 ) => {
   if (typeof window === "undefined" || !amount || amount <= 0) return;
+
+  let leveledUp = false;
+  let updatedStats = getStoredUserStats();
+
   try {
-    const stats = getStoredUserStats();
-    stats.xp = (stats.xp || 0) + amount;
-    stats.totalXp = (stats.totalXp || 0) + amount;
-    localStorage.setItem(USER_GAMIFICATION_KEY, JSON.stringify(stats));
-  } catch { /* Ignore la progression locale illisible. */ }
-  window.dispatchEvent(
-    new CustomEvent("dawjang:xp-gain", {
-      detail: { amount, reason, source, timestamp: Date.now() },
-    })
-  );
+    const prevLevel = updatedStats.level || 1;
+    const nextXp = (updatedStats.xp || 0) + amount;
+    const nextRank =
+      PRESTIGE_RANKS.find((r) => nextXp >= r.minXp && nextXp < r.maxXp) ||
+      PRESTIGE_RANKS[PRESTIGE_RANKS.length - 1];
+
+    leveledUp = nextRank.level > prevLevel;
+    updatedStats = {
+      ...updatedStats,
+      xp: nextXp,
+      totalXp: Math.max(updatedStats.totalXp || 0, nextXp),
+      level: nextRank.level,
+      nextLevelXp: nextRank.maxXp,
+      rankTitle: nextRank.title,
+    };
+    localStorage.setItem(USER_GAMIFICATION_KEY, JSON.stringify(updatedStats));
+  } catch {
+    // Ignore erreur de stockage
+  }
+
+  const detail: XpGainEventDetail = {
+    amount,
+    reason,
+    source,
+    timestamp: Date.now(),
+    leveledUp,
+    newStats: updatedStats,
+  };
+
+  window.dispatchEvent(new CustomEvent("dawjang-xp-earned", { detail }));
+  window.dispatchEvent(new CustomEvent("dawjang:xp-gain", { detail }));
   window.dispatchEvent(new CustomEvent("hippocampus-stats-updated"));
+
+  if (leveledUp && getSavedStudentProfile().levelUpAlerts !== false) {
+    notify.xp(
+      `Palier LV.${updatedStats.level} atteint`,
+      `Vous passez au rang « ${updatedStats.rankTitle} » (+${amount} XP · ${reason}).`,
+      { action: { label: "Voir mes badges", to: "/settings" } }
+    );
+  }
 };
 
 export default useGamification;

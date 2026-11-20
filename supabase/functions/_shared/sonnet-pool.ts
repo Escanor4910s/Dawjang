@@ -1,16 +1,20 @@
 // supabase/functions/_shared/sonnet-pool.ts
 // Pool multi-clés et rotation automatique pour Claude Sonnet 4.6 (rédacteur principal)
-// et Gemini 2.5 (correcteur anti-dégâts & repli docimologique).
+// et Gemini 2.5 Flash (superviseur anti-dégâts, audit d'annales & OCR Vision).
 
-declare const Deno: {
-  env: {
-    get(key: string): string | undefined;
-  };
-} | undefined;
+declare const Deno:
+  | {
+      env: {
+        get(key: string): string | undefined;
+      };
+    }
+  | undefined;
 
-declare const process: {
-  env: Record<string, string | undefined>;
-} | undefined;
+declare const process:
+  | {
+      env: Record<string, string | undefined>;
+    }
+  | undefined;
 
 export type SonnetProviderKind = "anthropic" | "openrouter";
 export type GeminiProviderKind = "gemini" | "openrouter" | "lovable";
@@ -40,23 +44,35 @@ const LOVABLE_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 let sonnetCursor = 0;
 let geminiCursor = 0;
+// Clé de cooldown scopée par provider + modèle + clé API pour éviter qu'un échec Sonnet
+// ne mette la même clé OpenRouter en cooldown pour Gemini.
 const keyCooldownUntil = new Map<string, number>();
+let lastPoolError = "";
 
-/** Réinitialise les curseurs de rotation et les cooldowns (utile pour les tests unitaires). */
 export function resetPoolCursorsForTest(): void {
   sonnetCursor = 0;
   geminiCursor = 0;
   keyCooldownUntil.clear();
+  lastPoolError = "";
 }
 
-function markKeyFailure(key: string, status?: number): void {
+export function getLastPoolError(): string {
+  return lastPoolError;
+}
+
+function cooldownKey(provider: string, model: string, key: string): string {
+  return `${provider}::${model}::${key}`;
+}
+
+function markKeyFailure(provider: string, model: string, key: string, status?: number, detail = ""): void {
   const isPermanentOrAuth = status === 401 || status === 403 || status === 402;
-  const cooldownMs = isPermanentOrAuth ? 300_000 : 45_000;
-  keyCooldownUntil.set(key, Date.now() + cooldownMs);
+  const cooldownMs = isPermanentOrAuth ? 180_000 : 30_000;
+  keyCooldownUntil.set(cooldownKey(provider, model, key), Date.now() + cooldownMs);
+  lastPoolError = `[${provider}/${model}] HTTP ${status || "NET"} ${detail.slice(0, 220)}`.trim();
 }
 
-function markKeySuccess(key: string): void {
-  keyCooldownUntil.delete(key);
+function markKeySuccess(provider: string, model: string, key: string): void {
+  keyCooldownUntil.delete(cooldownKey(provider, model, key));
 }
 
 function readEnv(name: string): string {
@@ -79,10 +95,6 @@ function readEnv(name: string): string {
   return "";
 }
 
-/**
- * Découpe une variable d'environnement pouvant contenir 1 à N clés
- * (séparées par virgule, point-virgule, pipe ou retour à la ligne).
- */
 export function splitEnvKeys(raw: string): string[] {
   if (!raw) return [];
   return raw
@@ -125,16 +137,11 @@ function openRouterHeaders(apiKey: string): Record<string, string> {
   return {
     "Content-Type": "application/json",
     Authorization: `Bearer ${apiKey}`,
-    "HTTP-Referer": readEnv("APP_PUBLIC_URL") || "https://dawjang.app",
-    "X-Title": "DawJang",
+    "HTTP-Referer": readEnv("APP_PUBLIC_URL") || readEnv("SITE_URL") || "https://obsmed.space",
+    "X-Title": "DawJang Examen Blanc",
   };
 }
 
-/**
- * Résout toutes les clés conduisant vers Claude Sonnet 4.6 :
- * - Clés directes Anthropic (`sk-ant-...`) via SONNET_API_KEY*, ANTHROPIC_API_KEY*, CLAUDE_API_KEY*
- * - Clés OpenRouter (`sk-or-...`) via OPENROUTER_SONNET_API_KEY* ou OPENROUTER_API_KEY*
- */
 export function resolveSonnetKeyPool(): PoolKeyEntry<SonnetProviderKind>[] {
   const collected: Array<{ key: string; provider: SonnetProviderKind }> = [];
 
@@ -155,12 +162,6 @@ export function resolveSonnetKeyPool(): PoolKeyEntry<SonnetProviderKind>[] {
   return dedupeEntries(collected);
 }
 
-/**
- * Résout les clés Gemini 2.5 dédiées au rôle de correcteur anti-dégâts & repli :
- * - Clés directes Google (`GEMINI_API_KEY*`, `GOOGLE_API_KEY*`)
- * - Clés OpenRouter (`OPENROUTER_API_KEY*`) sur `google/gemini-2.5-flash`
- * - Passerelle Lovable (`LOVABLE_API_KEY`) en dernier repli
- */
 export function resolveGeminiRepairKeyPool(): PoolKeyEntry<GeminiProviderKind>[] {
   const collected: Array<{ key: string; provider: GeminiProviderKind }> = [];
 
@@ -185,37 +186,55 @@ export function getAiPoolSummary() {
     sonnetKeysCount: resolveSonnetKeyPool().length,
     geminiKeysCount: resolveGeminiRepairKeyPool().length,
     hasOpenAiFallback: Boolean(readEnv("OPENAI_API_KEY")),
+    sonnetModel: readEnv("SONNET_OPENROUTER_MODEL") || DEFAULT_OPENROUTER_SONNET_MODEL,
+    geminiModel: readEnv("GEMINI_REPAIR_OPENROUTER_MODEL") || DEFAULT_OPENROUTER_GEMINI_MODEL,
   };
 }
 
-function rotateOrder<T extends { key: string }>(items: T[], cursor: number): T[] {
+function rotateOrder<T extends { key: string; provider: string }>(
+  items: T[],
+  cursor: number,
+  modelResolver: (item: T) => string
+): T[] {
   if (items.length <= 1) return items;
   const start = ((cursor % items.length) + items.length) % items.length;
   const rotated = [...items.slice(start), ...items.slice(0, start)];
   const now = Date.now();
-  const healthy = rotated.filter((item) => (keyCooldownUntil.get(item.key) || 0) <= now);
-  const cooling = rotated.filter((item) => (keyCooldownUntil.get(item.key) || 0) > now);
+  const healthy = rotated.filter(
+    (item) => (keyCooldownUntil.get(cooldownKey(item.provider, modelResolver(item), item.key)) || 0) <= now
+  );
+  const cooling = rotated.filter(
+    (item) => (keyCooldownUntil.get(cooldownKey(item.provider, modelResolver(item), item.key)) || 0) > now
+  );
   return healthy.length > 0 ? [...healthy, ...cooling] : rotated;
 }
 
 export function safeParseJsonObject(rawText: string): any | null {
-  const cleaned = String(rawText || "")
+  const stripped = String(rawText || "")
     .replace(/^[\s\S]*?```(?:json)?\s*/i, "")
     .replace(/\s*```[\s\S]*$/i, "")
     .trim();
-  if (!cleaned) return null;
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const first = cleaned.indexOf("{");
-    const last = cleaned.lastIndexOf("}");
-    if (first !== -1 && last > first) {
+  if (!stripped) return null;
+
+  const tryParse = (candidate: string): any | null => {
+    try {
+      return JSON.parse(candidate);
+    } catch {
       try {
-        return JSON.parse(cleaned.slice(first, last + 1));
+        return JSON.parse(candidate.replace(/,\s*([}\]])/g, "$1"));
       } catch {
-        // ignore invalid fragment
+        return null;
       }
     }
+  };
+
+  const direct = tryParse(stripped);
+  if (direct !== null) return direct;
+
+  const first = stripped.indexOf("{");
+  const last = stripped.lastIndexOf("}");
+  if (first !== -1 && last > first) {
+    return tryParse(stripped.slice(first, last + 1));
   }
   return null;
 }
@@ -242,6 +261,7 @@ async function invokeSingleSonnetKey(params: {
   const { entry, systemPrompt, userContent, cachedCoursePrefix, temperature, maxTokens, timeoutMs } = params;
   const anthropicModel = readEnv("SONNET_MODEL") || DEFAULT_SONNET_MODEL;
   const openrouterModel = readEnv("SONNET_OPENROUTER_MODEL") || DEFAULT_OPENROUTER_SONNET_MODEL;
+  const activeModel = entry.provider === "anthropic" ? anthropicModel : openrouterModel;
 
   try {
     if (entry.provider === "anthropic") {
@@ -298,11 +318,12 @@ async function invokeSingleSonnetKey(params: {
         timeoutMs
       );
       if (!resp.ok) {
-        markKeyFailure(entry.key, resp.status);
-        console.warn(`[sonnet-pool:anthropic#slot-${entry.slotIndex}] HTTP ${resp.status}`);
+        const errBody = await resp.text().catch(() => "");
+        markKeyFailure("anthropic", anthropicModel, entry.key, resp.status, errBody);
+        console.warn(`[sonnet-pool:anthropic#slot-${entry.slotIndex}] HTTP ${resp.status}: ${errBody.slice(0, 220)}`);
         return null;
       }
-      markKeySuccess(entry.key);
+      markKeySuccess("anthropic", anthropicModel, entry.key);
       const data = await resp.json();
       const text = (Array.isArray(data?.content) ? data.content : [])
         .map((c: any) => c?.text || "")
@@ -313,9 +334,10 @@ async function invokeSingleSonnetKey(params: {
 
     const messages: any[] = [];
     if (systemPrompt) messages.push({ role: "system", content: systemPrompt });
-    const fullUserContent = cachedCoursePrefix && typeof userContent === "string"
-      ? `${cachedCoursePrefix}\n\n${userContent}`
-      : userContent;
+    const fullUserContent =
+      cachedCoursePrefix && typeof userContent === "string"
+        ? `${cachedCoursePrefix}\n\n${userContent}`
+        : userContent;
     messages.push({ role: "user", content: fullUserContent });
 
     const resp = await fetchWithTimeout(
@@ -333,17 +355,18 @@ async function invokeSingleSonnetKey(params: {
       timeoutMs
     );
     if (!resp.ok) {
-      markKeyFailure(entry.key, resp.status);
-      console.warn(`[sonnet-pool:openrouter#slot-${entry.slotIndex}] HTTP ${resp.status}`);
+      const errBody = await resp.text().catch(() => "");
+      markKeyFailure("openrouter", openrouterModel, entry.key, resp.status, errBody);
+      console.warn(`[sonnet-pool:openrouter#slot-${entry.slotIndex}] HTTP ${resp.status}: ${errBody.slice(0, 220)}`);
       return null;
     }
-    markKeySuccess(entry.key);
+    markKeySuccess("openrouter", openrouterModel, entry.key);
     const data = await resp.json();
     const text = String(data?.choices?.[0]?.message?.content || "").trim();
     return text ? { text, model: openrouterModel } : null;
-  } catch (err) {
-    markKeyFailure(entry.key);
-    console.warn(`[sonnet-pool:${entry.provider}#slot-${entry.slotIndex}]`, err);
+  } catch (err: any) {
+    markKeyFailure(entry.provider, activeModel, entry.key, 0, String(err?.message || err));
+    console.warn(`[sonnet-pool:${entry.provider}#slot-${entry.slotIndex}]`, err?.message || err);
     return null;
   }
 }
@@ -360,6 +383,7 @@ async function invokeSingleGeminiKey(params: {
   const { entry, systemPrompt, userContent, temperature, maxTokens, expectJson, timeoutMs } = params;
   const geminiModel = readEnv("GEMINI_REPAIR_MODEL") || DEFAULT_GEMINI_MODEL;
   const openrouterModel = readEnv("GEMINI_REPAIR_OPENROUTER_MODEL") || DEFAULT_OPENROUTER_GEMINI_MODEL;
+  const activeModel = entry.provider === "gemini" ? geminiModel : openrouterModel;
 
   try {
     if (entry.provider === "gemini") {
@@ -389,11 +413,12 @@ async function invokeSingleGeminiKey(params: {
         timeoutMs
       );
       if (!resp.ok) {
-        markKeyFailure(entry.key, resp.status);
-        console.warn(`[gemini-pool:direct#slot-${entry.slotIndex}] HTTP ${resp.status}`);
+        const errBody = await resp.text().catch(() => "");
+        markKeyFailure("gemini", geminiModel, entry.key, resp.status, errBody);
+        console.warn(`[gemini-pool:direct#slot-${entry.slotIndex}] HTTP ${resp.status}: ${errBody.slice(0, 220)}`);
         return null;
       }
-      markKeySuccess(entry.key);
+      markKeySuccess("gemini", geminiModel, entry.key);
       const data = await resp.json();
       const text = (data?.candidates?.[0]?.content?.parts || [])
         .map((p: any) => p?.text || "")
@@ -427,24 +452,22 @@ async function invokeSingleGeminiKey(params: {
       timeoutMs
     );
     if (!resp.ok) {
-      markKeyFailure(entry.key, resp.status);
-      console.warn(`[gemini-pool:${entry.provider}#slot-${entry.slotIndex}] HTTP ${resp.status}`);
+      const errBody = await resp.text().catch(() => "");
+      markKeyFailure(entry.provider, openrouterModel, entry.key, resp.status, errBody);
+      console.warn(`[gemini-pool:${entry.provider}#slot-${entry.slotIndex}] HTTP ${resp.status}: ${errBody.slice(0, 220)}`);
       return null;
     }
-    markKeySuccess(entry.key);
+    markKeySuccess(entry.provider, openrouterModel, entry.key);
     const data = await resp.json();
     const text = String(data?.choices?.[0]?.message?.content || "").trim();
     return text ? { text, model: openrouterModel } : null;
-  } catch (err) {
-    markKeyFailure(entry.key);
-    console.warn(`[gemini-pool:${entry.provider}#slot-${entry.slotIndex}]`, err);
+  } catch (err: any) {
+    markKeyFailure(entry.provider, activeModel, entry.key, 0, String(err?.message || err));
+    console.warn(`[gemini-pool:${entry.provider}#slot-${entry.slotIndex}]`, err?.message || err);
     return null;
   }
 }
 
-/**
- * Appelle Claude Sonnet 4.6 en parcourant le pool de clés (rotation + bascule auto).
- */
 export async function callSonnet46Json<T = any>(params: {
   systemPrompt: string;
   userPrompt: string;
@@ -457,7 +480,9 @@ export async function callSonnet46Json<T = any>(params: {
   const pool = resolveSonnetKeyPool();
   if (pool.length === 0) return null;
 
-  const ordered = rotateOrder(pool, sonnetCursor);
+  const anthropicModel = readEnv("SONNET_MODEL") || DEFAULT_SONNET_MODEL;
+  const openrouterModel = readEnv("SONNET_OPENROUTER_MODEL") || DEFAULT_OPENROUTER_SONNET_MODEL;
+  const ordered = rotateOrder(pool, sonnetCursor, (e) => (e.provider === "anthropic" ? anthropicModel : openrouterModel));
   sonnetCursor = (sonnetCursor + 1) % pool.length;
 
   for (const entry of ordered) {
@@ -466,14 +491,20 @@ export async function callSonnet46Json<T = any>(params: {
       systemPrompt: params.systemPrompt,
       userContent: params.userPrompt,
       cachedCoursePrefix: params.cachedCoursePrefix,
-      temperature: params.temperature ?? 0.45,
-      maxTokens: params.maxTokens ?? 8192,
-      timeoutMs: params.timeoutMs ?? 28000,
+      temperature: params.temperature ?? 0.35,
+      maxTokens: Math.min(6144, Math.max(1024, params.maxTokens ?? 4096)),
+      timeoutMs: params.timeoutMs ?? 32000,
     });
     if (!raw?.text) continue;
     const parsed = safeParseJsonObject(raw.text);
-    if (!parsed) continue;
-    if (params.validate && !params.validate(parsed)) continue;
+    if (!parsed) {
+      console.warn(`[sonnet-pool] JSON non parsable (extrait): ${raw.text.slice(0, 180)}`);
+      continue;
+    }
+    if (params.validate && !params.validate(parsed)) {
+      console.warn(`[sonnet-pool] JSON rejeté par validate()`);
+      continue;
+    }
     return {
       data: parsed as T,
       provider: `sonnet-${entry.provider}`,
@@ -485,10 +516,6 @@ export async function callSonnet46Json<T = any>(params: {
   return null;
 }
 
-/**
- * Appelle Gemini 2.5 en tant que correcteur anti-dégâts ou repli structuré,
- * avec rotation multi-clés sur Gemini direct puis OpenRouter/Lovable.
- */
 export async function callGemini25Json<T = any>(params: {
   systemPrompt: string;
   userPrompt: string;
@@ -500,7 +527,9 @@ export async function callGemini25Json<T = any>(params: {
   const pool = resolveGeminiRepairKeyPool();
   if (pool.length === 0) return null;
 
-  const ordered = rotateOrder(pool, geminiCursor);
+  const geminiModel = readEnv("GEMINI_REPAIR_MODEL") || DEFAULT_GEMINI_MODEL;
+  const openrouterModel = readEnv("GEMINI_REPAIR_OPENROUTER_MODEL") || DEFAULT_OPENROUTER_GEMINI_MODEL;
+  const ordered = rotateOrder(pool, geminiCursor, (e) => (e.provider === "gemini" ? geminiModel : openrouterModel));
   geminiCursor = (geminiCursor + 1) % pool.length;
 
   for (const entry of ordered) {
@@ -509,14 +538,20 @@ export async function callGemini25Json<T = any>(params: {
       systemPrompt: params.systemPrompt,
       userContent: params.userPrompt,
       temperature: params.temperature ?? 0.1,
-      maxTokens: params.maxTokens ?? 8192,
+      maxTokens: Math.min(8192, Math.max(1024, params.maxTokens ?? 4096)),
       expectJson: true,
-      timeoutMs: params.timeoutMs ?? 18000,
+      timeoutMs: params.timeoutMs ?? 24000,
     });
     if (!raw?.text) continue;
     const parsed = safeParseJsonObject(raw.text);
-    if (!parsed) continue;
-    if (params.validate && !params.validate(parsed)) continue;
+    if (!parsed) {
+      console.warn(`[gemini-pool] JSON non parsable (extrait): ${raw.text.slice(0, 180)}`);
+      continue;
+    }
+    if (params.validate && !params.validate(parsed)) {
+      console.warn(`[gemini-pool] JSON rejeté par validate()`);
+      continue;
+    }
     return {
       data: parsed as T,
       provider: `gemini-${entry.provider}`,
@@ -536,7 +571,9 @@ export async function callSonnet46Vision(params: {
   const pool = resolveSonnetKeyPool();
   if (pool.length === 0) return null;
 
-  const ordered = rotateOrder(pool, sonnetCursor);
+  const anthropicModel = readEnv("SONNET_MODEL") || DEFAULT_SONNET_MODEL;
+  const openrouterModel = readEnv("SONNET_OPENROUTER_MODEL") || DEFAULT_OPENROUTER_SONNET_MODEL;
+  const ordered = rotateOrder(pool, sonnetCursor, (e) => (e.provider === "anthropic" ? anthropicModel : openrouterModel));
   sonnetCursor = (sonnetCursor + 1) % pool.length;
 
   for (const entry of ordered) {
@@ -567,7 +604,7 @@ export async function callSonnet46Vision(params: {
       systemPrompt: "",
       userContent: content,
       temperature: 0.05,
-      maxTokens: 8192,
+      maxTokens: 4096,
       timeoutMs: params.timeoutMs ?? 24000,
     });
     if (raw?.text && raw.text.length > 20) {
@@ -589,7 +626,9 @@ export async function callGemini25Vision(params: {
   const pool = resolveGeminiRepairKeyPool();
   if (pool.length === 0) return null;
 
-  const ordered = rotateOrder(pool, geminiCursor);
+  const geminiModel = readEnv("GEMINI_REPAIR_MODEL") || DEFAULT_GEMINI_MODEL;
+  const openrouterModel = readEnv("GEMINI_REPAIR_OPENROUTER_MODEL") || DEFAULT_OPENROUTER_GEMINI_MODEL;
+  const ordered = rotateOrder(pool, geminiCursor, (e) => (e.provider === "gemini" ? geminiModel : openrouterModel));
   geminiCursor = (geminiCursor + 1) % pool.length;
 
   for (const entry of ordered) {
@@ -615,7 +654,7 @@ export async function callGemini25Vision(params: {
       systemPrompt: "",
       userContent: content,
       temperature: 0.05,
-      maxTokens: 8192,
+      maxTokens: 6144,
       expectJson: false,
       timeoutMs: params.timeoutMs ?? 22000,
     });

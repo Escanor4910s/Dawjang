@@ -7,9 +7,12 @@ import {
 import { getAiPoolSummary } from "../_shared/sonnet-pool.ts";
 import { getUserPlanInfo, checkExamAiActionAccess } from "../_shared/plan-utils.ts";
 
+const ENGINE_VERSION = "2.0-dual-sonnet46-gemini25";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -37,12 +40,17 @@ serve(async (req) => {
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       return jsonResponse({ error: "Requête invalide" }, 400);
     }
-    const accessError = await checkExamAiActionAccess(userInfo, body);
-    if (accessError) return accessError;
 
     if (body?.action === "pool_status") {
-      return jsonResponse({ ok: true, pool: getAiPoolSummary() });
+      return jsonResponse({
+        ok: true,
+        version: ENGINE_VERSION,
+        pool: getAiPoolSummary(),
+      });
     }
+
+    const accessError = await checkExamAiActionAccess(userInfo, body);
+    if (accessError) return accessError;
 
     if (body?.action === "vision_ocr_extract") {
       const res = await handleVisionOcrExtract(body);
@@ -65,6 +73,7 @@ serve(async (req) => {
     );
   } catch (error) {
     const invalidJson = error instanceof SyntaxError;
+    console.error("[dawjang-exam-ai] Erreur non capturée:", error);
     return jsonResponse(
       { error: invalidJson ? "Requête JSON invalide." : "Erreur interne dawjang-exam-ai." },
       invalidJson ? 400 : 500

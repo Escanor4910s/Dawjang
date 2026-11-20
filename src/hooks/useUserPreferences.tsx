@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "@/components/ThemeProvider";
 import i18n from "@/lib/i18n";
+import { cacheNotificationPrefs } from "@/lib/notificationHub";
 
 export interface UserPreferences {
   theme: "light" | "dark" | "system";
@@ -112,6 +113,13 @@ export const UserPreferencesProvider = ({ children }: { children: React.ReactNod
         };
         
         setPreferences(newPrefs);
+        cacheNotificationPrefs({
+          notify_weekly_results: newPrefs.notify_weekly_results,
+          notify_revision_reminders: newPrefs.notify_revision_reminders,
+          notify_new_qcm: newPrefs.notify_new_qcm,
+          notify_flashcard_alerts: newPrefs.notify_flashcard_alerts,
+          notify_subscription_alerts: newPrefs.notify_subscription_alerts,
+        });
         // Only sync theme if localStorage didn't already have a value.
         // If localStorage already has the theme, ThemeProvider already applied it,
         // so calling setTheme again would cause a redundant flash.
@@ -160,6 +168,13 @@ export const UserPreferencesProvider = ({ children }: { children: React.ReactNod
 
       // Apply changes locally
       setPreferences(newPrefs);
+      cacheNotificationPrefs({
+        notify_weekly_results: newPrefs.notify_weekly_results,
+        notify_revision_reminders: newPrefs.notify_revision_reminders,
+        notify_new_qcm: newPrefs.notify_new_qcm,
+        notify_flashcard_alerts: newPrefs.notify_flashcard_alerts,
+        notify_subscription_alerts: newPrefs.notify_subscription_alerts,
+      });
       if (updates.theme) {
         setTheme(updates.theme);
       }
